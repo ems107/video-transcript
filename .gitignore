@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Modelos, datos de trabajo y base de datos local
+models/
+work/
+data/
+*.db
+*.db-journal
+
+# Secretos
+.env
+
+# Vídeos y resultados de prueba
+*.mp4
+*.mkv
+*.mov
+*.webm
+*.wav
+samples/
+analizados/
