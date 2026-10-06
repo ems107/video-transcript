@@ -42,7 +42,7 @@ export default function People() {
           </div>
           <label className="field">
             <span>Otros nombres</span>
-            <input value={d.aliases} onChange={(e) => setD({ ...d, aliases: e.target.value })} placeholder="Separados por comas: nombre en Teams, apodos…" />
+            <input value={d.aliases} onChange={(e) => setD({ ...d, aliases: e.target.value })} placeholder="Separados por comas: nombre que aparece en las videollamadas, apodos…" />
             <small>Ayuda a reconocerla por el nombre que aparece en la videollamada.</small>
           </label>
           <label className="field"><span>Notas</span><textarea rows={2} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} /></label>

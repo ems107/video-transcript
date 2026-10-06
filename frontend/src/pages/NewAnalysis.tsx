@@ -102,7 +102,7 @@ export default function NewAnalysis() {
                     <option value="mix">Mezclar todas las pistas</option>
                     {tracks.map((t) => <option key={t.index} value={t.index}>{trackName(t)}</option>)}
                   </select>
-                  <small>Si una pista ya contiene todo el audio (p. ej. la pista 1 de OBS), elígela.</small>
+                  <small>Si una pista ya contiene todo el audio (algunos grabadores guardan una pista con la mezcla completa), elígela.</small>
                 </label>
                 <label className="field">
                   <span>Pista de tu micrófono</span>

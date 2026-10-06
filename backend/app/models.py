@@ -41,7 +41,7 @@ class Person(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     role: str = ""
-    # Otros nombres con los que aparece (p. ej. nombre en Teams)
+    # Otros nombres con los que aparece (p. ej. el nombre que muestra en las videollamadas)
     aliases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     notes: str = ""
     created_at: NaiveDatetime = Field(default_factory=now)

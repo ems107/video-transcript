@@ -54,7 +54,7 @@ def vision_user(context: str, t: str) -> str:
     return f"""Fotograma en {t} de la grabación.
 {("Contexto del vídeo:\n" + context + "\n") if context else ""}
 Devuelve:
-- tipo_escena y aplicacion (p. ej. Teams, Zoom, VS Code, Excel, Chrome).
+- tipo_escena y aplicacion: nombre del programa o web visible, tal como aparezca en pantalla (cadena vacía si no se distingue).
 - descripcion: 1-3 frases sobre qué se muestra y qué parece estar haciéndose.
 - texto_relevante: textos importantes legibles (títulos, pestañas, archivos, funciones, cifras clave, \
 diapositivas). Máximo 600 caracteres.
