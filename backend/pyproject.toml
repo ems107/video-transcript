@@ -1,0 +1,46 @@
+[project]
+name = "video-transcript"
+version = "0.1.0"
+description = "Transcripción y análisis local de vídeos con IA"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlmodel>=0.0.22",
+    "pydantic-settings>=2.6",
+    "jinja2>=3.1",
+    "httpx>=0.28",
+    "sse-starlette>=2.1",
+    "rapidfuzz>=3.10",
+    "pillow>=11.0",
+    "imagehash>=4.3",
+    "numpy>=2.1",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    "whisperx==3.8.6",
+    "pyannote-audio>=4.0.7,<5",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.8"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
