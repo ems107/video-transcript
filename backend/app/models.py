@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
+from pydantic import NaiveDatetime
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
@@ -32,8 +33,8 @@ class Profile(SQLModel, table=True):
     summary_sections: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     # Glosario: [{"term": str, "variants": [str], "definition": str}]
     glossary: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=now)
-    updated_at: datetime = Field(default_factory=now)
+    created_at: NaiveDatetime = Field(default_factory=now)
+    updated_at: NaiveDatetime = Field(default_factory=now)
 
 
 class Person(SQLModel, table=True):
@@ -43,7 +44,7 @@ class Person(SQLModel, table=True):
     # Otros nombres con los que aparece (p. ej. nombre en Teams)
     aliases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     notes: str = ""
-    created_at: datetime = Field(default_factory=now)
+    created_at: NaiveDatetime = Field(default_factory=now)
 
 
 class VoiceEmbedding(SQLModel, table=True):
@@ -53,7 +54,7 @@ class VoiceEmbedding(SQLModel, table=True):
     person_id: int = Field(foreign_key="person.id", index=True, ondelete="CASCADE")
     video_id: Optional[int] = Field(default=None, foreign_key="video.id", ondelete="SET NULL")
     vector: list[float] = Field(sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=now)
+    created_at: NaiveDatetime = Field(default_factory=now)
 
 
 class Video(SQLModel, table=True):
@@ -67,8 +68,8 @@ class Video(SQLModel, table=True):
     status: str = "pending"  # pending | processing | done | error
     summary_md: str = ""
     analysis: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
-    recorded_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=now)
+    recorded_at: Optional[NaiveDatetime] = None
+    created_at: NaiveDatetime = Field(default_factory=now)
 
 
 class Job(SQLModel, table=True):
@@ -80,9 +81,9 @@ class Job(SQLModel, table=True):
     message: str = ""
     error: str = ""
     options: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=now)
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    created_at: NaiveDatetime = Field(default_factory=now)
+    started_at: Optional[NaiveDatetime] = None
+    finished_at: Optional[NaiveDatetime] = None
 
 
 class Speaker(SQLModel, table=True):
@@ -91,8 +92,11 @@ class Speaker(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     video_id: int = Field(foreign_key="video.id", index=True, ondelete="CASCADE")
     label: str
+    order_idx: int = 0  # orden de aparición (Hablante 1, 2...)
     person_id: Optional[int] = Field(default=None, foreign_key="person.id", ondelete="SET NULL")
     suggested_person_id: Optional[int] = Field(default=None, foreign_key="person.id", ondelete="SET NULL")
+    suggested_name: str = ""  # nombre visto en pantalla que aún no es una persona conocida
+    source: str = ""  # micrófono | voz | pantalla
     confidence: float = 0.0
     confirmed: bool = False
     is_owner: bool = False

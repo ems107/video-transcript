@@ -1,0 +1,127 @@
+"""Operaciones sobre la base de datos compartidas por la API y el worker."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import text
+from sqlmodel import Session, select
+
+from .models import Keyframe, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding
+from .pipeline.export import write_outputs
+from .pipeline.transcript import fmt_ts
+
+
+def profile_dict(session: Session, profile_id: int | None) -> dict[str, Any] | None:
+    if not profile_id:
+        return None
+    p = session.get(Profile, profile_id)
+    return p.model_dump() if p else None
+
+
+def people_for(session: Session, profile_id: int | None) -> list[dict[str, Any]]:
+    """Personas del perfil primero; después el resto de personas conocidas."""
+    linked = set()
+    if profile_id:
+        linked = set(session.exec(select(ProfilePersonLink.person_id).where(ProfilePersonLink.profile_id == profile_id)))
+    people = session.exec(select(Person)).all()
+    rows = [{"id": p.id, "name": p.name, "role": p.role, "aliases": p.aliases or [], "in_profile": p.id in linked}
+            for p in people]
+    return sorted(rows, key=lambda r: (not r["in_profile"], r["name"]))
+
+
+def voice_db(session: Session) -> dict[int, list[list[float]]]:
+    out: dict[int, list[list[float]]] = {}
+    for e in session.exec(select(VoiceEmbedding)):
+        out.setdefault(e.person_id, []).append(e.vector)
+    return out
+
+
+def speaker_names(session: Session, video_id: int) -> dict[str, str]:
+    """Nombre a mostrar de cada hablante: persona confirmada > propuesta > nombre en pantalla > «Hablante N»."""
+    names = {}
+    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
+        pid = sp.person_id or sp.suggested_person_id
+        person = session.get(Person, pid) if pid else None
+        names[sp.label] = person.name if person else (sp.suggested_name or f"Hablante {sp.order_idx}")
+    return names
+
+
+def persist_speakers(session: Session, video_id: int, identities: dict[str, dict[str, Any]]) -> None:
+    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
+        session.delete(sp)
+    for label, d in identities.items():
+        session.add(Speaker(
+            video_id=video_id, label=label, order_idx=d["order"],
+            suggested_person_id=d["person_id"], suggested_name=d["suggested_name"], source=d["source"],
+            confidence=d["confidence"], is_owner=d["is_owner"], speaking_time=d["speaking_time"],
+            visual_hints=d["visual_hints"], embedding=d["embedding"],
+        ))
+    session.commit()
+
+
+def replace_speaker_name(analysis: Any, old: str, new: str) -> Any:
+    """Sustituye «Hablante N» por el nombre real en los textos del análisis."""
+    if not re.fullmatch(r"Hablante \d+", old):
+        return analysis
+    pat = re.compile(rf"\b{re.escape(old)}\b")
+    if isinstance(analysis, str):
+        return pat.sub(new, analysis)
+    if isinstance(analysis, list):
+        return [replace_speaker_name(x, old, new) for x in analysis]
+    if isinstance(analysis, dict):
+        return {k: replace_speaker_name(v, old, new) for k, v in analysis.items()}
+    return analysis
+
+
+def video_meta(session: Session, video: Video) -> dict[str, Any]:
+    names = speaker_names(session, video.id)
+    sps = session.exec(select(Speaker).where(Speaker.video_id == video.id).order_by(Speaker.order_idx)).all()
+    profile = session.get(Profile, video.profile_id) if video.profile_id else None
+    return {
+        "title": video.title,
+        "date": (video.recorded_at or video.created_at).strftime("%Y-%m-%d %H:%M"),
+        "duration": fmt_ts(video.duration),
+        "profile": profile.name if profile else "",
+        "participants": [names[s.label] for s in sps if s.label in names],
+        "source": video.source_path,
+    }
+
+
+def export_video(session: Session, video: Video) -> None:
+    """(Re)escribe los documentos de la carpeta del vídeo con los nombres actuales."""
+    if not video.folder:
+        return
+    names = speaker_names(session, video.id)
+    segs = session.exec(select(Segment).where(Segment.video_id == video.id).order_by(Segment.idx)).all()
+    utts = [{"start": s.start, "end": s.end, "speaker": s.speaker, "text": s.text} for s in segs]
+    frames = session.exec(select(Keyframe).where(Keyframe.video_id == video.id).order_by(Keyframe.t)).all()
+    extra = {"pantalla": [{"t": fmt_ts(k.t), "tipo": k.scene_type, "descripcion": k.description,
+                           "texto": k.visible_text, "archivo": Path(k.path).name} for k in frames]}
+    analysis = {k: v for k, v in (video.analysis or {}).items() if k != "fragmentos"}
+    write_outputs(Path(video.folder), video_meta(session, video), utts, names, analysis, extra)
+
+
+def index_video(session: Session, video: Video) -> None:
+    """Reindexa en FTS5 el título, el resumen, la transcripción y la pantalla de un vídeo."""
+    conn = session.connection()
+    conn.execute(text("DELETE FROM search_fts WHERE video_id = :v"), {"v": video.id})
+    names = speaker_names(session, video.id)
+    rows = [{"text": video.title, "kind": "title", "ref": None, "t": 0.0, "sp": ""}]
+    a = video.analysis or {}
+    summary = "\n".join(filter(None, [a.get("resumen_breve", ""), a.get("resumen_detallado", "")]))
+    if summary:
+        rows.append({"text": summary, "kind": "summary", "ref": None, "t": 0.0, "sp": ""})
+    for s in session.exec(select(Segment).where(Segment.video_id == video.id)):
+        rows.append({"text": s.text, "kind": "segment", "ref": s.id, "t": s.start, "sp": names.get(s.speaker, s.speaker)})
+    for k in session.exec(select(Keyframe).where(Keyframe.video_id == video.id)):
+        t = " ".join(filter(None, [k.description, k.visible_text]))
+        if t:
+            rows.append({"text": t, "kind": "frame", "ref": k.id, "t": k.t, "sp": ""})
+    conn.execute(
+        text("INSERT INTO search_fts (text, kind, video_id, ref_id, t, speaker) VALUES (:text, :kind, :v, :ref, :t, :sp)"),
+        [{**r, "v": video.id} for r in rows],
+    )
+    session.commit()

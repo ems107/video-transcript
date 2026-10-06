@@ -50,12 +50,14 @@ class Settings(BaseModel):
     llm_temperature: float = 0.2
 
     # Fotogramas
+    frame_sample_every: float = 2.0  # muestreo para detectar cambios de escena
+    max_frames: int = 240  # máximo de fotogramas analizados por el modelo de visión
     frame_min_interval: float = 4.0  # segundos mínimos entre fotogramas
     frame_max_interval: float = 60.0  # como máximo un fotograma cada N segundos
     frame_hash_distance: int = 6  # distancia de hash perceptual para considerar duplicado
 
     # Resumen por bloques
-    chunk_minutes: float = 20.0
+    chunk_minutes: float = 30.0
 
 
 def load_settings() -> Settings:
