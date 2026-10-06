@@ -123,6 +123,8 @@ def create_job(body: JobCreate, session: Session = SessionDep) -> dict[str, Any]
     job = Job(video_id=video.id, options=body.options)
     session.add(job)
     session.commit()
+    session.refresh(job)
+    session.refresh(video)
     worker.notify()
     return job_out(job, video)
 
