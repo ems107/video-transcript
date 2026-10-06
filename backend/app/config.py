@@ -46,7 +46,7 @@ class Settings(BaseModel):
     llm_mmproj_path: str = str(MODELS_DIR / "llm" / "mmproj-Qwen3.6-35B-A3B.gguf")
     llm_port: int = 8091
     llm_ctx: int = 65536
-    llm_n_cpu_moe: int = 20  # capas MoE cuyos expertos se ejecutan en CPU/RAM
+    llm_n_cpu_moe: int = 24  # capas MoE cuyos expertos se ejecutan en CPU/RAM
     llm_temperature: float = 0.2
 
     # Fotogramas

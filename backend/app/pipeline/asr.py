@@ -29,6 +29,7 @@ def build_whisper_prompt(profile: dict[str, Any] | None, people: list[dict[str, 
         if g.get("term"):
             add(g["term"])
     names = [p["name"] for p in people]
+    seen.update(normalize(n) for n in names)
     for t in screen_terms:
         add(t)
 
