@@ -5,13 +5,13 @@ La lógica sin base de datos está en knowledge.py; aquí solo se lee y escribe.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from sqlmodel import Session, select
 
 from . import knowledge as K
 from .models import KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink
+from .models import now as _now
 
 
 def item_dict(it: KnowledgeItem) -> dict[str, Any]:
@@ -106,7 +106,7 @@ def restore_version(session: Session, version: KnowledgeVersion) -> None:
         p = session.get(Profile, profile_id)
         for k, val in manual.items():
             setattr(p, k, val)
-        p.updated_at = datetime.now()
+        p.updated_at = _now()
         session.add(p)
         if "person_ids" in snap:
             for link in session.exec(select(ProfilePersonLink).where(ProfilePersonLink.profile_id == profile_id)):
@@ -124,7 +124,7 @@ def restore_version(session: Session, version: KnowledgeVersion) -> None:
     items = owner_items(session, profile_id, person_id)
     plan = K.restore_plan(snap, [item_dict(i) for i in items])
     by_id = {i.id: i for i in items}
-    now = datetime.now()
+    now = _now()
     for iid in plan["retire"]:
         by_id[iid].status, by_id[iid].decided_at = "retirado", now
     for iid in plan["accept"]:

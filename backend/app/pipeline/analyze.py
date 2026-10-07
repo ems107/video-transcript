@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..knowledge import effective_sections
 from ..llm import LLMServer
-from ..prompts import CHUNK_SCHEMA, CHUNK_SYSTEM, FINAL_SCHEMA, FINAL_SYSTEM, chunk_user, final_user, profile_block
+from ..prompts import (
+    CHUNK_SCHEMA,
+    CHUNK_SYSTEM,
+    FINAL_SCHEMA,
+    FINAL_SYSTEM,
+    chunk_user,
+    final_user,
+    profile_block,
+)
 from .base import JobContext
 from .transcript import fmt_ts
 
@@ -92,7 +101,7 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     profile = ctx.profile or {}
     final = llm.chat_json(
         FINAL_SYSTEM,
-        final_user(context, profile.get("extra_prompt", ""), profile.get("summary_sections") or [], fmt_ts(duration), speakers,
+        final_user(context, profile.get("extra_prompt", ""), effective_sections(profile), fmt_ts(duration), speakers,
                    partial_text),
         FINAL_SCHEMA,
         max_tokens=10000,

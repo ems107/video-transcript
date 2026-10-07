@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from ..knowledge import effective_glossary
 from ..llm import LLMServer
 from ..prompts import CORRECT_SCHEMA, CORRECT_SYSTEM
 from .base import JobContext
@@ -19,16 +20,17 @@ BATCH = 25
 
 def run(ctx: JobContext, llm: LLMServer) -> None:
     utts = ctx.load("utterances.json")
-    glossary = (ctx.profile or {}).get("glossary") or []
+    glossary = effective_glossary(ctx.profile)
     if not glossary:
         ctx.save("corrected.json", [{**u, "original_text": "", "corrections": []} for u in utts])
         return
 
     cands = find_candidates([u["text"] for u in utts], glossary)
+    # Lo declarado por el usuario se aplica directamente; lo aprendido y lo fonético lo valida el LLM
     for c in cands:
-        if c.kind in ("variante", "mayusculas"):
+        if c.kind in ("variante", "mayusculas") and c.trusted:
             c.accepted = True
-    fuzzy = [c for c in cands if c.kind == "fonetica"]
+    fuzzy = [c for c in cands if c.accepted is None]
     if fuzzy:
         ctx.report(0.1, f"Validando {len(fuzzy)} posibles términos mal transcritos")
         llm.start()

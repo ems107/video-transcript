@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .knowledge import learned_block, person_line, prompt_people
+
 
 def profile_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:
-    """Contexto del perfil (negocio, glosario, personas) para incluir en los prompts."""
+    """Contexto del perfil (negocio, glosario, lo aprendido, personas) para incluir en los prompts."""
     parts: list[str] = []
     if profile:
         parts.append(f"Tipo de vídeo: {profile['name']}")
@@ -18,9 +20,13 @@ def profile_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) 
         if gl:
             lines = [f"- {g['term']}" + (f": {g['definition']}" if g.get("definition") else "") for g in gl]
             parts.append("Glosario (escritura correcta de los términos):\n" + "\n".join(lines))
+        learned = learned_block(profile)
+        if learned:
+            parts.append("Aprendido de vídeos anteriores (si contradice lo anterior, prevalece lo anterior):\n"
+                         + learned)
+    people = prompt_people(people)
     if people:
-        lines = [f"- {p['name']}" + (f" ({p['role']})" if p.get("role") else "") for p in people]
-        parts.append("Personas habituales:\n" + "\n".join(lines))
+        parts.append("Personas habituales:\n" + "\n".join(person_line(p) for p in people))
     return "\n\n".join(parts)
 
 

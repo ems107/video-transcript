@@ -271,3 +271,78 @@ def merged_aliases(target: dict[str, Any], source: dict[str, Any]) -> list[str]:
             seen.add(k)
             out.append(n.strip())
     return out
+
+
+# --------------------------------------------------------------------------- uso en los prompts
+
+def effective_glossary(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Glosario manual seguido de los términos aprendidos (marcados como no fiables para corregir)."""
+    profile = profile or {}
+    out = [{**g, "trusted": True} for g in profile.get("glossary") or [] if g.get("term")]
+    seen = {normalize(g["term"]) for g in out}
+    for it in profile.get("learned") or []:
+        if it["kind"] != "termino":
+            continue
+        term = it["data"].get("term", "").strip()
+        if term and normalize(term) not in seen:
+            seen.add(normalize(term))
+            out.append({"term": term, "variants": [], "definition": it["data"].get("definition", ""), "trusted": False})
+    return out
+
+
+def effective_sections(profile: dict[str, Any] | None) -> list[str]:
+    profile = profile or {}
+    out = list(profile.get("summary_sections") or [])
+    seen = {normalize(s) for s in out}
+    for it in profile.get("learned") or []:
+        title = it["data"].get("title", "").strip() if it["kind"] == "seccion" else ""
+        if title and normalize(title) not in seen:
+            seen.add(normalize(title))
+            out.append(title)
+    return out
+
+
+def learned_block(profile: dict[str, Any] | None, max_chars: int = 6000) -> str:
+    """Contexto y términos aprendidos, de más a menos confirmados, dentro de un límite de tamaño."""
+    lines: list[str] = []
+    size = 0
+    manual_terms = {normalize(g.get("term", "")) for g in (profile or {}).get("glossary") or []}
+    for it in (profile or {}).get("learned") or []:
+        if it["kind"] == "contexto":
+            cat = CATEGORY_LABELS.get(it.get("category", ""), "")
+            line = f"- {f'[{cat}] ' if cat else ''}{it['data'].get('text', '')}"
+        elif it["kind"] == "termino" and normalize(it["data"].get("term", "")) not in manual_terms:
+            d = it["data"].get("definition", "")
+            line = f"- Término «{it['data'].get('term', '')}»" + (f": {d}" if d else "")
+        else:
+            continue
+        if size + len(line) > max_chars:
+            break
+        lines.append(line)
+        size += len(line) + 1
+    return "\n".join(lines)
+
+
+def person_line(p: dict[str, Any], max_facts: int = 5) -> str:
+    """«- María López (Jefa de proyecto; Organización: Acme): lleva Atlas; …» para los prompts."""
+    facts = p.get("facts") or []
+    tags = []
+    role = p.get("role") or next((f["text"] for f in facts if f["category"] == "cargo"), "")
+    if role:
+        tags.append(role)
+    for cat in ("organizacion", "equipo"):
+        val = next((f["text"] for f in facts if f["category"] == cat), "")
+        if val:
+            tags.append(f"{CATEGORY_LABELS[cat]}: {val}")
+    rest = [f["text"] for f in facts if f["category"] not in SINGLE_VALUE][:max_facts]
+    line = f"- {p['name']}" + (f" ({'; '.join(tags)})" if tags else "")
+    if p.get("notes"):
+        rest.insert(0, p["notes"])
+    return line + (": " + "; ".join(rest) if rest else "")
+
+
+def prompt_people(people: list[dict[str, Any]], limit: int = 30) -> list[dict[str, Any]]:
+    """Personas que se incluyen en los prompts: las del vídeo y las del perfil (o cualquiera, si no hay)."""
+    relevant = [p for p in people if p.get("in_video") or p.get("in_profile")]
+    relevant.sort(key=lambda p: (not p.get("in_video"), not p.get("in_profile")))
+    return (relevant or people)[:limit]

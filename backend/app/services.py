@@ -9,7 +9,18 @@ from typing import Any
 from sqlalchemy import text
 from sqlmodel import Session, select
 
-from .models import Keyframe, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding
+from . import knowledge_store as KS
+from .models import (
+    Keyframe,
+    KnowledgeItem,
+    Person,
+    Profile,
+    ProfilePersonLink,
+    Segment,
+    Speaker,
+    Video,
+    VoiceEmbedding,
+)
 from .pipeline.export import write_outputs
 from .pipeline.transcript import fmt_ts
 
@@ -18,18 +29,37 @@ def profile_dict(session: Session, profile_id: int | None) -> dict[str, Any] | N
     if not profile_id:
         return None
     p = session.get(Profile, profile_id)
-    return p.model_dump() if p else None
+    if not p:
+        return None
+    learned = [{"kind": i.kind, "category": i.category, "data": i.data, "seen_count": i.seen_count}
+               for i in KS.owner_items(session, profile_id=profile_id, statuses=("aceptado",))]
+    return {**p.model_dump(), "learned": learned}
 
 
 def people_for(session: Session, profile_id: int | None) -> list[dict[str, Any]]:
-    """Personas del perfil primero; después el resto de personas conocidas."""
+    """Personas del perfil primero; después el resto. Incluye lo aprendido (otros nombres y datos)."""
     linked = set()
     if profile_id:
         linked = set(session.exec(select(ProfilePersonLink.person_id).where(ProfilePersonLink.profile_id == profile_id)))
-    people = session.exec(select(Person)).all()
-    rows = [{"id": p.id, "name": p.name, "role": p.role, "aliases": p.aliases or [], "in_profile": p.id in linked}
-            for p in people]
+    learned: dict[int, list[KnowledgeItem]] = {}
+    q = select(KnowledgeItem).where(KnowledgeItem.person_id.is_not(None), KnowledgeItem.status == "aceptado")
+    for it in session.exec(q.order_by(KnowledgeItem.seen_count.desc(), KnowledgeItem.id.desc())):
+        learned.setdefault(it.person_id, []).append(it)
+    rows = []
+    for p in session.exec(select(Person)):
+        items = learned.get(p.id, [])
+        aliases = list(p.aliases or []) + [i.data.get("name", "") for i in items if i.kind == "alias"]
+        facts = [{"category": i.category, "text": i.data.get("text", "")} for i in items if i.kind == "dato"]
+        rows.append({"id": p.id, "name": p.name, "role": p.role, "notes": p.notes, "aliases": [a for a in aliases if a],
+                     "facts": facts, "in_profile": p.id in linked})
     return sorted(rows, key=lambda r: (not r["in_profile"], r["name"]))
+
+
+def video_person_ids(session: Session, video_id: int) -> set[int]:
+    """Personas confirmadas o propuestas como hablantes de un vídeo."""
+    return {sp.person_id or sp.suggested_person_id
+            for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id))
+            if sp.person_id or sp.suggested_person_id}
 
 
 def voice_db(session: Session) -> dict[int, list[list[float]]]:

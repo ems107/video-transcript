@@ -122,3 +122,61 @@ def test_duplicates_and_merge_aliases():
     assert len(dups) == 2
     assert merged_aliases({"name": "María López", "aliases": ["Mari"]}, {"name": "María", "aliases": ["mari"]}) \
         == ["Mari", "María"]
+
+
+PROFILE = {
+    "name": "Trabajo",
+    "glossary": [{"term": "Salesforce", "variants": ["sels fors"], "definition": "CRM"}],
+    "summary_sections": ["Estado"],
+    "learned": [
+        {"kind": "termino", "category": "", "data": {"term": "Atlas", "definition": "Proyecto"}, "seen_count": 3},
+        {"kind": "termino", "category": "", "data": {"term": "salesforce", "definition": ""}, "seen_count": 1},
+        {"kind": "contexto", "category": "cliente", "data": {"text": "Acme es el cliente principal"}, "seen_count": 2},
+        {"kind": "seccion", "category": "", "data": {"title": "Riesgos"}, "seen_count": 1},
+    ],
+}
+
+
+def test_effective_glossary_and_sections():
+    from app.knowledge import effective_glossary, effective_sections
+
+    g = effective_glossary(PROFILE)
+    assert [(e["term"], e["trusted"]) for e in g] == [("Salesforce", True), ("Atlas", False)]
+    assert effective_sections(PROFILE) == ["Estado", "Riesgos"]
+
+
+def test_learned_terms_never_applied_without_llm():
+    from app.knowledge import effective_glossary
+    from app.pipeline.glossary import find_candidates
+
+    cands = find_candidates(["Lo vemos en atlas y en sels fors."], effective_glossary(PROFILE))
+    by = {c.original: c for c in cands}
+    assert by["sels fors"].trusted and by["sels fors"].kind == "variante"
+    assert not by["atlas"].trusted and by["atlas"].kind == "mayusculas"
+
+
+def test_profile_block_and_people():
+    from app.knowledge import learned_block, person_line, prompt_people
+    from app.prompts import profile_block
+
+    block = learned_block(PROFILE)
+    assert "[Cliente] Acme es el cliente principal" in block and "Término «Atlas»: Proyecto" in block
+    assert "salesforce" not in block  # ya está en el glosario manual
+    assert learned_block(PROFILE, max_chars=10).count("\n") == 0
+
+    maria = {"id": 1, "name": "María", "role": "", "notes": "", "in_profile": True, "facts": [
+        {"category": "cargo", "text": "Jefa de proyecto"}, {"category": "organizacion", "text": "Acme"},
+        {"category": "proyecto", "text": "Lleva Atlas"}]}
+    other = {"id": 2, "name": "Pedro", "role": "", "facts": [], "in_profile": False}
+    assert person_line(maria) == "- María (Jefa de proyecto; Organización: Acme): Lleva Atlas"
+    assert prompt_people([other, maria]) == [maria]
+    assert prompt_people([other]) == [other]  # sin perfil: cualquiera
+    text = profile_block(PROFILE, [maria, other])
+    assert "Aprendido de vídeos anteriores" in text and "Pedro" not in text
+
+
+def test_whisper_prompt_learned_after_manual():
+    from app.pipeline.asr import build_whisper_prompt
+
+    prompt = build_whisper_prompt(PROFILE, [], ["Jira"])
+    assert prompt.index("Salesforce") < prompt.index("Atlas") < prompt.index("Jira")

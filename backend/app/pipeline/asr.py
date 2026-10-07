@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..knowledge import effective_glossary
 from .base import JobContext, free_gpu
 from .glossary import normalize
 
@@ -25,9 +26,8 @@ def build_whisper_prompt(profile: dict[str, Any] | None, people: list[dict[str, 
             seen.add(k)
             terms.append(t.strip())
 
-    for g in (profile or {}).get("glossary") or []:
-        if g.get("term"):
-            add(g["term"])
+    for g in effective_glossary(profile):  # manual primero, después lo aprendido
+        add(g["term"])
     names = [p["name"] for p in people]
     seen.update(normalize(n) for n in names)
     for t in screen_terms:

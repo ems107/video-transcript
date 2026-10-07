@@ -213,6 +213,9 @@ class Worker:
     def _load_names(self, ctx: JobContext) -> None:
         with Session(engine) as s:
             ctx.speaker_names = services.speaker_names(s, ctx.video_id)
+            in_video = services.video_person_ids(s, ctx.video_id)
+        for p in ctx.people:
+            p["in_video"] = p["id"] in in_video
 
     def _publish(self, ctx: JobContext) -> None:
         s_ = ctx.settings
