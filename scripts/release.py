@@ -140,7 +140,7 @@ def main() -> None:
     git("add", "VERSION", "CHANGELOG.md", "backend/pyproject.toml", "backend/uv.lock",
         "frontend/package.json", "frontend/package-lock.json")
     git("commit", "-m", f"Versión {new}")
-    git("tag", "-a", tag, "-m", f"Versión {new}\n\n{notes}")
+    git("tag", "-a", tag, "--cleanup=verbatim", "-m", f"Versión {new}\n\n{notes}")
     print(f"Creado el commit y el tag {tag}.")
 
     if not args.push:
