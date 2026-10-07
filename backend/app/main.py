@@ -23,6 +23,7 @@ from sqlmodel import Session, func, select
 from sse_starlette.sse import EventSourceResponse
 
 from . import __version__, knowledge_store as KS, proposals as PR, services
+from . import people as people_mod
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -522,6 +523,44 @@ def person_out(session: Session, p: Person) -> dict[str, Any]:
 @app.get("/api/people")
 def list_people(session: Session = SessionDep) -> list[dict[str, Any]]:
     return [person_out(session, p) for p in session.exec(select(Person).order_by(Person.name))]
+
+
+@app.get("/api/people/duplicates")
+def people_duplicates(session: Session = SessionDep) -> list[dict[str, Any]]:
+    """Parejas de personas que podrían ser la misma (nombre parecido o voz parecida)."""
+    return people_mod.duplicates(session)
+
+
+class PairIn(BaseModel):
+    a: int
+    b: int
+
+
+@app.post("/api/people/duplicates/dismiss")
+def dismiss_duplicate(body: PairIn, session: Session = SessionDep) -> dict[str, Any]:
+    people_mod.dismiss(session, body.a, body.b)
+    return {"ok": True}
+
+
+@app.get("/api/people/{person_id}")
+def get_person(person_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    p = _404(session.get(Person, person_id), "Persona")
+    return {**person_out(session, p), **people_mod.person_detail(session, p)}
+
+
+class MergeIn(BaseModel):
+    into_id: int
+
+
+@app.post("/api/people/{person_id}/merge")
+def merge_person(person_id: int, body: MergeIn, session: Session = SessionDep) -> dict[str, Any]:
+    """Fusiona esta persona en otra (que se conserva)."""
+    if person_id == body.into_id:
+        raise HTTPException(400, "Elige otra persona")
+    source = _404(session.get(Person, person_id), "Persona")
+    target = _404(session.get(Person, body.into_id), "Persona")
+    people_mod.merge(session, source, target)
+    return person_out(session, session.get(Person, body.into_id))
 
 
 @app.post("/api/people")

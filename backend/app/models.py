@@ -168,3 +168,10 @@ class KnowledgeVersion(SQLModel, table=True):
     reason: str = ""
     snapshot: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: NaiveDatetime = Field(default_factory=now)
+
+
+class PersonPairDismissal(SQLModel, table=True):
+    """Pareja de personas que el usuario ha marcado como «no son la misma persona»."""
+
+    a: int = Field(foreign_key="person.id", primary_key=True, ondelete="CASCADE")
+    b: int = Field(foreign_key="person.id", primary_key=True, ondelete="CASCADE")

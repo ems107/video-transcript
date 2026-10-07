@@ -108,3 +108,42 @@ def test_profile_from_video_requires_work_data(client, session, tmp_path, monkey
     session.refresh(job), session.refresh(v)
     assert job.status == "queued" and job.options["redo"] == ["learn"] and v.profile_id == r.json()["id"]
     assert client.get(f"/api/profiles/{v.profile_id}/versions").json()[0]["reason"].startswith("Creado desde")
+
+
+def test_person_detail_duplicates_and_merge(client, session):
+    from app.models import KnowledgeItem, Speaker, Video, VoiceEmbedding
+
+    prof = client.post("/api/profiles", json={"name": "Trabajo"}).json()
+    full = client.post("/api/people", json={"name": "María López", "role": "PM"}).json()
+    short = client.post("/api/people", json={"name": "María", "aliases": ["Mari"]}).json()
+    client.put(f"/api/profiles/{prof['id']}", json={"name": "Trabajo", "person_ids": [short["id"]]})
+    v = Video(source_path="a.mp4", title="Reunión", status="done", analysis={
+        "resumen_breve": "María presentó el plan.",
+        "tareas": [{"responsable": "Mari", "tarea": "Enviar informe", "plazo": "", "t": "00:01:00"}]})
+    session.add(v)
+    session.commit()
+    session.add(Speaker(video_id=v.id, label="SPEAKER_00", person_id=short["id"], confirmed=True, speaking_time=42))
+    session.add(VoiceEmbedding(person_id=short["id"], vector=[1.0, 0.0]))
+    for pid, text in ((short["id"], "Lleva el proyecto Atlas"), (full["id"], "Lleva el proyecto Atlas"),
+                      (short["id"], "Vive en Valencia")):
+        session.add(KnowledgeItem(person_id=pid, kind="dato", category="otro", data={"text": text},
+                                  key=text.lower(), status="aceptado", evidence=[{"video_id": v.id}]))
+    session.commit()
+
+    d = client.get(f"/api/people/{short['id']}").json()
+    assert d["stats"]["videos"] == 1 and d["stats"]["speaking_time"] == 42
+    assert [t["tarea"] for t in d["tasks"]] == ["Enviar informe"] and d["profiles"][0]["name"] == "Trabajo"
+
+    dups = client.get("/api/people/duplicates").json()
+    assert [(x["a_name"], x["b_name"]) for x in dups] == [("María López", "María")]
+
+    merged = client.post(f"/api/people/{short['id']}/merge", json={"into_id": full["id"]}).json()
+    assert merged["name"] == "María López" and merged["aliases"] == ["María", "Mari"] and merged["voice_samples"] == 1
+    assert client.get(f"/api/people/{short['id']}").status_code == 404
+    know = sorted(k["text"] for k in client.get(f"/api/people/{full['id']}/knowledge").json())
+    assert know == ["Lleva el proyecto Atlas", "Vive en Valencia"]  # el repetido se une
+    assert client.get(f"/api/profiles/{prof['id']}").json()["person_ids"] == [full["id"]]
+    session.refresh(v)
+    assert v.analysis["resumen_breve"] == "María presentó el plan."  # «María» ya forma parte del nombre nuevo
+    assert client.get("/api/people/duplicates").json() == []
+    assert client.get(f"/api/people/{full['id']}/versions").json()[0]["reason"] == "Fusionada con «María»"
