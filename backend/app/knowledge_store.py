@@ -177,6 +177,15 @@ def pending_texts(session: Session, video_id: int, profile_id: int | None, perso
     return [K.item_text(r.kind, r.data) for r in session.exec(q.order_by(KnowledgeItem.id.desc()).limit(limit))]
 
 
+def has_pending_sections(session: Session, profile_id: int | None, video_id: int) -> bool:
+    """Si el perfil ya tiene secciones propuestas por otros vídeos (aún sin revisar)."""
+    if not profile_id:
+        return False
+    q = select(KnowledgeItem).where(KnowledgeItem.profile_id == profile_id, KnowledgeItem.kind == "seccion",
+                                    KnowledgeItem.status == "propuesto", KnowledgeItem.video_id != video_id)
+    return session.exec(q).first() is not None
+
+
 def _owner_context(session: Session, video_id: int, owner: tuple, profile_id: int | None,
                    speakers: dict[str, dict], auto: float) -> tuple[dict[str, Any], list[KnowledgeItem]]:
     """Campos de dueño de una propuesta nueva y elementos existentes con los que deduplicarla."""

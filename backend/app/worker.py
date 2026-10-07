@@ -223,7 +223,8 @@ class Worker:
             with Session(engine) as s:
                 rejected = KS.rejected_texts(s, (ctx.profile or {}).get("id"), in_video)
                 pending = KS.pending_texts(s, ctx.video_id, (ctx.profile or {}).get("id"), in_video)
-            proposals = learn.run(ctx, llm, rejected, pending)
+                sections = KS.has_pending_sections(s, (ctx.profile or {}).get("id"), ctx.video_id)
+            proposals = learn.run(ctx, llm, rejected, pending, sections)
             with Session(engine) as s:
                 stats = KS.merge_proposals(s, ctx.video_id, proposals, ctx.settings.voice_auto_threshold)
             ctx.report(1.0, f"{stats['nuevas']} propuestas nuevas, {stats['repetidas']} ya conocidas")
@@ -308,7 +309,9 @@ class Worker:
             if status == "done":
                 job.progress = 1.0
             video = s.get(Video, job.video_id)
-            if status != "done" and video.status == "processing":
+            if status == "done" and video.folder:
+                video.status = "done"  # también al repetir fases sueltas (p. ej. solo «learn»), sin publicar
+            elif status != "done" and video.status == "processing":
                 video.status = "error" if status == "error" else ("done" if video.folder else "pending")
             s.add(job), s.add(video)
             s.commit()

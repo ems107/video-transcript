@@ -122,6 +122,40 @@ def term_candidates(utts: list[dict[str, Any]], screen_terms: list[str], exclude
     return out
 
 
+# Palabras que el LLM añade al redactar y que no tienen por qué estar en la transcripción
+_FILLER = set("""
+para como con que los las del una uno unos unas esta este estos estas esto sobre entre cada desde hasta tambien
+tiene tienen hace hacer esta estan ser son sus mas muy todo todos toda todas otro otra otros otras donde cuando
+lleva llevar gestiona gestionar encargado encargada responsable coordina coordinar trabaja trabajar utiliza
+utilizar existe existen proceso realiza realizar persona personas parte forma manera usa usar suele habitual
+habitualmente principal principales equipo grupo area departamento
+""".split())
+
+
+def _content_words(text: str) -> list[str]:
+    words = []
+    for raw in text.split():
+        w = normalize(raw)
+        acronym = raw.strip("«».,;:()").isupper() and len(w) >= 2
+        if w and w not in _FILLER and (len(w) >= 4 or acronym):
+            words.append(w)
+    return words
+
+
+def supported(text: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]], t: float,
+              window: float = 60.0) -> bool:
+    """Si la transcripción (o la pantalla) alrededor de `t` respalda la frase: comparten la mayoría de sus
+    palabras con contenido. Evita que se cuelen datos inventados o copiados de otro sitio."""
+    words = _content_words(text)
+    if not words:
+        return False
+    near = [u["text"] for u in utts if u["end"] >= t - window and u["start"] <= t + window]
+    near += [v.get("texto_relevante", "") for v in vision if abs(v["t"] - t) <= window]
+    stems = {w[:5] for w in normalize(" ".join(near)).split()}
+    hits = sum(1 for w in words if w[:5] in stems)
+    return hits >= max(1, -(-len(words) * 6 // 10))  # al menos el 60 % (redondeando hacia arriba)
+
+
 def excerpt_at(utts: list[dict[str, Any]], t: float, window: float = 20.0, max_lines: int = 4) -> list[dict[str, Any]]:
     """Líneas reales de la transcripción alrededor de `t` (evidencia de una propuesta)."""
     near = [u for u in utts if u["end"] >= t - window and u["start"] <= t + window]

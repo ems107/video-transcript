@@ -105,7 +105,7 @@ def collect_proposals(
             if not k or t is None or n_ctx >= MAX_CONTEXT or (("profile", None), k) in seen or K.is_ephemeral(text):
                 continue
             lines = evidence_lines(t, utts, vision)
-            if not lines:
+            if not lines or not K.supported(text, utts, vision, t):
                 continue
             seen.add((("profile", None), k))
             n_ctx += 1
@@ -124,7 +124,7 @@ def collect_proposals(
             if per_owner.get(owner, 0) >= MAX_PER_PERSON:
                 continue
             lines = evidence_lines(t, utts, vision)
-            if not lines:
+            if not lines or not K.supported(text, utts, vision, t):
                 continue
             if owner[0] == "new":
                 new_people.add(normalize(owner[1]))
@@ -157,14 +157,16 @@ def collect_proposals(
     return [p for p in out if not p.get("drop")]
 
 
-def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str] | None = None) -> list[dict[str, Any]]:
+def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str] | None = None,
+        sections_pending: bool = False) -> list[dict[str, Any]]:
     utts = ctx.load("corrected.json")
     vision = ctx.load("vision.json", [])
     names = ctx.speaker_names
     profile = ctx.profile
     context = profile_block(profile, ctx.people)
     known = known_block(profile, ctx.people)
-    want_sections = bool(profile) and not K.effective_sections(profile)
+    # Secciones solo para un perfil sin ninguna (ni aceptada ni pendiente de revisar)
+    want_sections = bool(profile) and not K.effective_sections(profile) and not sections_pending
     exclude = {normalize(g["term"]) for g in K.effective_glossary(profile)}
     exclude |= {normalize(n) for p in ctx.people for n in [p["name"], *(p.get("aliases") or [])]}
     screen_terms = ctx.load("screen_terms.json", [])

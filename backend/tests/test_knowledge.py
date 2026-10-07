@@ -190,3 +190,15 @@ def test_is_ephemeral():
         assert is_ephemeral(s), s
     for s in ("Lleva la integración con Salesforce", "Es del equipo de QA", "Domina Kubernetes", "Vive en Valencia"):
         assert not is_ephemeral(s), s
+
+
+def test_supported_requires_transcript_backing():
+    from app.knowledge import supported
+
+    utts = [{"start": 10.0, "end": 15.0, "speaker": "A", "text": "Yo me encargo de la integración con Salesforce."},
+            {"start": 16.0, "end": 20.0, "speaker": "B", "text": "Y el coste mensual de la nube lo vemos con finanzas."}]
+    assert supported("Lleva la integración con Salesforce", utts, [], 12)
+    assert supported("Revisa el coste mensual de la nube con el equipo de finanzas", utts, [], 18)
+    assert not supported("Lleva la integración con el CRM", utts, [], 12)  # copiado de otro sitio
+    assert not supported("Es del equipo de datos", utts, [], 12)
+    assert not supported("Lleva la integración con Salesforce", utts, [], 500)  # lejos de donde se dijo

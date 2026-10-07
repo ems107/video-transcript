@@ -214,11 +214,11 @@ Reglas:
 - Solo lo que se dice o se ve explícitamente. No deduzcas rasgos, intenciones ni opiniones.
 - Conocimiento útil para entender futuras grabaciones. NO incluyas lo puntual de esta reunión: tareas, \
 acuerdos, plazos, fechas de entrega, estado de avance, incidencias concretas, propuestas o lo que se hará \
-próximamente. Pregúntate: ¿seguirá siendo cierto y útil dentro de un mes? Si no, no lo incluyas.
-  Sí: «Lleva la integración con el CRM», «Es del equipo de datos», «El proyecto X es la plataforma de pedidos».
-  No: «Revisó los registros ayer», «Propone mover la tarea al lunes», «Hubo un pico de errores a las 9».
-- Cada dato en una frase breve y autocontenida, en español. En los datos de una persona no repitas su \
-nombre (escribe «Gestiona la integración con…», no «María gestiona…»).
+próximamente. Pregúntate: ¿seguirá siendo cierto y útil dentro de un mes? Si no, no lo incluyas. Vale \
+quién se encarga de qué de forma habitual, a qué equipo u organización pertenece alguien o qué es cada \
+sistema o proyecto; no vale lo que alguien hizo, revisó o propuso en esta reunión.
+- Cada dato en una frase breve y autocontenida, en español, usando las palabras de la transcripción. En \
+los datos de una persona no repitas su nombre: empieza por el verbo.
 - Lo que alguien dice de sí mismo («yo llevo…») es un dato de quien habla; lo que se dice de otra \
 persona es un dato de esa persona.
 - No repitas lo ya conocido. Si algo nuevo lo actualiza o contradice, pon su número en «reemplaza»; \

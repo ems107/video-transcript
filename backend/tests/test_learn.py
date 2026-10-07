@@ -123,3 +123,31 @@ def test_pending_texts_excludes_own_video(session):
     session.add(KnowledgeItem(person_id=maria.id, kind="dato", data={"text": "Del vídeo 2"}, video_id=v2.id))
     session.commit()
     assert KS.pending_texts(session, v1.id, None, {maria.id}) == ["Del vídeo 2"]
+
+
+def test_sections_only_once(session):
+    prof, _, v1, v2 = _setup(session)
+    session.add(KnowledgeItem(profile_id=prof.id, kind="seccion", data={"title": "Estado"}, video_id=v1.id))
+    session.commit()
+    assert KS.has_pending_sections(session, prof.id, v2.id)
+    assert not KS.has_pending_sections(session, prof.id, v1.id)  # una nueva pasada del mismo vídeo sí las repite
+
+
+def test_requeued_video_returns_to_done(engine, monkeypatch):
+    from app import worker as W
+    from app.models import Job
+
+    monkeypatch.setattr(W, "engine", engine)
+    from sqlmodel import Session
+
+    with Session(engine) as s:
+        v = Video(source_path="a.mp4", status="processing", folder="C:/x")
+        s.add(v)
+        s.commit()
+        job = Job(video_id=v.id, status="running")
+        s.add(job)
+        s.commit()
+        jid, vid = job.id, v.id
+    W.Worker()._finish(jid, "done", "Completado")
+    with Session(engine) as s:
+        assert s.get(Video, vid).status == "done"
