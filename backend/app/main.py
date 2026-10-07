@@ -816,4 +816,5 @@ if FRONTEND_DIST.exists():
         f = FRONTEND_DIST / full_path
         if full_path and f.is_file():
             return FileResponse(f)
-        return FileResponse(FRONTEND_DIST / "index.html")
+        # index.html nunca se cachea: tras recompilar apunta a ficheros nuevos (los de /assets llevan hash)
+        return FileResponse(FRONTEND_DIST / "index.html", headers={"Cache-Control": "no-cache"})

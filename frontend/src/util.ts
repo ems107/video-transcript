@@ -28,13 +28,33 @@ export function parseTs(ts: string): number | null {
   return m[3] !== undefined ? +m[1] * 3600 + +m[2] * 60 + +m[3] : +m[1] * 60 + +m[2]
 }
 
-// Estado de los trabajos en tiempo real (SSE)
+// Estado de los trabajos en tiempo real (SSE).
+// La conexión se cierra al ocultar o abandonar la página: el navegador solo admite 6 conexiones por
+// servidor y, si las ocupan pestañas en segundo plano o páginas guardadas en caché, la web se bloquea.
 export function useJobs(): Job[] {
   const [jobs, setJobs] = useState<Job[]>([])
   useEffect(() => {
-    const es = new EventSource('/api/events')
-    es.addEventListener('jobs', (e) => setJobs(JSON.parse((e as MessageEvent).data)))
-    return () => es.close()
+    let es: EventSource | null = null
+    const open = () => {
+      if (es || document.visibilityState !== 'visible') return
+      es = new EventSource('/api/events')
+      es.addEventListener('jobs', (e) => setJobs(JSON.parse((e as MessageEvent).data)))
+    }
+    const close = () => {
+      es?.close()
+      es = null
+    }
+    const onVisibility = () => (document.visibilityState === 'visible' ? open() : close())
+    open()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', close)
+    window.addEventListener('pageshow', open)
+    return () => {
+      close()
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', close)
+      window.removeEventListener('pageshow', open)
+    }
   }, [])
   return jobs
 }
