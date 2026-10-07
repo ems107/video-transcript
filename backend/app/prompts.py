@@ -200,3 +200,97 @@ y marcas de tiempo. {sec}
 - participantes: quién intervino y su papel en la reunión.
 - temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados.
 {("\nInstrucciones adicionales del usuario:\n" + extra) if extra else ""}"""
+
+
+# --------------------------------------------------------------------------- aprendizaje
+
+LEARN_SYSTEM = """Extraes conocimiento duradero de la grabación de una reunión o sesión de trabajo para \
+completar dos fichas:
+- la del tipo de vídeo (perfil): proyectos, clientes, sistemas, procesos, siglas y términos del negocio;
+- la de cada persona: cargo, organización, equipo, responsabilidades, proyectos, conocimientos, relaciones \
+y cualquier dato personal que se mencione.
+
+Reglas:
+- Solo lo que se dice o se ve explícitamente. No deduzcas rasgos, intenciones ni opiniones.
+- Conocimiento útil para entender futuras grabaciones; no las tareas, acuerdos o detalles puntuales de \
+esta reunión.
+- Cada dato en una frase breve y autocontenida, en español.
+- Lo que alguien dice de sí mismo («yo llevo…») es un dato de quien habla; lo que se dice de otra \
+persona es un dato de esa persona.
+- No repitas lo ya conocido. Si algo nuevo lo actualiza o contradice, pon su número en «reemplaza»; \
+si no, 0.
+- Indica la marca de tiempo [hh:mm:ss] de donde sale cada dato.
+- Ante la duda, no lo incluyas: mejor poco y seguro."""
+
+PROFILE_CATEGORY_ENUM = ["proyecto", "cliente", "sistema", "proceso", "sigla", "otro"]
+PERSON_CATEGORY_ENUM = ["cargo", "organizacion", "equipo", "responsabilidad", "proyecto", "conocimiento",
+                        "relacion", "personal", "otro"]
+
+LEARN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "terminos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"termino": {"type": "string"}, "definicion": {"type": "string"}, "t": {"type": "string"}},
+                "required": ["termino", "definicion", "t"],
+            },
+        },
+        "contexto": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "categoria": {"type": "string", "enum": PROFILE_CATEGORY_ENUM},
+                    "texto": {"type": "string"},
+                    "t": {"type": "string"},
+                    "reemplaza": {"type": "integer"},
+                },
+                "required": ["categoria", "texto", "t", "reemplaza"],
+            },
+        },
+        "personas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": "string"},
+                    "categoria": {"type": "string", "enum": PERSON_CATEGORY_ENUM},
+                    "dato": {"type": "string"},
+                    "t": {"type": "string"},
+                    "reemplaza": {"type": "integer"},
+                },
+                "required": ["nombre", "categoria", "dato", "t", "reemplaza"],
+            },
+        },
+        "secciones": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["terminos", "contexto", "personas", "secciones"],
+}
+
+
+def learn_user(context: str, known: str, rejected: list[str], candidates: list[str], part: int, total: int,
+               start: str, end: str, body: str, with_profile: bool, want_sections: bool) -> str:
+    profile_part = (
+        "- terminos: términos del negocio que aparecen (siglas, productos, sistemas, nombres propios que no sean "
+        "personas), escritos tal como aparecen. definicion: solo si se explica o es evidente por el contexto; "
+        "si no, cadena vacía.\n"
+        "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
+        if with_profile else "- terminos y contexto: listas vacías.\n"
+    )
+    sections = ("- secciones: hasta 5 títulos de secciones útiles para resumir este tipo de reuniones."
+                if want_sections else "- secciones: lista vacía.")
+    return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{("Ya conocido (no lo repitas):\n" + known + "\n\n") if known else ""}\
+{("Rechazado antes por el usuario (no lo propongas):\n" + "\n".join("- " + r for r in rejected) + "\n\n") if rejected else ""}\
+{("Posibles términos detectados (pueden no serlo):\n" + ", ".join(candidates) + "\n\n") if candidates and with_profile else ""}\
+Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
+describen lo que se ve.
+
+{body}
+
+Devuelve:
+{profile_part}- personas: datos sobre personas. nombre: el nombre tal como aparece antes de «:» si es quien habla, o \
+el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento, \
+relacion, personal u otro. dato: la frase.
+{sections}"""

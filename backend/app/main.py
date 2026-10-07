@@ -322,7 +322,7 @@ def regenerate(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     if not last or last.status in ("queued", "running"):
         raise HTTPException(400, "Hay un trabajo en curso para este vídeo")
     last.status, last.message, last.error, last.progress = "queued", "Regenerando análisis", "", 0.0
-    last.options = {**(last.options or {}), "redo": ["correct", "analyze", "publish"]}
+    last.options = {**(last.options or {}), "redo": ["correct", "analyze", "learn", "publish"]}
     v.status = "processing"
     session.add(last), session.add(v)
     session.commit()

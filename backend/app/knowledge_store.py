@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from . import knowledge as K
-from .models import KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink
+from .models import KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Speaker, Video
 from .models import now as _now
+from .pipeline.glossary import normalize
 
 
 def item_dict(it: KnowledgeItem) -> dict[str, Any]:
@@ -140,3 +142,97 @@ def restore_version(session: Session, version: KnowledgeVersion) -> None:
                                   status="aceptado", decided_at=now))
     session.commit()
     record_version(session, f"Restaurada la versión del {version.created_at:%d/%m/%Y %H:%M}", profile_id, person_id)
+
+
+# --------------------------------------------------------------------------- propuestas
+
+def speaker_rows(session: Session, video_id: int) -> dict[str, dict[str, Any]]:
+    return {sp.label: sp.model_dump() for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id))}
+
+
+def rejected_texts(session: Session, profile_id: int | None, person_ids: set[int], limit: int = 60) -> list[str]:
+    """Lo rechazado del perfil y de las personas del vídeo, para que el LLM no lo vuelva a proponer."""
+    conds = [KnowledgeItem.person_id.in_(person_ids)] if person_ids else []
+    if profile_id:
+        conds.append(KnowledgeItem.profile_id == profile_id)
+    if not conds:
+        return []
+    q = select(KnowledgeItem).where(KnowledgeItem.status == "rechazado", or_(*conds))
+    return [K.item_text(r.kind, r.data) for r in session.exec(q.order_by(KnowledgeItem.id.desc()).limit(limit))]
+
+
+def _owner_context(session: Session, video_id: int, owner: tuple, profile_id: int | None,
+                   speakers: dict[str, dict], auto: float) -> tuple[dict[str, Any], list[KnowledgeItem]]:
+    """Campos de dueño de una propuesta nueva y elementos existentes con los que deduplicarla."""
+    kind, ref = owner[0], owner[1]
+    if kind == "profile":
+        return {"profile_id": profile_id}, owner_items(session, profile_id=profile_id) if profile_id else []
+    if kind == "person":
+        return {"person_id": ref}, owner_items(session, person_id=ref)
+    if kind == "speaker":
+        existing = list(session.exec(select(KnowledgeItem).where(
+            KnowledgeItem.video_id == video_id, KnowledgeItem.speaker_label == ref, KnowledgeItem.person_id.is_(None))))
+        pid = K.speaker_person(speakers.get(ref), auto)
+        if pid:
+            existing += owner_items(session, person_id=pid)
+        return {"speaker_label": ref}, existing
+    # Persona nueva: una sola propuesta por nombre, venga del vídeo que venga
+    return {"profile_id": profile_id}, list(session.exec(select(KnowledgeItem).where(KnowledgeItem.kind == "nueva_persona")))
+
+
+def _group_new_people(proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Los datos de una persona nueva se agrupan en una única propuesta «nueva_persona»."""
+    out: list[dict[str, Any]] = []
+    by_name: dict[str, dict[str, Any]] = {}
+    for p in proposals:
+        owner = tuple(p["owner"])
+        if owner[0] != "new":
+            out.append({**p, "owner": owner})
+            continue
+        g = by_name.setdefault(normalize(owner[1]), {
+            "kind": "nueva_persona", "category": "", "owner": owner, "data": {"name": owner[1], "datos": []},
+            "t": p["t"], "lines": p["lines"], "replaces": 0})
+        g["data"]["datos"].append({"category": p["category"], "text": p["data"]["text"], "t": p["t"], "lines": p["lines"]})
+    return out + list(by_name.values())
+
+
+def merge_proposals(session: Session, video_id: int, proposals: list[dict[str, Any]], auto: float) -> dict[str, int]:
+    """Guarda las propuestas de un vídeo: une las repetidas, descarta las rechazadas y crea las nuevas."""
+    video = session.get(Video, video_id)
+    when = video.recorded_at or video.created_at
+    speakers = speaker_rows(session, video_id)
+    stats = {"nuevas": 0, "repetidas": 0, "descartadas": 0}
+    for p in _group_new_people(proposals):
+        fields, existing = _owner_context(session, video_id, p["owner"], video.profile_id, speakers, auto)
+        if p["kind"] in K.PROFILE_KINDS and not fields.get("profile_id"):
+            continue
+        key = K.item_key(p["kind"], p["data"])
+        ev = {"video_id": video_id, "t": p["t"], "lines": p["lines"]}
+        match = K.find_match(p["kind"], key, [item_dict(i) for i in existing])
+        if match:
+            it = session.get(KnowledgeItem, match["id"])
+            if it.status in ("rechazado", "retirado"):
+                stats["descartadas"] += 1
+                continue
+            it.evidence, is_new = K.add_evidence(list(it.evidence or []), ev)
+            if is_new:
+                it.seen_count += 1
+                it.last_seen_at = max(d for d in (it.last_seen_at, when) if d)
+            if p["kind"] == "nueva_persona" and it.status == "propuesto":
+                known = {normalize(d["text"]) for d in it.data.get("datos", [])}
+                extra = [d for d in p["data"]["datos"] if normalize(d["text"]) not in known]
+                it.data = {**it.data, "datos": [*it.data.get("datos", []), *extra]}
+            session.add(it)
+            stats["repetidas"] += 1
+            continue
+        replaces = p.get("replaces") or None
+        if replaces and not any(i.id == replaces and i.status == "aceptado" for i in existing):
+            # Un hablante aún sin resolver puede reemplazar un dato de su futura persona: se valida al aceptar
+            target = session.get(KnowledgeItem, replaces) if p["owner"][0] == "speaker" else None
+            if not (target and target.status == "aceptado" and target.kind == p["kind"]):
+                replaces = None
+        session.add(KnowledgeItem(**fields, kind=p["kind"], category=p.get("category", ""), data=p["data"], key=key,
+                                  video_id=video_id, replaces_id=replaces, evidence=[ev], last_seen_at=when))
+        stats["nuevas"] += 1
+    session.commit()
+    return stats

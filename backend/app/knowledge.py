@@ -346,3 +346,12 @@ def prompt_people(people: list[dict[str, Any]], limit: int = 30) -> list[dict[st
     relevant = [p for p in people if p.get("in_video") or p.get("in_profile")]
     relevant.sort(key=lambda p: (not p.get("in_video"), not p.get("in_profile")))
     return (relevant or people)[:limit]
+
+
+def parse_ts(ts: str) -> float | None:
+    """«hh:mm:ss», «mm:ss» o «[hh:mm:ss]» a segundos."""
+    m = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", ts or "")
+    if not m:
+        return None
+    a, b, c = m.groups()
+    return int(a) * 3600 + int(b) * 60 + int(c) if c is not None else int(a) * 60 + int(b)

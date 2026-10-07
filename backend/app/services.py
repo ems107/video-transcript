@@ -31,7 +31,7 @@ def profile_dict(session: Session, profile_id: int | None) -> dict[str, Any] | N
     p = session.get(Profile, profile_id)
     if not p:
         return None
-    learned = [{"kind": i.kind, "category": i.category, "data": i.data, "seen_count": i.seen_count}
+    learned = [{"id": i.id, "kind": i.kind, "category": i.category, "data": i.data, "seen_count": i.seen_count}
                for i in KS.owner_items(session, profile_id=profile_id, statuses=("aceptado",))]
     return {**p.model_dump(), "learned": learned}
 
@@ -49,7 +49,7 @@ def people_for(session: Session, profile_id: int | None) -> list[dict[str, Any]]
     for p in session.exec(select(Person)):
         items = learned.get(p.id, [])
         aliases = list(p.aliases or []) + [i.data.get("name", "") for i in items if i.kind == "alias"]
-        facts = [{"category": i.category, "text": i.data.get("text", "")} for i in items if i.kind == "dato"]
+        facts = [{"id": i.id, "category": i.category, "text": i.data.get("text", "")} for i in items if i.kind == "dato"]
         rows.append({"id": p.id, "name": p.name, "role": p.role, "notes": p.notes, "aliases": [a for a in aliases if a],
                      "facts": facts, "in_profile": p.id in linked})
     return sorted(rows, key=lambda r: (not r["in_profile"], r["name"]))
