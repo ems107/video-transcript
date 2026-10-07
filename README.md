@@ -1,44 +1,68 @@
 # video-transcript
 
-Aplicación web local para transcribir y analizar grabaciones de escritorio (videollamadas, código, presentaciones) con IA 100 % local.
+[![Versión](https://img.shields.io/github/v/release/ems107/video-transcript?label=versi%C3%B3n)](https://github.com/ems107/video-transcript/releases)
+[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
 
-- Transcripción fiel en español con vocabulario de negocio (Whisper large-v3).
-- Separación de hablantes (pyannote community-1) y reconocimiento de personas entre vídeos mediante huellas de voz.
-- Análisis de lo que se ve en pantalla (Qwen3.6-35B-A3B, modelo de visión y texto vía llama.cpp).
-- Resumen detallado, tareas, decisiones y título corto.
-- Perfiles con contexto, glosario y personas.
-- Biblioteca con miniaturas, búsqueda entre vídeos y carpeta de resultados por vídeo.
+Aplicación web local para transcribir y analizar grabaciones del escritorio (videollamadas, código, presentaciones,
+programas) con IA **100 % local, libre y gratuita**. Ningún audio, imagen ni texto sale del ordenador.
 
-## Estructura
+Qué aporta cada versión: [CHANGELOG](CHANGELOG.md).
 
-```
-backend/    API FastAPI + pipeline de IA (Python 3.12, uv)
-frontend/   Web React + Vite + TypeScript
-scripts/    Utilidades (descarga de modelos, etc.)
-models/     Modelos descargados (no se versiona)
-data/       Base de datos y ficheros de trabajo (no se versiona)
-```
+## Índice
+
+- [Qué hace](#qué-hace)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación-una-sola-vez)
+- [Uso](#uso)
+- [Cómo funciona](#cómo-funciona)
+- [Desarrollo](#desarrollo)
+- [Versiones](#versiones)
+- [Licencias](#licencias)
+
+## Qué hace
+
+- **Transcripción fiel** en español, con términos técnicos sueltos en inglés y vocabulario de negocio
+  (Whisper large-v3).
+- **Separación de hablantes** (pyannote community-1) y **reconocimiento de las mismas personas** en
+  distintos vídeos por su huella de voz. La app propone y tú confirmas.
+- **Análisis de lo que se ve en pantalla** (Qwen3.6-35B-A3B): videollamada, código, documentos o
+  diapositivas. Lo visto aporta contexto, nombres y términos a la transcripción y al resumen.
+- **Resumen detallado**, tareas, decisiones, temas pendientes y un título corto, con marcas de tiempo
+  para comprobar cada punto.
+- **Perfiles** por tipo de vídeo, con contexto de negocio, glosario, personas habituales, instrucciones
+  y secciones del resumen.
+- **Carpeta de resultados por vídeo**: `AAAA-MM-DD - Título/` contiene el vídeo original (movido o
+  copiado) y todos los documentos.
+- **Biblioteca web** con miniaturas, reproductor sincronizado con la transcripción, búsqueda en todos
+  los vídeos y botón «Abrir carpeta».
 
 ## Requisitos
 
-- Windows 10/11 con GPU NVIDIA (probado con RTX 5070 Ti, 16 GB) y driver con CUDA 12.8+.
-- [uv](https://docs.astral.sh/uv/), Node.js 20+, ffmpeg, llama.cpp (build CUDA).
+- Windows 10/11 con GPU NVIDIA de 16 GB (probado con una RTX 5070 Ti) y un driver con CUDA 12.8 o
+  posterior.
+- 32 GB de RAM o más: parte del modelo de lenguaje se carga en RAM. Se ha probado con 64 GB.
+- Unos 30 GB libres para los modelos.
+- [uv](https://docs.astral.sh/uv/), [Node.js](https://nodejs.org/) 20+, [git](https://git-scm.com/).
+- ffmpeg y llama.cpp (build CUDA). El script de descarga instala llama.cpp en `models/`.
 
 ## Instalación (una sola vez)
 
 ```powershell
+git clone https://github.com/ems107/video-transcript.git
+cd video-transcript
 winget install Gyan.FFmpeg        # reabrir la terminal después
 cd backend
 uv sync                           # Python 3.12 + PyTorch CUDA 12.8 + WhisperX + pyannote
 uv run python ../scripts/download_models.py --only llama llm whisper align nltk   # ~25 GB
 ```
 
-**pyannote community-1** (separación de hablantes) requiere aceptar sus condiciones una vez:
+**pyannote community-1** (separación de hablantes) es gratuito y tiene licencia CC-BY-4.0, pero su
+descarga exige aceptar sus condiciones una vez:
 
 1. Crea una cuenta gratuita en <https://huggingface.co> y acepta las condiciones en
    <https://huggingface.co/pyannote/speaker-diarization-community-1>.
 2. Crea un token de lectura en <https://huggingface.co/settings/tokens>.
-3. Ejecuta (pedirá el token; no se guarda en ningún sitio):
+3. Ejecuta lo siguiente. Pedirá el token, que no se guarda en ningún sitio:
 
    ```powershell
    cd backend
@@ -51,37 +75,98 @@ Después todo funciona sin conexión a internet.
 
 ```powershell
 .\run.ps1            # abre http://127.0.0.1:8770
-.\run.ps1 -Rebuild   # recompila el frontend tras cambios
+.\run.ps1 -Rebuild   # recompila el frontend tras actualizar
 ```
 
-1. **Perfiles**: crea uno por tipo de vídeo con el contexto de negocio, el glosario y las personas habituales.
-2. **Nuevo análisis**: pega la ruta del vídeo (Explorador → Mayús + clic derecho → «Copiar como ruta»), elige el perfil y añádelo a la cola.
-3. Al terminar, el vídeo y sus resultados están en `<carpeta de analizados>/AAAA-MM-DD - Título/`:
-   `transcripcion.md`, `transcripcion.txt`, `resumen.md`, `analisis.json`, `miniatura.jpg`, `fotogramas/`.
-4. En el detalle del vídeo, **confirma los hablantes**: la app guarda su huella de voz y los reconocerá en próximos vídeos.
-   Si cambias nombres o el perfil, «Regenerar análisis» rehace el resumen.
+1. **Perfiles**: crea uno por tipo de vídeo con el contexto de negocio, el glosario y las personas
+   habituales. Cada línea del glosario tiene el formato `Término | variantes mal oídas | definición`.
+2. **Nuevo análisis**: pega la ruta del vídeo (en el Explorador, Mayús + clic derecho → «Copiar como
+   ruta»), elige el perfil y si el vídeo se mueve o se copia, y añádelo a la cola.
+3. **Cola**: muestra el progreso de cada fase. Si cierras la app, el trabajo se reanuda donde se quedó.
+4. Al terminar, el vídeo y sus resultados están en `<carpeta de analizados>/AAAA-MM-DD - Título/`:
+   `transcripcion.md`, `transcripcion.txt`, `resumen.md`, `analisis.json`, `miniatura.jpg` y
+   `fotogramas/`.
+5. En el detalle del vídeo, **confirma los hablantes**. La app guarda su huella de voz y los reconocerá
+   en los próximos vídeos. Si cambias nombres o el perfil, «Regenerar análisis» rehace el resumen.
+6. **Buscar**: busca en todas las transcripciones y resúmenes (sin distinguir tildes; las comillas
+   buscan la frase exacta).
+
+### Actualizar a una nueva versión
+
+```powershell
+git pull
+cd backend; uv sync; cd ..
+.\run.ps1 -Rebuild
+```
+
+Antes de actualizar, lee en el [CHANGELOG](CHANGELOG.md) si la versión requiere algún paso adicional.
+Las versiones mayores pueden requerirlo.
 
 ## Cómo funciona
 
 | Fase | Qué hace |
 |---|---|
-| Ingesta | ffprobe + extracción de audio 16 kHz (mezcla de pistas o la elegida; pista de micrófono opcional) |
+| Ingesta | ffprobe y extracción del audio a 16 kHz (mezcla de pistas o la elegida; pista de micrófono opcional) |
 | Fotogramas | Muestreo cada 2 s y selección por cambio de escena (hash perceptual) |
 | Visión | Qwen3.6 describe cada fotograma: tipo de escena, texto visible, participantes y hablante resaltado |
-| Transcripción | Whisper large-v3 con detección de voz y contexto inicial con glosario, personas y términos vistos en pantalla |
+| Transcripción | Whisper large-v3 con detección de voz y un contexto inicial con el glosario, las personas y los términos vistos en pantalla |
 | Alineamiento | wav2vec2 español: tiempos por palabra |
-| Hablantes | pyannote community-1 + huella de voz por hablante |
-| Identificación | Huellas de voz conocidas + nombre resaltado en pantalla + pista de micrófono |
-| Corrección | Glosario: variantes declaradas y mayúsculas directas; parecidos fonéticos validados por el LLM |
-| Análisis | Resumen por bloques de 30 min y redacción final: título, resumen, tareas, decisiones, pendientes |
-| Publicación | Carpeta propia con el vídeo y los documentos; indexado para la búsqueda |
+| Hablantes | pyannote community-1 y huella de voz de cada hablante |
+| Identificación | Huellas de voz conocidas, nombre resaltado en pantalla y pista de micrófono |
+| Corrección | Glosario: variantes declaradas y mayúsculas directas; los parecidos fonéticos los valida el LLM |
+| Análisis | Resumen por bloques de 30 min y redacción final: título, resumen, tareas, decisiones y pendientes |
+| Publicación | Carpeta propia con el vídeo y los documentos, indexada para la búsqueda |
 
-Solo un modelo ocupa la GPU en cada momento. Cada fase guarda un punto de control en `data/work/`,
-así que si se cierra la app el trabajo se reanuda donde se quedó.
+Solo un modelo ocupa la GPU en cada momento: llama-server se arranca y se detiene según la fase. Cada
+fase guarda un punto de control en `data/work/`.
 
-## Licencias de los modelos
+## Desarrollo
 
-Todo el software y los modelos son gratuitos y se ejecutan localmente:
+```
+backend/    API FastAPI + pipeline de IA (Python 3.12, uv, SQLite + FTS5)
+  app/pipeline/   una fase por módulo (ingest, frames, vision, asr, diarize, identify, correct, analyze, export)
+  tests/          pruebas de la lógica sin GPU
+frontend/   Web React + Vite + TypeScript
+scripts/    download_models.py (modelos), release.py (versiones)
+docs/       documentación del proyecto
+models/     modelos descargados (no se versiona)
+data/       base de datos, ajustes y ficheros de trabajo (no se versiona)
+```
+
+```powershell
+# backend con recarga automática
+cd backend; uv run uvicorn app.main:app --port 8770 --reload
+# frontend con recarga automática (http://localhost:5173, redirige /api al backend)
+cd frontend; npm install; npm run dev
+# pruebas
+cd backend; uv run pytest
+```
+
+## Versiones
+
+El proyecto usa [versionado semántico](https://semver.org/lang/es/). Cada versión tiene:
+
+- un tag `vX.Y.Z`;
+- una [release en GitHub](https://github.com/ems107/video-transcript/releases);
+- su entrada en el [CHANGELOG](CHANGELOG.md), donde se explica qué aporta.
+
+La versión instalada se muestra en la barra lateral de la web.
+
+El flujo para desarrollar nuevas funciones y publicar versiones está en
+[docs/VERSIONADO.md](docs/VERSIONADO.md). En resumen:
+
+```powershell
+git switch -c feature/mi-funcion      # desarrollar en una rama
+# ... commits + entrada en "Sin publicar" del CHANGELOG ...
+git switch main; git merge --no-ff feature/mi-funcion
+python scripts/release.py minor --push   # o patch / major
+```
+
+## Licencias
+
+El código de este repositorio se distribuye bajo la licencia [MIT](LICENSE).
+
+Todos los componentes y modelos son gratuitos y se ejecutan localmente:
 
 | Componente | Licencia |
 |---|---|
@@ -94,4 +179,7 @@ Todo el software y los modelos son gratuitos y se ejecutan localmente:
 
 ### Atribución
 
-Separación de hablantes: *pyannote/speaker-diarization-community-1* por pyannoteAI ([modelo](https://huggingface.co/pyannote/speaker-diarization-community-1)), licencia [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). Su descarga requiere una cuenta gratuita de Hugging Face y aceptar sus condiciones una única vez; después funciona sin conexión.
+Separación de hablantes: *pyannote/speaker-diarization-community-1* por pyannoteAI
+([modelo](https://huggingface.co/pyannote/speaker-diarization-community-1)), licencia
+[CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). Su descarga requiere una cuenta gratuita de
+Hugging Face y aceptar sus condiciones una única vez. Después funciona sin conexión.

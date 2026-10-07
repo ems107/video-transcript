@@ -142,7 +142,7 @@ export type SearchHit = {
 
 export type Settings = Record<string, string | number>
 
-export type Status = { checks: Record<string, boolean>; ready: boolean; current_job: number | null }
+export type Status = { version: string; checks: Record<string, boolean>; ready: boolean; current_job: number | null }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {

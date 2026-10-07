@@ -22,7 +22,7 @@ from sqlalchemy import text
 from sqlmodel import Session, func, select
 from sse_starlette.sse import EventSourceResponse
 
-from . import services
+from . import __version__, services
 from .config import FRONTEND_DIST, MODELS_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -41,7 +41,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="video-transcript", lifespan=lifespan)
+app = FastAPI(title="video-transcript", version=__version__, lifespan=lifespan)
 SessionDep = Depends(get_session)
 
 
@@ -65,7 +65,7 @@ def status() -> dict[str, Any]:
         "align": any((MODELS_DIR / "hf" / "hub").glob("models--jonatasgrosman--wav2vec2-large-xlsr-53-spanish")),
         "diarization": (Path(s.diarization_model_dir) / "config.yaml").exists(),
     }
-    return {"checks": checks, "ready": all(checks.values()), "current_job": worker.current}
+    return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current}
 
 
 @app.get("/api/settings")

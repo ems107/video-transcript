@@ -50,6 +50,7 @@ export default function App() {
           <NavLink to="/personas">Personas</NavLink>
           <NavLink to="/ajustes">Ajustes</NavLink>
         </nav>
+        {status?.version && <div className="version">v{status.version}</div>}
       </aside>
       <main className="main">
         {missing.length > 0 && (
