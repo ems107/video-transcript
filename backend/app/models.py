@@ -129,3 +129,42 @@ class Keyframe(SQLModel, table=True):
     visible_text: str = ""
     participants: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     active_speaker: str = ""
+
+
+class KnowledgeItem(SQLModel, table=True):
+    """Conocimiento aprendido de los vídeos (o propuesto por la IA) sobre un perfil o una persona.
+
+    Lo manual vive en Profile/Person y la IA nunca lo toca; esto son elementos sueltos que el usuario
+    acepta o rechaza. Los aceptados no se borran: se retiran.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    profile_id: Optional[int] = Field(default=None, foreign_key="profile.id", index=True, ondelete="CASCADE")
+    person_id: Optional[int] = Field(default=None, foreign_key="person.id", index=True, ondelete="CASCADE")
+    # termino | contexto | seccion (perfil) · dato | alias (persona) · nueva_persona
+    kind: str
+    category: str = ""
+    data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    key: str = Field(default="", index=True)  # texto normalizado para deduplicar
+    status: str = "propuesto"  # propuesto | aceptado | rechazado | retirado
+    # Origen: vídeo y hablante (los datos de un hablante se atribuyen a la persona al resolverlo)
+    video_id: Optional[int] = Field(default=None, foreign_key="video.id", index=True, ondelete="SET NULL")
+    speaker_label: str = ""
+    replaces_id: Optional[int] = None
+    # [{video_id, t, lines: [{t, label, text}]}]
+    evidence: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    seen_count: int = 1  # nº de vídeos distintos en los que aparece
+    last_seen_at: Optional[NaiveDatetime] = None
+    created_at: NaiveDatetime = Field(default_factory=now)
+    decided_at: Optional[NaiveDatetime] = None
+
+
+class KnowledgeVersion(SQLModel, table=True):
+    """Foto del estado de un perfil o persona (manual + aprendido aceptado) tras cada cambio."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    profile_id: Optional[int] = Field(default=None, foreign_key="profile.id", index=True, ondelete="CASCADE")
+    person_id: Optional[int] = Field(default=None, foreign_key="person.id", index=True, ondelete="CASCADE")
+    reason: str = ""
+    snapshot: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=now)
