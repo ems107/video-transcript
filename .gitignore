@@ -27,3 +27,7 @@ data/
 *.wav
 samples/
 analizados/
+
+# Claude Code: ajustes y notas personales
+.claude/settings.local.json
+CLAUDE.local.md

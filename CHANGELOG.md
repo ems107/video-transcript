@@ -8,6 +8,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- Documentación para asistentes de IA: `CLAUDE.md`, guías por tema en `docs/ai/` y reglas por zona
+  del código en `.claude/rules/`.
+
 ## [1.0.0] - 2026-10-07
 
 Primera versión completa: transcripción, hablantes, visión, análisis y biblioteca, todo local.

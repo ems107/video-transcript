@@ -1,0 +1,102 @@
+# video-transcript
+
+App web local (FastAPI + React) que transcribe y analiza grabaciones del escritorio: videollamadas en
+español con términos técnicos sueltos en inglés, de 30 minutos a más de 3 horas. Produce la
+transcripción con hablantes identificados entre vídeos, el análisis de la pantalla, un resumen, tareas
+y decisiones, y un título. Cada vídeo se publica en su propia carpeta `AAAA-MM-DD - Título/`. El
+usuario final es una sola persona en su PC con Windows y una RTX 5070 Ti de 16 GB.
+
+## Restricciones (no negociables)
+
+- **Solo software y modelos libres, gratuitos y locales.** Nada de APIs de pago ni servicios en la
+  nube, y nada que envíe audio, imagen o texto fuera del equipo. Si una mejora requiere algo de pago o
+  con licencia restrictiva, pregunta antes.
+- **Genérico, no atado a ningún programa.** Prompts, ejemplos e interfaz no deben mencionar programas
+  concretos de videollamada o escritorio. La pantalla puede mostrar cualquier cosa.
+- **Fidelidad.** La transcripción y el análisis nunca inventan contenido. La corrección de términos es
+  conservadora (ver `docs/ai/AI_PROMPTS.md`).
+- **Tokens y secretos.** El token de Hugging Face nunca se guarda en disco ni en el repositorio, y no
+  debe pegarse en la conversación. El usuario ejecuta en su propia terminal las descargas que lo
+  necesitan.
+- **Una sola GPU de 16 GB.** Nunca debe haber dos modelos grandes cargados a la vez (ver
+  `docs/ai/AI_MODELS_GPU.md`).
+
+## Comandos
+
+```powershell
+.\run.ps1 [-Rebuild] [-NoBrowser]                          # app completa en http://127.0.0.1:8770
+cd backend;  uv run pytest                                 # pruebas de lógica (sin GPU, < 1 s)
+cd backend;  uv run uvicorn app.main:app --port 8770 --reload
+cd frontend; npm run dev                                   # :5173, redirige /api a :8770
+cd frontend; npm run build                                 # tsc -b + vite build (comprueba los tipos)
+cd frontend; npm run lint                                  # oxlint
+python scripts/release.py patch|minor|major [--push]       # publicar una versión (docs/VERSIONADO.md)
+```
+
+- El entorno Python lo gestiona `uv` (Python 3.12). No uses `pip` ni el Python del sistema para el
+  backend.
+- `ruff check` ya da avisos en el código existente. No los corrijas de forma masiva fuera de la tarea,
+  pero el código nuevo no debe añadir más. `Optional[...]` en `models.py` es intencionado, porque
+  SQLModel lo requiere.
+- Shell: Windows. En Git Bash, `curl` con argumentos UTF-8 falla; envía el cuerpo con
+  `--data-binary @fichero`.
+
+## Mapa del código
+
+```
+backend/app/
+  main.py        API REST + SSE (/api/events) + sirve frontend/dist
+  worker.py      cola de un hilo: STAGES, reanudación por fases, publicación (_publish)
+  pipeline/      una fase por módulo; base.py define JobContext
+  prompts.py     todos los prompts y esquemas JSON del LLM
+  services.py    helpers de BD compartidos por la API y el worker (exportar, indexar, nombres)
+  models.py      tablas SQLModel;  db.py: motor SQLite + FTS5
+  config.py      Settings (persistidos en data/settings.json) y rutas
+  env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA
+  llm.py         arranca y para llama-server; chat_json con salida JSON validada por esquema
+  media.py       ffprobe / ffmpeg
+frontend/src/    App.tsx (rutas), api.ts (tipos + cliente), util.ts, pages/*.tsx, index.css
+scripts/         download_models.py, release.py
+models/ data/ samples/   no se versionan (modelos, BD y trabajo, vídeos de prueba)
+```
+
+## Guías por tema (léelas antes de tocar esa parte)
+
+| Si vas a… | Lee |
+|---|---|
+| Tocar una fase, añadir otra o cambiar la reanudación o la publicación | `docs/ai/AI_PIPELINE.md` |
+| Cambiar modelos, VRAM, llama-server, dependencias de IA o la descarga | `docs/ai/AI_MODELS_GPU.md` |
+| Cambiar prompts, el glosario, la identificación de hablantes o el resumen | `docs/ai/AI_PROMPTS.md` |
+| Cambiar tablas, endpoints, ajustes o la búsqueda | `docs/ai/AI_BACKEND.md` |
+| Cambiar páginas, tipos de la API o estilos | `docs/ai/AI_FRONTEND.md` |
+| Publicar una versión | `docs/VERSIONADO.md` |
+
+`.claude/rules/*.md` recuerdan las reglas clave de cada zona del código y se cargan solas al tocar
+sus ficheros.
+
+**Mantén esta documentación al día.** Si un cambio deja algo de este fichero, de `docs/ai/` o de
+`.claude/rules/` desactualizado (rutas, fases, claves, comandos, umbrales), actualízalo en el mismo
+commit. Lo que se pueda deducir leyendo el código no hace falta documentarlo.
+
+## Convenciones
+
+- **Idioma:** la interfaz, los mensajes al usuario, los prompts, los comentarios, los docstrings y los
+  mensajes de commit van en español. Los identificadores de código van en inglés, salvo las claves JSON
+  del análisis (`titulo`, `tareas`…), que la web y los exportadores ya usan.
+- Comentarios escasos: explican el *porqué*. Imita el estilo del fichero que edites.
+- **Git:** commits pequeños y descriptivos por cada paso lógico que funcione. Las funciones nuevas van
+  en una rama `feature/...`. Cada cambio visible para el usuario lleva una línea bajo
+  `## [Sin publicar]` en `CHANGELOG.md`, dentro del mismo commit. No hagas push, no crees tags y no
+  publiques releases si el usuario no lo pide.
+- **Versión:** su única fuente es el fichero `VERSION`. Los manifiestos los actualiza `release.py`;
+  no la cambies a mano.
+
+## Verificación antes de dar algo por terminado
+
+1. `uv run pytest` en verde. Si cambias lógica pura (glosario, voz, troceo, transcripción), añade o
+   ajusta un test en `backend/tests/test_logic.py`.
+2. Si cambias el frontend o `api.ts`, `npm run build` sin errores.
+3. Si cambias la pipeline o los prompts, haz una prueba de punta a punta con un vídeo corto a través de
+   la API o la web. Los vídeos de prueba están en `samples/videos-prueba/` (ver `docs/ai/AI_PIPELINE.md`).
+   Para no mover los vídeos de muestra, usa `file_mode: "copy"`.
+4. Si la prueba crea datos en `data/` que el usuario no ha pedido, avísale o restáuralos al terminar.

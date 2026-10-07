@@ -128,7 +128,7 @@ backend/    API FastAPI + pipeline de IA (Python 3.12, uv, SQLite + FTS5)
   tests/          pruebas de la lógica sin GPU
 frontend/   Web React + Vite + TypeScript
 scripts/    download_models.py (modelos), release.py (versiones)
-docs/       documentación del proyecto
+docs/       documentación del proyecto (docs/ai/: guías técnicas para asistentes de IA)
 models/     modelos descargados (no se versiona)
 data/       base de datos, ajustes y ficheros de trabajo (no se versiona)
 ```
@@ -141,6 +141,9 @@ cd frontend; npm install; npm run dev
 # pruebas
 cd backend; uv run pytest
 ```
+
+Para desarrollar con asistentes de IA (Claude Code), [`CLAUDE.md`](CLAUDE.md) recoge las restricciones,
+los comandos y el mapa del código, y enlaza las guías de cada parte en [`docs/ai/`](docs/ai/).
 
 ## Versiones
 
