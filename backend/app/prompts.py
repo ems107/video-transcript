@@ -212,15 +212,20 @@ y cualquier dato personal que se mencione.
 
 Reglas:
 - Solo lo que se dice o se ve explícitamente. No deduzcas rasgos, intenciones ni opiniones.
-- Conocimiento útil para entender futuras grabaciones; no las tareas, acuerdos o detalles puntuales de \
-esta reunión.
-- Cada dato en una frase breve y autocontenida, en español.
+- Conocimiento útil para entender futuras grabaciones. NO incluyas lo puntual de esta reunión: tareas, \
+acuerdos, plazos, fechas de entrega, estado de avance, incidencias concretas, propuestas o lo que se hará \
+próximamente. Pregúntate: ¿seguirá siendo cierto y útil dentro de un mes? Si no, no lo incluyas.
+  Sí: «Lleva la integración con el CRM», «Es del equipo de datos», «El proyecto X es la plataforma de pedidos».
+  No: «Revisó los registros ayer», «Propone mover la tarea al lunes», «Hubo un pico de errores a las 9».
+- Cada dato en una frase breve y autocontenida, en español. En los datos de una persona no repitas su \
+nombre (escribe «Gestiona la integración con…», no «María gestiona…»).
 - Lo que alguien dice de sí mismo («yo llevo…») es un dato de quien habla; lo que se dice de otra \
 persona es un dato de esa persona.
 - No repitas lo ya conocido. Si algo nuevo lo actualiza o contradice, pon su número en «reemplaza»; \
 si no, 0.
 - Indica la marca de tiempo [hh:mm:ss] de donde sale cada dato.
-- Ante la duda, no lo incluyas: mejor poco y seguro."""
+- Ante la duda, no lo incluyas: mejor poco y seguro. En muchas reuniones no hay nada nuevo que aprender: \
+devuelve entonces listas vacías."""
 
 PROFILE_CATEGORY_ENUM = ["proyecto", "cliente", "sistema", "proceso", "sigla", "otro"]
 PERSON_CATEGORY_ENUM = ["cargo", "organizacion", "equipo", "responsabilidad", "proyecto", "conocimiento",
@@ -271,11 +276,12 @@ LEARN_SCHEMA = {
 
 
 def learn_user(context: str, known: str, rejected: list[str], candidates: list[str], part: int, total: int,
-               start: str, end: str, body: str, with_profile: bool, want_sections: bool) -> str:
+               start: str, end: str, body: str, with_profile: bool, want_sections: bool,
+               pending: list[str] | None = None) -> str:
     profile_part = (
         "- terminos: términos del negocio que aparecen (siglas, productos, sistemas, nombres propios que no sean "
-        "personas), escritos tal como aparecen. definicion: solo si se explica o es evidente por el contexto; "
-        "si no, cadena vacía.\n"
+        "personas), escritos tal como aparecen; no palabras comunes. definicion: qué es, de forma general y "
+        "duradera, solo si se explica o es evidente; si no, cadena vacía.\n"
         "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
         if with_profile else "- terminos y contexto: listas vacías.\n"
     )
@@ -283,6 +289,7 @@ def learn_user(context: str, known: str, rejected: list[str], candidates: list[s
                 if want_sections else "- secciones: lista vacía.")
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{("Ya conocido (no lo repitas):\n" + known + "\n\n") if known else ""}\
 {("Rechazado antes por el usuario (no lo propongas):\n" + "\n".join("- " + r for r in rejected) + "\n\n") if rejected else ""}\
+{("Ya propuesto y pendiente de revisar (no lo repitas, ni con otras palabras):\n" + "\n".join("- " + r for r in pending) + "\n\n") if pending else ""}\
 {("Posibles términos detectados (pueden no serlo):\n" + ", ".join(candidates) + "\n\n") if candidates and with_profile else ""}\
 Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
 describen lo que se ve.
@@ -291,6 +298,6 @@ describen lo que se ve.
 
 Devuelve:
 {profile_part}- personas: datos sobre personas. nombre: el nombre tal como aparece antes de «:» si es quien habla, o \
-el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento, \
-relacion, personal u otro. dato: la frase.
+el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento \
+(materias o sistemas que domina, no hechos concretos que sabe), relacion, personal u otro. dato: la frase.
 {sections}"""

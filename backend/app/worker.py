@@ -222,7 +222,8 @@ class Worker:
             in_video = {p["id"] for p in ctx.people if p.get("in_video")}
             with Session(engine) as s:
                 rejected = KS.rejected_texts(s, (ctx.profile or {}).get("id"), in_video)
-            proposals = learn.run(ctx, llm, rejected)
+                pending = KS.pending_texts(s, ctx.video_id, (ctx.profile or {}).get("id"), in_video)
+            proposals = learn.run(ctx, llm, rejected, pending)
             with Session(engine) as s:
                 stats = KS.merge_proposals(s, ctx.video_id, proposals, ctx.settings.voice_auto_threshold)
             ctx.report(1.0, f"{stats['nuevas']} propuestas nuevas, {stats['repetidas']} ya conocidas")

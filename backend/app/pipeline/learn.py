@@ -39,12 +39,21 @@ def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) ->
     return "\n".join(lines)
 
 
-def evidence_lines(t: float, utts: list[dict[str, Any]], vision: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def evidence_lines(t: float, utts: list[dict[str, Any]], vision: list[dict[str, Any]],
+                   term: str = "") -> list[dict[str, Any]]:
+    """Transcripción alrededor de `t`; la pantalla solo si muestra el término (o si no hay habla)."""
     lines = K.excerpt_at(utts, t, max_lines=3)
     frame = min(vision, key=lambda v: abs(v["t"] - t), default=None)
-    if frame and abs(frame["t"] - t) <= 5 and (frame.get("texto_relevante") or "").strip():
-        lines.append({"t": float(frame["t"]), "label": "(pantalla)", "text": frame["texto_relevante"][:400]})
+    text = (frame or {}).get("texto_relevante") or ""
+    shows_term = bool(term) and f" {normalize(term)} " in f" {normalize(text)} "
+    if frame and abs(frame["t"] - t) <= 5 and text.strip() and (shows_term or not lines):
+        lines.append({"t": float(frame["t"]), "label": "(pantalla)", "text": text[:400]})
     return sorted(lines, key=lambda x: x["t"])
+
+
+def looks_like_term(term: str, screen: set[str]) -> bool:
+    """Un término del negocio lleva mayúsculas o cifras, o se ha visto escrito en pantalla."""
+    return any(c.isupper() or c.isdigit() for c in term) or normalize(term) in screen
 
 
 def collect_proposals(
@@ -57,12 +66,14 @@ def collect_proposals(
     profile: dict[str, Any] | None,
     hints: dict[str, dict[str, int]],
     want_sections: bool,
+    screen_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Convierte las respuestas del LLM en propuestas verificadas, con su dueño y su evidencia."""
     out: list[dict[str, Any]] = []
     known_terms = {normalize(g["term"]) for g in K.effective_glossary(profile)}
     person_names = {normalize(n) for p in people for n in [p["name"], *(p.get("aliases") or [])]}
     person_names |= {normalize(n) for n in speaker_names.values()}
+    screen = {normalize(s) for s in screen_terms or []}
 
     def stamp(ts: str, rng: tuple[float, float]) -> float | None:
         t = K.parse_ts(ts)
@@ -74,13 +85,13 @@ def collect_proposals(
         for x in r.get("terminos", []):
             term = x.get("termino", "").strip()
             k = normalize(term)
-            if not k or k in known_terms or k in person_names or k in terms:
+            if not k or k in known_terms or k in person_names or k in terms or not looks_like_term(term, screen):
                 continue
             occ = K.term_occurrences(term, utts, vision, limit=50)
             if occ:
                 terms[k] = {"kind": "termino", "category": "", "owner": ("profile", None), "n": len(occ),
                             "data": {"term": term, "definition": x.get("definicion", "").strip()},
-                            "t": occ[0], "lines": evidence_lines(occ[0], utts, vision), "replaces": 0}
+                            "t": occ[0], "lines": evidence_lines(occ[0], utts, vision, term), "replaces": 0}
     out += sorted(terms.values(), key=lambda p: -p["n"])[:MAX_TERMS]
 
     n_ctx = 0
@@ -91,7 +102,7 @@ def collect_proposals(
         for x in r.get("contexto", []):
             text, t = x.get("texto", "").strip(), stamp(x.get("t", ""), rng)
             k = normalize(text)
-            if not k or t is None or n_ctx >= MAX_CONTEXT or (("profile", None), k) in seen:
+            if not k or t is None or n_ctx >= MAX_CONTEXT or (("profile", None), k) in seen or K.is_ephemeral(text):
                 continue
             lines = evidence_lines(t, utts, vision)
             if not lines:
@@ -104,7 +115,7 @@ def collect_proposals(
             text, t = x.get("dato", "").strip(), stamp(x.get("t", ""), rng)
             owner = K.resolve_name(x.get("nombre", ""), speaker_names, people)
             k = normalize(text)
-            if not k or t is None or owner is None or (owner, k) in seen:
+            if not k or t is None or owner is None or (owner, k) in seen or K.is_ephemeral(text):
                 continue
             if owner[0] == "new":
                 owner = ("new", owner[1].strip())
@@ -146,7 +157,7 @@ def collect_proposals(
     return [p for p in out if not p.get("drop")]
 
 
-def run(ctx: JobContext, llm: LLMServer, rejected: list[str]) -> list[dict[str, Any]]:
+def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str] | None = None) -> list[dict[str, Any]]:
     utts = ctx.load("corrected.json")
     vision = ctx.load("vision.json", [])
     names = ctx.speaker_names
@@ -156,7 +167,8 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str]) -> list[dict[str, 
     want_sections = bool(profile) and not K.effective_sections(profile)
     exclude = {normalize(g["term"]) for g in K.effective_glossary(profile)}
     exclude |= {normalize(n) for p in ctx.people for n in [p["name"], *(p.get("aliases") or [])]}
-    candidates = K.term_candidates(utts, ctx.load("screen_terms.json", []), exclude)
+    screen_terms = ctx.load("screen_terms.json", [])
+    candidates = K.term_candidates(utts, screen_terms, exclude)
 
     chunks = chunk_lines(timeline(utts, vision, names), ctx.settings.chunk_minutes)
     state = ctx.load("learn.partial.json", {})
@@ -171,7 +183,7 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str]) -> list[dict[str, 
             state[str(i)] = llm.chat_json(
                 LEARN_SYSTEM,
                 learn_user(context, known, rejected, candidates, i + 1, len(chunks), fmt_ts(start), fmt_ts(end), body,
-                           with_profile=bool(profile), want_sections=want_sections and i == 0),
+                           with_profile=bool(profile), want_sections=want_sections and i == 0, pending=pending),
                 LEARN_SCHEMA, max_tokens=4000,
             )
             ctx.save("learn.partial.json", state)
@@ -180,6 +192,7 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str]) -> list[dict[str, 
 
     identities = ctx.load("identities.json", {})
     hints = {label: d.get("visual_hints") or {} for label, d in identities.items()}
-    proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile, hints, want_sections)
+    proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile, hints, want_sections,
+                                  screen_terms)
     ctx.save("proposals.json", proposals)
     return proposals

@@ -161,6 +161,22 @@ def rejected_texts(session: Session, profile_id: int | None, person_ids: set[int
     return [K.item_text(r.kind, r.data) for r in session.exec(q.order_by(KnowledgeItem.id.desc()).limit(limit))]
 
 
+def pending_texts(session: Session, video_id: int, profile_id: int | None, person_ids: set[int],
+                  limit: int = 80) -> list[str]:
+    """Propuestas pendientes de otros vídeos sobre el perfil y las personas de este.
+
+    Las de este mismo vídeo no se incluyen: la nueva pasada las sustituye (`drop_pending_from`).
+    """
+    conds = [KnowledgeItem.person_id.in_(person_ids)] if person_ids else []
+    if profile_id:
+        conds.append(KnowledgeItem.profile_id == profile_id)
+    if not conds:
+        return []
+    q = select(KnowledgeItem).where(KnowledgeItem.status == "propuesto", or_(*conds),
+                                    or_(KnowledgeItem.video_id.is_(None), KnowledgeItem.video_id != video_id))
+    return [K.item_text(r.kind, r.data) for r in session.exec(q.order_by(KnowledgeItem.id.desc()).limit(limit))]
+
+
 def _owner_context(session: Session, video_id: int, owner: tuple, profile_id: int | None,
                    speakers: dict[str, dict], auto: float) -> tuple[dict[str, Any], list[KnowledgeItem]]:
     """Campos de dueño de una propuesta nueva y elementos existentes con los que deduplicarla."""
@@ -196,12 +212,35 @@ def _group_new_people(proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out + list(by_name.values())
 
 
+def drop_pending_from(session: Session, video_id: int) -> None:
+    """Una nueva pasada sobre un vídeo sustituye sus propuestas pendientes anteriores.
+
+    Lo aceptado y lo rechazado se conserva; una propuesta que también viene de otros vídeos solo pierde
+    la evidencia de este.
+    """
+    q = select(KnowledgeItem).where(KnowledgeItem.status == "propuesto")
+    for it in session.exec(q):
+        ev = it.evidence or []
+        rest = [e for e in ev if e.get("video_id") != video_id]
+        if len(rest) == len(ev):
+            continue
+        if rest:
+            it.evidence, it.seen_count = rest, max(1, it.seen_count - 1)
+            if it.video_id == video_id:
+                it.video_id = rest[-1].get("video_id")
+            session.add(it)
+        else:
+            session.delete(it)
+    session.flush()
+
+
 def merge_proposals(session: Session, video_id: int, proposals: list[dict[str, Any]], auto: float) -> dict[str, int]:
     """Guarda las propuestas de un vídeo: une las repetidas, descarta las rechazadas y crea las nuevas."""
     video = session.get(Video, video_id)
     when = video.recorded_at or video.created_at
     speakers = speaker_rows(session, video_id)
     stats = {"nuevas": 0, "repetidas": 0, "descartadas": 0}
+    drop_pending_from(session, video_id)
     for p in _group_new_people(proposals):
         fields, existing = _owner_context(session, video_id, p["owner"], video.profile_id, speakers, auto)
         if p["kind"] in K.PROFILE_KINDS and not fields.get("profile_id"):

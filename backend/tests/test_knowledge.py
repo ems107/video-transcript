@@ -180,3 +180,13 @@ def test_whisper_prompt_learned_after_manual():
 
     prompt = build_whisper_prompt(PROFILE, [], ["Jira"])
     assert prompt.index("Salesforce") < prompt.index("Atlas") < prompt.index("Jira")
+
+
+def test_is_ephemeral():
+    from app.knowledge import is_ephemeral
+
+    for s in ("Sabe que ayer no se realizó ningún despliegue", "La tarea tardó el doble", "Lo revisamos el lunes",
+              "Hubo un pico a las 9:00", "Ha propuesto mover la tarea"):
+        assert is_ephemeral(s), s
+    for s in ("Lleva la integración con Salesforce", "Es del equipo de QA", "Domina Kubernetes", "Vive en Valencia"):
+        assert not is_ephemeral(s), s

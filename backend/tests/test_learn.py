@@ -19,7 +19,8 @@ PROFILE = {"id": 1, "name": "Trabajo", "glossary": [], "summary_sections": [], "
 def llm_result():
     return {
         "terminos": [{"termino": "Jira", "definicion": "", "t": "00:00:16"},
-                     {"termino": "Zeus", "definicion": "inventado", "t": "00:00:12"}],
+                     {"termino": "Zeus", "definicion": "inventado", "t": "00:00:12"},
+                     {"termino": "pedidos", "definicion": "palabra común", "t": "00:00:16"}],
         "contexto": [{"categoria": "proyecto", "texto": "Atlas es un proyecto activo desde enero", "t": "00:00:11",
                       "reemplaza": 0},
                      {"categoria": "otro", "texto": "Fuera de rango", "t": "02:00:00", "reemplaza": 0}],
@@ -38,7 +39,8 @@ def test_collect_proposals_verifies_everything():
     kinds = [(p["kind"], p["owner"], p["data"].get("term") or p["data"].get("text") or p["data"].get("name")
               or p["data"].get("title")) for p in props]
     assert ("termino", ("profile", None), "Jira") in kinds
-    assert not [k for k in kinds if k[2] in ("Zeus", "Fuera de rango", "Nada")]  # inventado, sin evidencia o sin dueño
+    # inventado, palabra común, sin evidencia o sin dueño
+    assert not [k for k in kinds if k[2] in ("Zeus", "pedidos", "Fuera de rango", "Nada")]
     assert ("dato", ("speaker", "SPEAKER_00"), "Lleva el proyecto Atlas") in kinds
     assert ("dato", ("new", "Lucía"), "Es del equipo de QA") in kinds
     assert ("alias", ("speaker", "SPEAKER_00"), "María L.") in kinds
@@ -71,18 +73,53 @@ def test_merge_proposals_dedupes_and_respects_rejections(session):
     props = collect_proposals([llm_result()], [(10.0, 20.0)], UTTS, VISION, NAMES, PEOPLE, PROFILE, {}, True)
     stats = KS.merge_proposals(session, v1.id, props, auto=0.75)
     assert stats["nuevas"] == len(props)
-    again = KS.merge_proposals(session, v1.id, props, auto=0.75)  # mismo vídeo otra vez
-    assert again["nuevas"] == 0
+    # Una nueva pasada sobre el mismo vídeo sustituye sus propuestas pendientes (no se acumulan)
+    KS.merge_proposals(session, v1.id, props, auto=0.75)
     items = list(session.exec(select(KnowledgeItem)))
-    assert all(i.seen_count == 1 for i in items)
+    assert len(items) == len(props) and all(i.seen_count == 1 for i in items)
 
     jira = next(i for i in items if i.kind == "termino")
     jira.status = "rechazado"
-    session.add(jira)
+    ctx = next(i for i in items if i.kind == "contexto")
+    ctx.status = "aceptado"
+    session.add(jira), session.add(ctx)
     session.commit()
+    KS.merge_proposals(session, v1.id, props, auto=0.75)  # lo decidido se conserva y no se vuelve a proponer
+    kinds = [(i.kind, i.status) for i in session.exec(select(KnowledgeItem))]
+    assert kinds.count(("contexto", "aceptado")) == 1 and ("contexto", "propuesto") not in kinds
+    assert kinds.count(("termino", "rechazado")) == 1 and ("termino", "propuesto") not in kinds
     stats = KS.merge_proposals(session, v2.id, props, auto=0.75)
     assert stats["descartadas"] >= 1 and stats["nuevas"] >= 1
     ctx_item = next(i for i in list(session.exec(select(KnowledgeItem))) if i.kind == "contexto")
     assert ctx_item.seen_count == 2 and len(ctx_item.evidence) == 2
     new_person = next(i for i in list(session.exec(select(KnowledgeItem))) if i.kind == "nueva_persona")
     assert new_person.data["name"] == "Lucía" and len(new_person.data["datos"]) == 1
+
+
+def test_learn_failure_does_not_break_the_job(engine, monkeypatch, tmp_path):
+    import threading
+
+    from app import worker as W
+    from app.config import Settings
+    from app.pipeline.base import JobContext
+
+    def boom(*_a, **_k):
+        raise RuntimeError("LLM caído")
+
+    monkeypatch.setattr(W, "engine", engine)
+    monkeypatch.setattr(W.learn, "run", boom)
+    msgs = []
+    ctx = JobContext(job_id=1, video_id=1, source_path=tmp_path / "v.mp4", work_dir=tmp_path, settings=Settings(),
+                     options={}, profile=None, people=[], report=lambda f, m: msgs.append(m),
+                     cancel_event=threading.Event())
+    W.Worker()._learn(ctx, llm=None)  # no lanza
+    assert ctx.load("learn_error.json") == {"error": "LLM caído"}
+    assert "No se pudo aprender" in msgs[-1]
+
+
+def test_pending_texts_excludes_own_video(session):
+    _, maria, v1, v2 = _setup(session)
+    session.add(KnowledgeItem(person_id=maria.id, kind="dato", data={"text": "Del vídeo 1"}, video_id=v1.id))
+    session.add(KnowledgeItem(person_id=maria.id, kind="dato", data={"text": "Del vídeo 2"}, video_id=v2.id))
+    session.commit()
+    assert KS.pending_texts(session, v1.id, None, {maria.id}) == ["Del vídeo 2"]

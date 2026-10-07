@@ -348,6 +348,18 @@ def prompt_people(people: list[dict[str, Any]], limit: int = 30) -> list[dict[st
     return (relevant or people)[:limit]
 
 
+_EPHEMERAL = re.compile(
+    r"\b(ayer|hoy|mañana|anoche|esta (semana|mañana|tarde)|la semana (pasada|que viene)|el (lunes|martes|miércoles|"
+    r"jueves|viernes|sábado|domingo)|próxim[oa]s? (semana|reunión|lunes)|a las \d|tard[óo]|ha (revisado|propuesto))\b",
+    re.IGNORECASE,
+)
+
+
+def is_ephemeral(text: str) -> bool:
+    """Frases con marcas temporales o de un momento concreto: no son conocimiento duradero."""
+    return bool(_EPHEMERAL.search(text))
+
+
 def parse_ts(ts: str) -> float | None:
     """«hh:mm:ss», «mm:ss» o «[hh:mm:ss]» a segundos."""
     m = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", ts or "")
