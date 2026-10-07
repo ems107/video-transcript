@@ -22,11 +22,13 @@ from sqlalchemy import text
 from sqlmodel import Session, func, select
 from sse_starlette.sse import EventSourceResponse
 
-from . import __version__, services
+from . import __version__, knowledge_store as KS, services
 from .config import FRONTEND_DIST, MODELS_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
-from .models import Job, Keyframe, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding
+from .models import (
+    Job, Keyframe, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
+)
 from .worker import STAGE_LABELS, worker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -420,7 +422,9 @@ def get_profile(profile_id: int, session: Session = SessionDep) -> dict[str, Any
     return profile_out(session, _404(session.get(Profile, profile_id), "Perfil"))
 
 
-def _save_profile(session: Session, p: Profile, body: ProfileIn) -> dict[str, Any]:
+def _save_profile(session: Session, p: Profile, body: ProfileIn, reason: str = "Cambios manuales") -> dict[str, Any]:
+    if p.id:
+        KS.ensure_baseline(session, profile_id=p.id)
     data = body.model_dump(exclude={"person_ids"})
     data["glossary"] = [
         {"term": g.get("term", "").strip(), "variants": [v.strip() for v in g.get("variants", []) if v.strip()],
@@ -438,17 +442,33 @@ def _save_profile(session: Session, p: Profile, body: ProfileIn) -> dict[str, An
     for pid in dict.fromkeys(body.person_ids):
         session.add(ProfilePersonLink(profile_id=p.id, person_id=pid))
     session.commit()
+    KS.record_version(session, reason, profile_id=p.id)
     return profile_out(session, p)
 
 
 @app.post("/api/profiles")
 def create_profile(body: ProfileIn, session: Session = SessionDep) -> dict[str, Any]:
-    return _save_profile(session, Profile(name=body.name), body)
+    return _save_profile(session, Profile(name=body.name), body, reason="Creado")
 
 
 @app.put("/api/profiles/{profile_id}")
 def update_profile(profile_id: int, body: ProfileIn, session: Session = SessionDep) -> dict[str, Any]:
     return _save_profile(session, _404(session.get(Profile, profile_id), "Perfil"), body)
+
+
+@app.get("/api/profiles/{profile_id}/versions")
+def profile_versions(profile_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Profile, profile_id), "Perfil")
+    return KS.list_versions(session, profile_id=profile_id)
+
+
+@app.post("/api/profiles/{profile_id}/versions/{version_id}/restore")
+def restore_profile_version(profile_id: int, version_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    v = session.get(KnowledgeVersion, version_id)
+    if not v or v.profile_id != profile_id:
+        raise HTTPException(404, "Versión no encontrada")
+    KS.restore_version(session, v)
+    return profile_out(session, session.get(Profile, profile_id))
 
 
 @app.delete("/api/profiles/{profile_id}")
@@ -486,16 +506,41 @@ def create_person(body: PersonIn, session: Session = SessionDep) -> dict[str, An
     p = Person(**body.model_dump())
     session.add(p)
     session.commit()
+    KS.record_version(session, "Creada", person_id=p.id)
     return person_out(session, p)
 
 
 @app.put("/api/people/{person_id}")
 def update_person(person_id: int, body: PersonIn, session: Session = SessionDep) -> dict[str, Any]:
     p = _404(session.get(Person, person_id), "Persona")
+    KS.ensure_baseline(session, person_id=p.id)
+    renamed = body.name.strip() != p.name
     for k, val in body.model_dump().items():
         setattr(p, k, val)
     session.add(p)
     session.commit()
+    KS.record_version(session, "Cambios manuales", person_id=p.id)
+    if renamed:
+        services.refresh_person_videos(session, p.id)
+    return person_out(session, p)
+
+
+@app.get("/api/people/{person_id}/versions")
+def person_versions(person_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Person, person_id), "Persona")
+    return KS.list_versions(session, person_id=person_id)
+
+
+@app.post("/api/people/{person_id}/versions/{version_id}/restore")
+def restore_person_version(person_id: int, version_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    v = session.get(KnowledgeVersion, version_id)
+    if not v or v.person_id != person_id:
+        raise HTTPException(404, "Versión no encontrada")
+    old_name = session.get(Person, person_id).name
+    KS.restore_version(session, v)
+    p = session.get(Person, person_id)
+    if p.name != old_name:
+        services.refresh_person_videos(session, p.id)
     return person_out(session, p)
 
 

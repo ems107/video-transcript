@@ -125,3 +125,17 @@ def index_video(session: Session, video: Video) -> None:
         [{**r, "v": video.id} for r in rows],
     )
     session.commit()
+
+
+def person_video_ids(session: Session, person_id: int) -> list[int]:
+    q = select(Speaker.video_id).where((Speaker.person_id == person_id) | (Speaker.suggested_person_id == person_id))
+    return sorted(set(session.exec(q)))
+
+
+def refresh_person_videos(session: Session, person_id: int) -> None:
+    """Reescribe e indexa los vídeos en los que aparece una persona (tras renombrarla o fusionarla)."""
+    for vid in person_video_ids(session, person_id):
+        video = session.get(Video, vid)
+        if video and video.folder:
+            export_video(session, video)
+            index_video(session, video)
