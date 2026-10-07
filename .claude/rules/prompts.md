@@ -6,6 +6,8 @@ paths:
   - "backend/app/pipeline/identify.py"
   - "backend/app/pipeline/voice.py"
   - "backend/app/pipeline/analyze.py"
+  - "backend/app/pipeline/learn.py"
+  - "backend/app/knowledge.py"
 ---
 
 # Prompts, glosario e identificación
@@ -17,4 +19,8 @@ Lee `docs/ai/AI_PROMPTS.md` antes de editar.
   transcripción; solo acepta o rechaza sustituciones concretas.
 - Si cambias claves de un `*_SCHEMA`, actualiza `export.py`, `services.py`, `frontend/src/api.ts` y
   `VideoDetail.tsx`.
-- Los umbrales de voz y glosario tienen tests en `backend/tests/test_logic.py`.
+- Los umbrales de voz y glosario tienen tests en `backend/tests/test_logic.py`. El aprendizaje, en
+  `test_knowledge.py` y `test_learn.py`.
+- Aprendizaje: la IA solo propone. Toda propuesta se verifica en Python (evidencia real, no
+  inventada ni puntual). Lo aprendido nunca corrige la transcripción sin validación del LLM
+  (`trusted=False`).

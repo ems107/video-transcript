@@ -9,12 +9,15 @@ de componentes ni de estado: solo `useState`/`useEffect` y CSS propio.
 |---|---|
 | `src/App.tsx` | barra lateral, rutas, aviso de componentes que faltan (`CHECK_LABELS`) y la versión |
 | `src/api.ts` | **tipos de todas las respuestas** y el cliente `api.get/post/put/del` (lanza `Error(detail)`) |
-| `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor` |
+| `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor`, `notifyKnowledge()` |
+| `src/knowledge.tsx` | componentes del conocimiento aprendido: `ProposalList`/`ProposalCard` (con evidencia), `KnowledgeList` (aceptado, editar y retirar) y `VersionHistory` (restaurar) |
 | `src/index.css` | variables de diseño en `:root`, modo oscuro con `prefers-color-scheme` y clases de utilidad |
 | `src/pages/*.tsx` | una página por ruta (ver abajo) |
 
 Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resumen\|transcripcion\|tareas\|pantalla`),
-`/buscar`, `/perfiles`, `/personas`, `/ajustes`. Las rutas de la interfaz están en español.
+`/propuestas` (`?video=id`), `/buscar`, `/perfiles`, `/perfiles/:id` (`?tab=manual\|aprendido\|propuestas\|historial`),
+`/personas`, `/personas/:id` (`?tab=ficha\|propuestas\|historial`), `/ajustes`. Las rutas de la interfaz
+están en español.
 
 ## Reglas
 
@@ -31,6 +34,11 @@ Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resume
   `#t=<s>`, y `seek(t)` mueve el reproductor. Usa `TsLink` para mostrar una marca suelta.
 - El progreso de los trabajos llega solo por SSE (`useJobs`, en `App.tsx`, pasado como prop). No
   hagas polling.
+- Después de cualquier acción que cambie el conocimiento (decidir, editar, retirar, confirmar
+  hablantes, fusionar o restaurar), llama a `notifyKnowledge()`. Así se recargan el contador de la
+  barra lateral y las listas abiertas, que escuchan el evento `knowledge-changed`.
+- `knowledge.tsx` solo exporta componentes. Las funciones compartidas van en `util.ts`, porque oxlint
+  avisa con `only-export-components`.
 - Formularios: al hacer clic, `setBusy(true)`, y los errores se muestran en `<div className="error-box">`.
   Las confirmaciones destructivas usan `confirm(...)`.
 

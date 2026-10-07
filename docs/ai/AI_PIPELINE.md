@@ -20,6 +20,7 @@ worker crea `<fase>.done`.
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
 | `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `probe.json` | `analysis.json` (`analysis.partial.json`) | llama-server |
+| `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla) y filas `KnowledgeItem` | llama-server |
 | `publish` | `worker._publish` | todo lo anterior | carpeta final, `Segment`, `Keyframe`, FTS | — |
 
 \* `owner.wav` solo existe si el usuario indica en qué pista está su micrófono.
@@ -34,10 +35,15 @@ Formas clave:
 ## Reglas del worker
 
 - **Reanudación:** si existe `<fase>.done`, la fase se salta. Al arrancar, los trabajos `running`
-  vuelven a `queued`. Las fases largas (`vision`, `analyze`) guardan un `*.partial.json` para continuar
-  donde se quedaron.
-- **Repetir fases:** `options["redo"] = [...]` borra esas marcas antes de ejecutar. Es lo que usa
-  `POST /api/videos/{id}/regenerate` (`correct`, `analyze`, `publish`).
+  vuelven a `queued`. Las fases largas (`vision`, `analyze`, `learn`) guardan un `*.partial.json` para
+  continuar donde se quedaron.
+- **Repetir fases:** `options["redo"] = [...]` borra esas marcas, y los parciales de `worker.PARTIALS`,
+  antes de ejecutar. Lo usa `main._requeue()`:
+  - `regenerate`: `correct`, `analyze`, `learn` y `publish`;
+  - `videos/{id}/learn` y `profiles/from-video`: solo `learn`.
+- **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual
+  (ver `test_learn_failure_does_not_break_the_job`). Si el vídeo no tiene perfil, solo propone datos
+  de personas. Los detalles están en `AI_PROMPTS.md` (aprendizaje).
 - **GPU:** antes de una fase de `GPU_TORCH_STAGES` (asr, align, diarize) se llama a `llm.stop()`.
   Después de las demás se llama a `free_gpu()`. Cada fase con torch descarga su modelo al acabar (`del`
   + `free_gpu()`). Las fases que usan el LLM llaman a `llm.start()`, que no hace nada si ya está
@@ -66,6 +72,18 @@ Formas clave:
 
 ## Prueba de punta a punta
 
+**No uses `data/` del usuario ni su instancia en :8770.** Arranca una instancia aislada con otra
+carpeta de datos y otro puerto para el LLM:
+
+```bash
+# settings.json de la carpeta de prueba: {"analyzed_dir": "<scratchpad>\\analizados", "file_mode": "copy", "llm_port": 8092}
+VT_DATA_DIR='<scratchpad>\e2e\data' uv run uvicorn app.main:app --port 8771   # en segundo plano
+export MSYS_NO_PATHCONV=1   # Git Bash no debe convertir los argumentos «/api/...» en rutas de Windows
+```
+
+Comprueba antes con `nvidia-smi` que la GPU está libre: si la instancia del usuario está procesando
+algo, no caben dos modelos a la vez. Al terminar, para la instancia de prueba.
+
 Los vídeos sintéticos están en `samples/videos-prueba/`, que no se versiona:
 - `reunion_prueba.mp4`: dos voces y los nombres en pantalla. Sirve para probar la identificación por
   pantalla.
@@ -82,6 +100,6 @@ curl -s -X POST localhost:8770/api/jobs -H 'Content-Type: application/json' --da
 curl -s localhost:8770/api/jobs        # estado / progreso / error (traceback en "error")
 ```
 
-Con un vídeo de unos 2 minutos tarda 1–2 min. El primer uso de Whisper tras instalar puede tardar ~90 s
+Con un vídeo de unos 2 minutos tarda 1–2 min; `learn` añade unos 10 s (sin recargar el LLM). El primer uso de Whisper tras instalar puede tardar ~90 s
 más por la compilación JIT de CUDA, y solo ocurre una vez. Los errores del LLM se registran en
 `data/llama-server.log`.

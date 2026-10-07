@@ -21,6 +21,67 @@ las fases.
   correcciones y análisis.
 - Temperatura: 0.2 por defecto y 0.0 para validar correcciones.
 
+## Uso de lo aprendido en los prompts
+
+- **`profile_dict`** añade `learned` (lo aceptado del perfil) y **`people_for`** añade a cada persona
+  sus `facts` y sus alias aprendidos.
+- **`profile_block`**:
+  - añade «Aprendido de vídeos anteriores» (`knowledge.learned_block`), con un máximo de unos 6000
+    caracteres ordenados por `seen_count`;
+  - las personas salen con `knowledge.person_line`, y solo las del vídeo y del perfil
+    (`prompt_people`, como máximo 30);
+  - lo manual va primero y prevalece.
+- **Glosario efectivo** (`knowledge.effective_glossary`): el manual seguido del aprendido.
+  - Los términos aprendidos tienen `trusted=False`: en la corrección, sus coincidencias de mayúsculas
+    o variante **pasan por el LLM** y nunca se aplican solas (`Candidate.trusted`).
+  - En Whisper van después de los manuales.
+- Las secciones del resumen son las manuales seguidas de las aprendidas (`effective_sections`).
+
+## Aprendizaje (`LEARN_*`, `pipeline/learn.py`)
+
+- **Llamadas al LLM.** Se hace una por bloque del `timeline` (los mismos bloques que el resumen).
+- **Entrada de cada llamada:**
+  - `profile_block`;
+  - `known_block`: lo aceptado con su `[#id]`, para que pueda proponer `reemplaza`;
+  - lo rechazado y lo pendiente de **otros** vídeos (`KS.rejected_texts`, `KS.pending_texts`), para
+    que no lo repita;
+  - los candidatos a término (`knowledge.term_candidates`).
+- **Reglas del prompt:**
+  - solo lo dicho o visto, sin deducir;
+  - solo conocimiento **duradero**: se pregunta «¿seguirá siendo cierto dentro de un mes?» y da
+    ejemplos de Sí y No;
+  - los datos de persona no repiten su nombre;
+  - «conocimiento» significa materias que domina, no hechos concretos que sabe;
+  - ante la duda, listas vacías.
+  - Si cambias el prompt, prueba con un vídeo real: el modelo tiende a colar detalles de la reunión.
+- **Verificación en Python** (`collect_proposals`): no se confía en el LLM.
+  - Un término debe aparecer literalmente (`term_occurrences`). Además debe parecer un término
+    (`looks_like_term`: con mayúsculas o cifras, o visto en pantalla). No puede ser ya conocido ni el
+    nombre de una persona.
+  - Un hecho o dato necesita una marca de tiempo dentro del bloque y líneas reales alrededor
+    (`excerpt_at`). Se descartan las frases con marcas temporales (`is_ephemeral`: «ayer», «el
+    lunes», «a las 9»…).
+  - Límites por vídeo: 15 términos, 10 hechos, 8 datos por persona y 5 personas nuevas.
+  - La evidencia guarda etiquetas de hablante (`label`), no nombres. Los nombres se ponen al mostrarla.
+- **Atribución** (`knowledge.resolve_name`): el `nombre` devuelto por el LLM se resuelve así:
+  - si es un hablante del vídeo → `speaker_label`. «Hablante N» solo vale con coincidencia exacta;
+  - si es una persona conocida o uno de sus alias → `person_id`;
+  - si no → `nueva_persona`;
+  - si no es un nombre utilizable → se descarta.
+- **Cuándo se muestra lo de un hablante** (`speaker_person`): si está confirmado, o si fue reconocido
+  por micrófono o por voz con ≥ `voice_auto_threshold`. Si no, queda «en espera».
+- **Alias.** Los nombres vistos en pantalla como hablante activo (`visual_hints` ≥ 2) que difieren del
+  nombre mostrado generan propuestas `alias`.
+- **Guardado** (`KS.merge_proposals`):
+  1. `drop_pending_from` borra las pendientes anteriores de **este** vídeo: una nueva pasada las
+     sustituye. Lo aceptado y lo rechazado se conserva.
+  2. Para cada propuesta se busca un elemento equivalente del mismo dueño (`find_match`: clave idéntica
+     para términos y nombres; `token_sort_ratio` ≥ 85 para frases):
+     - si está rechazado o retirado, se descarta;
+     - si está propuesto o aceptado, se suma la evidencia, y `seen_count` solo sube con un vídeo
+       distinto.
+  3. Los datos de una persona nueva se agrupan en una sola propuesta `nueva_persona`.
+
 ## Visión (`VISION_*`, `pipeline/vision.py`)
 
 Se hace una llamada por fotograma, con un máximo de `Settings.max_frames` (240). Los fotogramas se
