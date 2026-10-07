@@ -183,4 +183,5 @@ table.tbl { width: 100%; border-collapse: collapse; }
   .sidebar { width: auto; height: auto; position: static; }
   .main { padding: 1rem; }
   .grid2 { grid-template-columns: 1fr; }
+  .spread > .grow { flex-basis: 100%; }
 }

@@ -135,7 +135,8 @@ def test_person_detail_duplicates_and_merge(client, session):
     assert [t["tarea"] for t in d["tasks"]] == ["Enviar informe"] and d["profiles"][0]["name"] == "Trabajo"
 
     dups = client.get("/api/people/duplicates").json()
-    assert [(x["a_name"], x["b_name"]) for x in dups] == [("María López", "María")]
+    # se propone conservar a quien tiene voz y vídeos
+    assert [(x["a_name"], x["b_name"]) for x in dups] == [("María", "María López")]
 
     merged = client.post(f"/api/people/{short['id']}/merge", json={"into_id": full["id"]}).json()
     assert merged["name"] == "María López" and merged["aliases"] == ["María", "Mari"] and merged["voice_samples"] == 1

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Person, type Profile } from '../api'
 import { KnowledgeList, ProposalList, VersionHistory } from '../knowledge'
+import { plural } from '../util'
 import { Editor } from './Profiles'
 
 type Tab = 'manual' | 'aprendido' | 'propuestas' | 'historial'
@@ -37,7 +38,7 @@ export default function ProfileDetail() {
         <div>
           <div className="small"><Link to="/perfiles">← Perfiles</Link></div>
           <h1 style={{ margin: '0.25rem 0' }}>{profile.name}</h1>
-          <div className="muted small">{profile.description}{profile.description && ' · '}{profile.video_count} vídeos</div>
+          <div className="muted small">{profile.description}{profile.description && ' · '}{plural(profile.video_count, 'vídeo', 'vídeos')}</div>
         </div>
         <button title="La IA vuelve a leer los vídeos ya analizados de este perfil y propone lo que aprenda" onClick={async () => {
           const r = await api.post<{ queued: number; skipped: number }>(`/api/profiles/${profile.id}/learn-all`)

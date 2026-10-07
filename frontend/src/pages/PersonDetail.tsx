@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Person, type PersonDetail as PD } from '../api'
 import { KnowledgeList, ProposalList, VersionHistory } from '../knowledge'
-import { fmtDate, fmtDuration, notifyKnowledge } from '../util'
+import { fmtDate, fmtDuration, notifyKnowledge, plural } from '../util'
 
 type Tab = 'ficha' | 'propuestas' | 'historial'
 
@@ -86,8 +86,8 @@ export default function PersonDetail() {
       <div className="small"><Link to="/personas">← Personas</Link></div>
       <h1 style={{ margin: '0.25rem 0' }}>{p.name}</h1>
       <div className="muted small" style={{ marginBottom: '0.75rem' }}>
-        {p.role && `${p.role} · `}{p.stats.videos} vídeos · {fmtDuration(p.stats.speaking_time)} hablando
-        {p.stats.last_seen && ` · última vez ${fmtDate(p.stats.last_seen)}`} · {p.voice_samples} muestras de voz
+        {p.role && `${p.role} · `}{plural(p.stats.videos, 'vídeo', 'vídeos')}{p.stats.speaking_time > 0 && ` · ${fmtDuration(p.stats.speaking_time)} hablando`}
+        {p.stats.last_seen && ` · última vez ${fmtDate(p.stats.last_seen)}`} · {plural(p.voice_samples, 'muestra', 'muestras')} de voz
         {p.profiles.length > 0 && <> · {p.profiles.map((pr, i) => <span key={pr.id}>{i > 0 && ', '}<Link to={`/perfiles/${pr.id}`}>{pr.name}</Link></span>)}</>}
       </div>
       <div className="tabs">

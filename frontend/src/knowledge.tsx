@@ -165,8 +165,14 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
 
   if (!data) return <p className="muted">Cargando…</p>
 
+  // Dentro de cada vídeo: primero el perfil, después cada persona y al final las personas nuevas
+  const ownerRank = { profile: 0, person: 1, speaker: 1, new: 2 }
+  const kindRank = ['termino', 'contexto', 'seccion', 'dato', 'alias', 'nueva_persona']
+  const sorted = [...data.items].sort((a, b) =>
+    ownerRank[a.owner.type] - ownerRank[b.owner.type] || a.owner.name.localeCompare(b.owner.name)
+    || kindRank.indexOf(a.kind) - kindRank.indexOf(b.kind) || a.id - b.id)
   const groups = new Map<string, Knowledge[]>()
-  for (const k of data.items) {
+  for (const k of sorted) {
     const key = `${k.video_id ?? ''}|${k.video_title}`
     groups.set(key, [...(groups.get(key) ?? []), k])
   }

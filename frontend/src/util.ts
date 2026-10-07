@@ -13,6 +13,7 @@ export function fmtTs(seconds: number): string {
 export function fmtDuration(seconds: number): string {
   if (!seconds) return '—'
   const m = Math.round(seconds / 60)
+  if (m === 0) return '<1 min'
   return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`
 }
 
@@ -77,4 +78,9 @@ export function speakerColor(order: number): string {
 // Avisa al resto de la web (contador de la barra lateral, otras listas) de que el conocimiento cambió
 export function notifyKnowledge() {
   window.dispatchEvent(new Event('knowledge-changed'))
+}
+
+// «1 vídeo», «3 vídeos»
+export function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
 }

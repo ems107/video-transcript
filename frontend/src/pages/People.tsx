@@ -47,7 +47,7 @@ export default function People() {
             <div key={`${x.a}-${x.b}`} className="spread small">
               <span>
                 <Link to={`/personas/${x.a}`}>{x.a_name}</Link> y <Link to={`/personas/${x.b}`}>{x.b_name}</Link>
-                <span className="muted"> · {x.reasons.map((r) => (r === 'voz' ? 'voz parecida' : 'nombre parecido')).join(' y ')}</span>
+                <span className="muted"> · {x.reasons.map((r) => (r === 'voz' ? 'voz parecida' : 'nombre parecido')).join(' y ')} · se conservaría «{x.a_name}», que tiene más datos</span>
               </span>
               <span className="row" style={{ gap: '0.35rem' }}>
                 <button className="sm" onClick={async () => {

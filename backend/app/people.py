@@ -65,11 +65,19 @@ def duplicates(session: Session) -> list[dict[str, Any]]:
         voices.setdefault(e.person_id, []).append(e.vector)
     dismissed = {(d.a, d.b) for d in session.exec(select(PersonPairDismissal))}
     names = {p.id: p.name for p in people}
+
+    def weight(pid: int) -> tuple:
+        """Qué persona conservar al fusionar: la que tiene más voz, vídeos y datos (y nombre más completo)."""
+        learned = len(KS.owner_items(session, person_id=pid, statuses=("aceptado",)))
+        return (len(voices.get(pid, [])), len(services.person_video_ids(session, pid)), learned, len(names[pid]))
+
     out = []
     for d in K.duplicate_candidates(rows, person_centroids(voices)):
         pair = (min(d["a"], d["b"]), max(d["a"], d["b"]))
-        if pair not in dismissed:
-            out.append({**d, "a_name": names[d["a"]], "b_name": names[d["b"]]})
+        if pair in dismissed:
+            continue
+        keep, other = (d["a"], d["b"]) if weight(d["a"]) >= weight(d["b"]) else (d["b"], d["a"])
+        out.append({**d, "a": keep, "b": other, "a_name": names[keep], "b_name": names[other]})
     return out
 
 

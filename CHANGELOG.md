@@ -58,6 +58,16 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
 - Al renombrar una persona, se reescriben los documentos de sus vídeos.
 - «Regenerar análisis» también vuelve a proponer lo aprendido del vídeo.
 
+### Corregido
+
+- La web podía quedarse bloqueada («Cargando…») al navegar mucho o con varias pestañas abiertas. Las
+  conexiones de eventos en tiempo real de páginas ocultas o ya abandonadas ocupaban el máximo de
+  conexiones del navegador.
+- Tras actualizar la app, el navegador podía mostrar una página en blanco por usar una versión
+  antigua guardada en caché.
+- Las duraciones de menos de un minuto se muestran como «<1 min», en lugar de «0 min».
+- En pantallas estrechas, la cabecera del vídeo ya no aplasta el título.
+
 ### Notas para actualizar
 
 - Solo se añaden tablas nuevas a la base de datos, así que basta con reiniciar la app (`.\run.ps1
