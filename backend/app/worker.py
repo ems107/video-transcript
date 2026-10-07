@@ -43,6 +43,8 @@ STAGES = [
     ("publish", "Publicando resultados", 0.03),
 ]
 GPU_TORCH_STAGES = {"asr", "align", "diarize"}
+# Ficheros de reanudación que se borran al repetir una fase
+PARTIALS = {"analyze": ("analysis.partial.json",), "learn": ("learn.partial.json", "learn_error.json")}
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
@@ -106,7 +108,7 @@ class Worker:
             # Fases a repetir (p. ej. regenerar solo el análisis)
             for stage in options.pop("redo", []):
                 (wd / f"{stage}.done").unlink(missing_ok=True)
-                for f in ("analysis.partial.json",) if stage == "analyze" else ():
+                for f in PARTIALS.get(stage, ()):
                     (wd / f).unlink(missing_ok=True)
             job.options = options
             s.add(job)

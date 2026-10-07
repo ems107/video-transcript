@@ -22,12 +22,12 @@ from sqlalchemy import text
 from sqlmodel import Session, func, select
 from sse_starlette.sse import EventSourceResponse
 
-from . import __version__, knowledge_store as KS, services
-from .config import FRONTEND_DIST, MODELS_DIR, Settings, ensure_dirs, load_settings, save_settings
+from . import __version__, knowledge_store as KS, proposals as PR, services
+from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
-    Job, Keyframe, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
+    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
 )
 from .worker import STAGE_LABELS, worker
 
@@ -56,7 +56,7 @@ def _404(obj: Any, what: str = "Elemento") -> Any:
 # --------------------------------------------------------------------------- estado y ajustes
 
 @app.get("/api/status")
-def status() -> dict[str, Any]:
+def status(session: Session = SessionDep) -> dict[str, Any]:
     s = load_settings()
     checks = {
         "ffmpeg": bool(__import__("shutil").which("ffmpeg")),
@@ -67,7 +67,9 @@ def status() -> dict[str, Any]:
         "align": any((MODELS_DIR / "hf" / "hub").glob("models--jonatasgrosman--wav2vec2-large-xlsr-53-spanish")),
         "diarization": (Path(s.diarization_model_dir) / "config.yaml").exists(),
     }
-    return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current}
+    pending = PR.pending_count(session, s.voice_auto_threshold)
+    return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current,
+            "pending_proposals": pending}
 
 
 @app.get("/api/settings")
@@ -318,16 +320,32 @@ def open_folder(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
 def regenerate(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     """Repite la corrección de términos y el análisis con los nombres y el perfil actuales."""
     v = _404(session.get(Video, video_id), "Vídeo")
+    job = _requeue(session, v, ["correct", "analyze", "learn", "publish"], "Regenerando análisis")
+    return {"ok": True, "job_id": job.id}
+
+
+def _requeue(session: Session, v: Video, redo: list[str], message: str) -> Job:
+    """Vuelve a encolar el último trabajo del vídeo repitiendo solo las fases indicadas."""
     last = session.exec(select(Job).where(Job.video_id == v.id).order_by(Job.id.desc())).first()
     if not last or last.status in ("queued", "running"):
         raise HTTPException(400, "Hay un trabajo en curso para este vídeo")
-    last.status, last.message, last.error, last.progress = "queued", "Regenerando análisis", "", 0.0
-    last.options = {**(last.options or {}), "redo": ["correct", "analyze", "learn", "publish"]}
+    if not (WORK_DIR / f"job_{last.id}" / "corrected.json").exists():
+        raise HTTPException(400, "Faltan los datos intermedios de este vídeo; hay que analizarlo de nuevo desde cero")
+    last.status, last.message, last.error, last.progress = "queued", message, "", 0.0
+    last.options = {**(last.options or {}), "redo": redo}
     v.status = "processing"
     session.add(last), session.add(v)
     session.commit()
     worker.notify()
-    return {"ok": True, "job_id": last.id}
+    return last
+
+
+@app.post("/api/videos/{video_id}/learn")
+def learn_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Vuelve a proponer conocimiento a partir de un vídeo ya analizado."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    job = _requeue(session, v, ["learn"], "Aprendiendo del vídeo")
+    return {"ok": True, "job_id": job.id}
 
 
 # --------------------------------------------------------------------------- hablantes
@@ -359,6 +377,7 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
         if sp.person_id and e.person_id == sp.person_id:
             session.delete(e)
 
+    old_pid = sp.person_id
     sp.person_id = person_id
     sp.confirmed = bool(person_id) and body.confirm
     if sp.confirmed and sp.embedding:
@@ -372,6 +391,10 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
         video.summary_md = (video.analysis or {}).get("resumen_breve", video.summary_md)
         session.add(video)
         session.commit()
+    if old_pid and old_pid != person_id:
+        PR.reassign_speaker_items(session, video.id, sp.label, old_pid, person_id)
+    if sp.confirmed:
+        PR.link_to_profile(session, video, person_id)
     services.export_video(session, video)
     services.index_video(session, video)
     return {"ok": True, "name": new_name}
@@ -559,6 +582,127 @@ def reset_voices(person_id: int, session: Session = SessionDep) -> dict[str, Any
         session.delete(e)
     session.commit()
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- conocimiento aprendido
+
+class Decision(BaseModel):
+    accept: list[int] = []
+    reject: list[int] = []
+    edits: dict[int, dict[str, Any]] = {}
+
+
+class ItemEdit(BaseModel):
+    text: Optional[str] = None
+    term: Optional[str] = None
+    definition: Optional[str] = None
+    title: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+
+
+@app.get("/api/proposals")
+def get_proposals(
+    session: Session = SessionDep,
+    video_id: Optional[int] = None,
+    profile_id: Optional[int] = None,
+    person_id: Optional[int] = None,
+) -> dict[str, Any]:
+    return PR.list_proposals(session, load_settings().voice_auto_threshold, video_id, profile_id, person_id)
+
+
+@app.post("/api/proposals/decide")
+def decide_proposals(body: Decision, session: Session = SessionDep) -> dict[str, Any]:
+    return PR.decide(session, load_settings().voice_auto_threshold, body.accept, body.reject, body.edits)
+
+
+@app.get("/api/profiles/{profile_id}/knowledge")
+def profile_knowledge(profile_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Profile, profile_id), "Perfil")
+    return _knowledge_out(session, KS.owner_items(session, profile_id=profile_id, statuses=("aceptado",)))
+
+
+@app.get("/api/people/{person_id}/knowledge")
+def person_knowledge(person_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Person, person_id), "Persona")
+    return _knowledge_out(session, KS.owner_items(session, person_id=person_id, statuses=("aceptado",)))
+
+
+def _knowledge_out(session: Session, items: list[KnowledgeItem]) -> list[dict[str, Any]]:
+    r = PR.Resolver(session, load_settings().voice_auto_threshold)
+    return [PR.proposal_out(session, r, it, it.person_id) for it in items]
+
+
+@app.put("/api/knowledge/{item_id}")
+def edit_knowledge(item_id: int, body: ItemEdit, session: Session = SessionDep) -> dict[str, Any]:
+    it = _404(session.get(KnowledgeItem, item_id), "Dato")
+    if it.status != "aceptado":
+        raise HTTPException(400, "Solo se pueden editar datos aceptados; las propuestas se editan al aceptarlas")
+    PR.update_item(session, it, body.model_dump(exclude_none=True))
+    return {"ok": True}
+
+
+@app.post("/api/knowledge/{item_id}/retire")
+def retire_knowledge(item_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    it = _404(session.get(KnowledgeItem, item_id), "Dato")
+    if it.status != "aceptado":
+        raise HTTPException(400, "Solo se pueden retirar datos aceptados")
+    PR.retire_item(session, it)
+    return {"ok": True}
+
+
+@app.post("/api/knowledge/forget-video/{video_id}")
+def forget_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    _404(session.get(Video, video_id), "Vídeo")
+    return PR.forget_video(session, video_id)
+
+
+class FromVideo(BaseModel):
+    video_id: int
+    name: str
+
+
+@app.post("/api/profiles/from-video")
+def profile_from_video(body: FromVideo, session: Session = SessionDep) -> dict[str, Any]:
+    """Crea un perfil vacío para el vídeo y le pide a la IA que proponga su contenido."""
+    v = _404(session.get(Video, body.video_id), "Vídeo")
+    if not body.name.strip():
+        raise HTTPException(400, "Indica un nombre para el perfil")
+    if v.status != "done":
+        raise HTTPException(400, "El vídeo aún no está analizado")
+    p = Profile(name=body.name.strip())
+    session.add(p)
+    session.commit()
+    for pid in dict.fromkeys(PR.speaker_persons(session, v.id)):
+        session.add(ProfilePersonLink(profile_id=p.id, person_id=pid))
+    previous = v.profile_id
+    v.profile_id = p.id
+    session.add(v)
+    session.commit()
+    KS.record_version(session, f"Creado desde el vídeo «{v.title}»", profile_id=p.id)
+    try:
+        _requeue(session, v, ["learn"], "Creando el perfil a partir del vídeo")
+    except HTTPException:
+        v.profile_id = previous
+        session.add(v)
+        session.delete(p)
+        session.commit()
+        raise
+    return profile_out(session, p)
+
+
+@app.post("/api/profiles/{profile_id}/learn-all")
+def learn_all(profile_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Encola el aprendizaje de todos los vídeos ya analizados del perfil."""
+    _404(session.get(Profile, profile_id), "Perfil")
+    queued, skipped = 0, 0
+    for v in session.exec(select(Video).where(Video.profile_id == profile_id, Video.status == "done")):
+        try:
+            _requeue(session, v, ["learn"], "Aprendiendo del vídeo")
+            queued += 1
+        except HTTPException:
+            skipped += 1
+    return {"queued": queued, "skipped": skipped}
 
 
 # --------------------------------------------------------------------------- búsqueda
