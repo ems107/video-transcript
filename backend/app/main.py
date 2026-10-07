@@ -593,20 +593,20 @@ class Decision(BaseModel):
 
 
 class ItemEdit(BaseModel):
-    text: Optional[str] = None
-    term: Optional[str] = None
-    definition: Optional[str] = None
-    title: Optional[str] = None
-    name: Optional[str] = None
-    category: Optional[str] = None
+    text: str | None = None
+    term: str | None = None
+    definition: str | None = None
+    title: str | None = None
+    name: str | None = None
+    category: str | None = None
 
 
 @app.get("/api/proposals")
 def get_proposals(
     session: Session = SessionDep,
-    video_id: Optional[int] = None,
-    profile_id: Optional[int] = None,
-    person_id: Optional[int] = None,
+    video_id: int | None = None,
+    profile_id: int | None = None,
+    person_id: int | None = None,
 ) -> dict[str, Any]:
     return PR.list_proposals(session, load_settings().voice_auto_threshold, video_id, profile_id, person_id)
 
