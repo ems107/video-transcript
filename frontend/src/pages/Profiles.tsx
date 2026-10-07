@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type GlossaryEntry, type Person, type Profile } from '../api'
 
-type Draft = Omit<Profile, 'id' | 'video_count'> & { id?: number }
+export type Draft = Omit<Profile, 'id' | 'video_count' | 'learned_count' | 'pending_count'> & { id?: number }
 
 const EMPTY: Draft = { name: '', description: '', context: '', extra_prompt: '', summary_sections: [], glossary: [], person_ids: [] }
 
@@ -22,7 +23,7 @@ function textToGlossary(t: string): GlossaryEntry[] {
   }).filter((e) => e.term)
 }
 
-function Editor({ initial, people, onSaved, onCancel }: { initial: Draft; people: Person[]; onSaved: () => void; onCancel: () => void }) {
+export function Editor({ initial, people, onSaved, onCancel }: { initial: Draft; people: Person[]; onSaved: () => void; onCancel?: () => void }) {
   const [d, setD] = useState<Draft>(initial)
   const [glossary, setGlossary] = useState(glossaryToText(initial.glossary))
   const [sections, setSections] = useState(initial.summary_sections.join('\n'))
@@ -43,7 +44,8 @@ function Editor({ initial, people, onSaved, onCancel }: { initial: Draft; people
 
   return (
     <div className="card pad stack">
-      <h2 style={{ marginTop: 0 }}>{d.id ? `Editar «${initial.name}»` : 'Nuevo perfil'}</h2>
+      {!d.id && <h2 style={{ marginTop: 0 }}>Nuevo perfil</h2>}
+      {d.id && <p className="muted small" style={{ margin: 0 }}>Esta parte es tuya: la IA nunca la modifica. Lo que aprende va en «Aprendido».</p>}
       <div className="grid2">
         <label className="field"><span>Nombre</span><input value={d.name} onChange={(e) => set('name', e.target.value)} placeholder="Trabajo" /></label>
         <label className="field"><span>Descripción breve</span><input value={d.description} onChange={(e) => set('description', e.target.value)} placeholder="Reuniones del equipo de producto" /></label>
@@ -86,7 +88,7 @@ function Editor({ initial, people, onSaved, onCancel }: { initial: Draft; people
       {error && <div className="error-box">{error}</div>}
       <div className="row">
         <button className="primary" onClick={save} disabled={!d.name.trim()}>Guardar</button>
-        <button onClick={onCancel}>Cancelar</button>
+        {onCancel && <button onClick={onCancel}>Cancelar</button>}
       </div>
     </div>
   )
@@ -117,11 +119,14 @@ export default function Profiles() {
           {profiles.map((p) => (
             <div key={p.id} className="card pad spread">
               <div>
-                <b>{p.name}</b> <span className="muted small">{p.description}</span>
-                <div className="muted small">{p.glossary.length} términos · {p.person_ids.length} personas · {p.video_count} vídeos</div>
+                <Link to={`/perfiles/${p.id}`}><b>{p.name}</b></Link> <span className="muted small">{p.description}</span>
+                <div className="muted small">
+                  {p.glossary.length} términos · {p.person_ids.length} personas · {p.video_count} vídeos · {p.learned_count} datos aprendidos
+                  {p.pending_count > 0 && <> · <Link to={`/perfiles/${p.id}?tab=propuestas`}><span className="pill warn">{p.pending_count} propuestas</span></Link></>}
+                </div>
               </div>
               <div className="row">
-                <button className="sm" onClick={() => setEditing(p)}>Editar</button>
+                <Link to={`/perfiles/${p.id}`}><button className="sm">Abrir</button></Link>
                 <button className="sm danger" onClick={async () => {
                   if (confirm(`¿Eliminar el perfil «${p.name}»? Los vídeos analizados se conservan.`)) {
                     await api.del(`/api/profiles/${p.id}`)

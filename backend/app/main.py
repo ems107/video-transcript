@@ -433,7 +433,10 @@ class ProfileIn(BaseModel):
 def profile_out(session: Session, p: Profile) -> dict[str, Any]:
     ids = list(session.exec(select(ProfilePersonLink.person_id).where(ProfilePersonLink.profile_id == p.id)))
     n_videos = session.exec(select(func.count()).select_from(Video).where(Video.profile_id == p.id)).one()
-    return {**p.model_dump(), "person_ids": ids, "video_count": n_videos}
+    items = KS.owner_items(session, profile_id=p.id, statuses=("aceptado", "propuesto"))
+    return {**p.model_dump(), "person_ids": ids, "video_count": n_videos,
+            "learned_count": sum(1 for i in items if i.status == "aceptado"),
+            "pending_count": sum(1 for i in items if i.status == "propuesto")}
 
 
 @app.get("/api/profiles")
@@ -517,7 +520,8 @@ def person_out(session: Session, p: Person) -> dict[str, Any]:
     videos = session.exec(
         select(func.count(func.distinct(Speaker.video_id))).where(Speaker.person_id == p.id)
     ).one()
-    return {**p.model_dump(), "voice_samples": voices, "video_count": videos}
+    learned = len(KS.owner_items(session, person_id=p.id, statuses=("aceptado",)))
+    return {**p.model_dump(), "voice_samples": voices, "video_count": videos, "learned_count": learned}
 
 
 @app.get("/api/people")

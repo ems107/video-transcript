@@ -11,7 +11,14 @@ from . import knowledge as K
 from . import knowledge_store as KS
 from . import services
 from .models import (
-    KnowledgeItem, KnowledgeVersion, Person, PersonPairDismissal, Profile, ProfilePersonLink, Speaker, Video,
+    KnowledgeItem,
+    KnowledgeVersion,
+    Person,
+    PersonPairDismissal,
+    Profile,
+    ProfilePersonLink,
+    Speaker,
+    Video,
     VoiceEmbedding,
 )
 from .pipeline.glossary import normalize

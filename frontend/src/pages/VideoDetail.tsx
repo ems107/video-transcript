@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, type Job, type Person, type SpeakerInfo, type VideoDetail as VD } from '../api'
-import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor } from '../util'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
+import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
@@ -51,6 +51,7 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
       await api.put(`/api/speakers/${sp.id}`, body)
       setEditing(null)
       setNewName('')
+      notifyKnowledge()
       onChange()
     } finally {
       setBusy(false)
@@ -66,6 +67,7 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
             setBusy(true)
             await api.post(`/api/videos/${video.id}/confirm-speakers`)
             setBusy(false)
+            notifyKnowledge()
             onChange()
           }}>Aceptar propuestas ({pending})</button>
         )}
@@ -114,6 +116,64 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
       <p className="small muted" style={{ marginBottom: 0 }}>
         Al confirmar, se guarda la huella de voz para reconocer a esa persona en próximos vídeos.
       </p>
+    </div>
+  )
+}
+
+// Lo aprendido de este vídeo: propuestas pendientes y acciones para crear o mejorar el perfil
+function KnowledgePanel({ video, running, onChange }: { video: VD; running: boolean; onChange: () => void }) {
+  const [counts, setCounts] = useState<{ ready: number; waiting: number } | null>(null)
+  const [error, setError] = useState('')
+  const load = useCallback(() => {
+    api.get<Proposals>(`/api/proposals?video_id=${video.id}`)
+      .then((r) => setCounts({ ready: r.items.length, waiting: r.waiting.length }))
+  }, [video.id])
+  useEffect(load, [load, video])
+  useEffect(() => {
+    window.addEventListener('knowledge-changed', load)
+    return () => window.removeEventListener('knowledge-changed', load)
+  }, [load])
+
+  async function run(fn: () => Promise<unknown>) {
+    setError('')
+    try {
+      await fn()
+      notifyKnowledge()
+      onChange()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  if (video.status !== 'done') return null
+  return (
+    <div className="card pad" style={{ marginTop: '1rem' }}>
+      <h3 style={{ marginTop: 0 }}>Aprendido de este vídeo</h3>
+      {counts && (
+        <p className="small" style={{ marginTop: 0 }}>
+          {counts.ready > 0
+            ? <Link to={`/propuestas?video=${video.id}`}><b>{counts.ready} propuestas</b> para revisar →</Link>
+            : <span className="muted">No hay propuestas pendientes.</span>}
+          {counts.waiting > 0 && <span className="muted"> · {counts.waiting} esperan a que confirmes hablantes</span>}
+        </p>
+      )}
+      <div className="row" style={{ gap: '0.35rem' }}>
+        {!video.profile_id && (
+          <button className="sm primary" disabled={running} title="Crea un perfil nuevo para este tipo de vídeo y la IA propone su contenido" onClick={() => {
+            const name = prompt('Nombre del nuevo perfil (p. ej. «Reuniones de equipo»):')
+            if (name?.trim()) run(() => api.post('/api/profiles/from-video', { video_id: video.id, name }))
+          }}>Crear perfil a partir de este vídeo</button>
+        )}
+        <button className="sm" disabled={running} title="La IA vuelve a leer el vídeo y propone lo que aprenda (lo rechazado no se repite)"
+          onClick={() => run(() => api.post(`/api/videos/${video.id}/learn`))}>Aprender de nuevo</button>
+        <button className="sm" disabled={running} title="Retira lo aceptado que solo venía de este vídeo y descarta sus propuestas"
+          onClick={() => {
+            if (confirm('¿Olvidar lo aprendido de este vídeo? Lo que solo venía de él se retira (recuperable desde el historial) y sus propuestas se descartan.')) {
+              run(() => api.post(`/api/knowledge/forget-video/${video.id}`))
+            }
+          }}>Olvidar lo aprendido</button>
+      </div>
+      {error && <div className="error-box small" style={{ marginTop: '0.5rem' }}>{error}</div>}
     </div>
   )
 }
@@ -245,6 +305,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
           )}
           {video.folder && <div className="small muted" style={{ marginTop: '0.4rem', wordBreak: 'break-all' }}>{video.folder}</div>}
           {video.speakers.length > 0 && <SpeakerPanel video={video} people={people} onChange={load} />}
+          <KnowledgePanel video={video} running={!!running} onChange={load} />
         </div>
 
         <div className="card pad" style={{ minWidth: 0 }}>

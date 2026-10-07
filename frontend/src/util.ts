@@ -53,3 +53,8 @@ const SPEAKER_COLORS = 8
 export function speakerColor(order: number): string {
   return `var(--spk-${((order - 1) % SPEAKER_COLORS + SPEAKER_COLORS) % SPEAKER_COLORS})`
 }
+
+// Avisa al resto de la web (contador de la barra lateral, otras listas) de que el conocimiento cambió
+export function notifyKnowledge() {
+  window.dispatchEvent(new Event('knowledge-changed'))
+}
