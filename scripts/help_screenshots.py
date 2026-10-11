@@ -165,7 +165,9 @@ async def shoot(c: CDP, name: str, selector: str | None = None, pad: int = 12) -
             log(f"  ⚠ {name}: no se encontró el elemento")
             return
         await asyncio.sleep(0.4)
-        rect = await c.js(f"""(() => {{ const r = ({expr}).getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }})()""")
+        # El recorte de CDP va en coordenadas de la página, no de la ventana: se suma lo desplazado
+        rect = await c.js(f"""(() => {{ const r = ({expr}).getBoundingClientRect();
+            return [r.x + window.scrollX, r.y + window.scrollY, r.width, r.height]; }})()""")
         x, y, w, h = rect
         params["clip"] = {"x": max(0, x - pad), "y": max(0, y - pad), "width": w + 2 * pad, "height": h + 2 * pad, "scale": 1}
     r = await c.send("Page.captureScreenshot", **params)
