@@ -8,6 +8,43 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+La app sigue un tema a lo largo de varios vídeos.
+
+### Añadido
+
+- **Seguimientos** (menú **Seguimientos**): reúnen los vídeos de un mismo tema y llevan su estado:
+  - un resumen de cómo ha evolucionado;
+  - las tareas, decisiones y dudas, cada una con su recorrido («aparece el día 4 → hecha el día 5») y
+    enlaces al vídeo en cada momento;
+  - lo que aportó cada vídeo.
+- Al encolar un vídeo se pueden elegir sus seguimientos: el análisis tiene en cuenta lo anterior del tema
+  y, al terminar, la IA actualiza el estado. Un vídeo ya analizado se añade desde su página.
+- Cada avance o cierre lleva **la frase del vídeo que lo dice**, comprobada contra la transcripción. Si la IA
+  cree que algo se cerró pero no encuentra la frase, lo muestra como «¿hecha?» con un botón **Confirmar**.
+  Para encontrarlo usa el modo razonamiento del modelo: actualizar un seguimiento tarda unos 2 minutos más
+  por cada 25 minutos de vídeo.
+- Las tareas, decisiones y dudas nuevas del seguimiento son las del análisis del vídeo: no cambian de una
+  ejecución a otra.
+- Puedes cambiar el estado de cualquier punto, editarlo, borrarlo o añadir uno a mano, y editar el resumen:
+  la IA ya no lo cambia. Cada cambio guarda una versión que se puede restaurar.
+- Al quitar o regenerar un vídeo de un seguimiento, la app pregunta si rehace su estado. Si no, lo marca
+  como desactualizado, con un botón para rehacerlo.
+- Los seguimientos se pueden archivar y se publican en su propia carpeta `Seguimiento - Nombre/`.
+- Nueva página de ayuda «Seguimientos».
+- Los términos que solo se ven en pantalla ya no se filtran por una regla fija: la IA razona si tienen que
+  ver con el vídeo (con lo que trata y con dónde, cuándo y cuánto aparecen). Si no está claro, se proponen
+  marcados como **dudosos**, con el motivo, y «Aceptar todas» no los incluye.
+- Los pendientes del resumen llevan su momento del vídeo, con enlace.
+
+### Corregido
+
+- El momento de las tareas y decisiones a veces salía con el texto de la tarea o con una fecha: ahora
+  siempre es una marca de tiempo.
+- El plazo de una tarea se escribe tal como se dice («el lunes»), sin convertirlo en una fecha.
+- La corrección de términos cambiaba palabras que ya contenían el término bien escrito (por ejemplo,
+  «onmicrosoft.com» por «onMicrosoft»).
+- Los nombres de los participantes leídos en pantalla ya no se proponen como términos del perfil.
+
 ## [1.4.0] - 2026-10-11
 
 La app explica cómo se usa y cómo funciona por dentro.

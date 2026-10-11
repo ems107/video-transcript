@@ -10,6 +10,12 @@ datos de las personas y personas nuevas que se mencionan. **Nada se usa hasta qu
 
 ![La página de propuestas](captura:propuestas)
 
+## Propuestas dudosas
+
+Un término que solo se ha visto en pantalla, sin que nadie lo mencione, puede tener que ver con la reunión
+o no (una pestaña abierta, un programa del escritorio). La IA lo razona y, si no está claro, lo propone
+marcado como **dudoso**, con el motivo. Decide tú: **Aceptar todas** no incluye las dudosas.
+
 ## Revisar una propuesta
 
 Cada propuesta indica:

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type RemovalInfo } from './api'
 import { notifyKnowledge, plural } from './util'
 import { HelpLink } from './HelpMarkdown'
+import { FollowupChoice } from './FollowupsPanel'
 
 type Options = { delete_files: boolean; delete_video: boolean; delete_original: boolean; forget: boolean }
 
@@ -12,10 +13,14 @@ export function RemoveDialog({ videoId, onClose, onRemoved }: { videoId: number;
   const [opts, setOpts] = useState<Options>({ delete_files: false, delete_video: false, delete_original: false, forget: false })
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  const [rebuild, setRebuild] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     ref.current?.showModal()
-    api.get<RemovalInfo>(`/api/videos/${videoId}/removal`).then(setInfo)
+    api.get<RemovalInfo>(`/api/videos/${videoId}/removal`).then((r) => {
+      setInfo(r)
+      setRebuild(Object.fromEntries(r.followups.filter((f) => f.applied).map((f) => [f.id, true])))
+    })
   }, [videoId])
 
   const set = (k: keyof Options) => (e: React.ChangeEvent<HTMLInputElement>) => setOpts({ ...opts, [k]: e.target.checked })
@@ -23,7 +28,8 @@ export function RemoveDialog({ videoId, onClose, onRemoved }: { videoId: number;
 
   const remove = async () => {
     setBusy(true)
-    const r = await api.post<{ ok: boolean; errors: string[] }>(`/api/videos/${videoId}/remove`, opts)
+    const follow_rebuild = Object.entries(rebuild).filter(([, v]) => v).map(([k]) => Number(k))
+    const r = await api.post<{ ok: boolean; errors: string[] }>(`/api/videos/${videoId}/remove`, { ...opts, follow_rebuild })
     if (opts.forget) notifyKnowledge()
     if (r.errors.length) {
       setErrors(r.errors)
@@ -85,6 +91,11 @@ export function RemoveDialog({ videoId, onClose, onRemoved }: { videoId: number;
               </span>
             </span>
           </label>
+          {info.followups.filter((f) => f.applied).map((f) => (
+            <FollowupChoice key={f.id} name={f.name} rebuild={!!rebuild[f.id]} onChange={(v) => setRebuild({ ...rebuild, [f.id]: v })}
+              rebuildText="Se quita lo que aportó este vídeo y la IA vuelve a aplicar los posteriores. Lo que cambiaste tú se conserva."
+              keepText="El estado sigue incluyendo lo que aportó y queda marcado como desactualizado." />
+          ))}
           {videoFate && <p className="small">{videoFate}</p>}
           {irreversible && <p className="small danger-text">Los ficheros borrados no se pueden recuperar.</p>}
           <div className="row" style={{ justifyContent: 'flex-end' }}>

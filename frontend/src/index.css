@@ -114,6 +114,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 label.field { display: block; }
 label.field > span { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; }
 label.field > small { display: block; color: var(--text-2); font-size: 0.8rem; margin-top: 0.2rem; }
+div.field > .label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; }
+div.field > small { display: block; color: var(--text-2); font-size: 0.8rem; margin-top: 0.2rem; }
 label.check { display: flex; gap: 0.5rem; align-items: center; }
 label.check input { width: auto; }
 /* Ventana modal (<dialog>) */
@@ -148,6 +150,21 @@ dialog.dialog blockquote { margin: 0; padding-left: 0.75rem; border-left: 3px so
 .correction-row { display: flex; gap: 0.75rem; align-items: flex-start; }
 .correction-row .grow { flex: 1; min-width: 0; }
 .correction-row .actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; }
+
+/* Seguimientos: cada punto con su estado, su texto y su recorrido de hitos */
+.warn-box { background: var(--surface-2); border-left: 3px solid var(--warn); }
+.followup-items { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+.followup-items > li { padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+.followup-items > li:last-child { border-bottom: none; }
+.followup-item { display: flex; gap: 0.6rem; align-items: flex-start; }
+.followup-item .grow { min-width: 0; }
+.followup-item .actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+select.status-select { width: auto; flex-shrink: 0; padding: 0.1rem 0.4rem; font-size: 0.8rem; border-radius: 99px; border: 1px solid var(--border); }
+.events { display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; margin: 0.35rem 0 0 0.25rem; font-size: 0.8rem; }
+.event { display: inline-flex; gap: 0.35rem; align-items: baseline; padding: 0.05rem 0.5rem; border-radius: 6px; background: var(--surface-2); }
+.event + .event::before { content: "→"; color: var(--text-2); margin-right: 0.15rem; }
+.event.hecha b, .event.resuelta b { color: var(--ok); }
+.event.descartada b, .event.anulada b, .event.cambiada b { color: var(--warn); }
 
 .progress { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.5s; }
@@ -209,6 +226,9 @@ table.tbl { width: 100%; border-collapse: collapse; }
   .spread > .grow { flex-basis: 100%; }
   .correction-row { flex-wrap: wrap; }
   .correction-row .grow { flex-basis: 100%; }
+  .followup-item { flex-wrap: wrap; }
+  .followup-item .grow { flex-basis: 100%; order: 2; }
+  .followup-item .actions { margin-left: auto; }
 }
 
 /* Ayuda */

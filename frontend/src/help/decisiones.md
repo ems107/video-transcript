@@ -99,7 +99,9 @@ Antes se usaba temperatura 0,2 sin penalización. Con el mismo vídeo de 37 minu
 31 datos repetidos por bucle a ninguno en dos ejecuciones, sin respuestas cortadas ni mezcla de idiomas (la
 ficha del modelo avisa de que una penalización alta puede provocarla). Ajustes completos: temperatura
 {{v:llm_temperature}}, top_p {{v:llm_top_p}}, top_k {{v:llm_top_k}}, min_p {{v:llm_min_p}} y
-presence_penalty {{v:llm_presence_penalty}}, sin «modo razonamiento». Además, todas las listas que devuelve
+presence_penalty {{v:llm_presence_penalty}}, sin «modo razonamiento» salvo en un caso medido: buscar qué
+dice un vídeo de los puntos de un [seguimiento](ayuda:seguimientos), donde sin razonar el modelo no
+encontraba los cierres dichos de pasada e inventaba momentos. Además, todas las listas que devuelve
 la IA tienen un máximo de elementos, y si una respuesta llega cortada o no es válida se guarda en
 `data/llm_failures/` para poder diagnosticarla.
 :::
@@ -118,12 +120,20 @@ solo por llegar tarde en la lista.
 
 ## Términos que se proponen para un perfil
 
-**Qué:** un término solo se propone si se oye en la conversación o forma parte del contenido de la pantalla
-en al menos {{v:termino_fotogramas}} fotogramas.
+**Qué:** un término que se oye en la conversación se propone como siempre. Uno que **solo se ve en
+pantalla** también se analiza, pero la IA razona si tiene relación con el vídeo: con lo que trata la
+grabación y con dónde, cuándo y cuánto aparece. Según su respuesta:
+- **relacionado**: se propone, con el motivo;
+- **dudoso**: se propone marcado como **dudoso**, con el motivo, para que decidas tú;
+- **sin relación**: no se propone (queda anotado en los datos del vídeo).
 
-**Por qué:** la lectura de la pantalla anota todo lo legible, incluidas la barra de tareas y las pestañas del
-navegador. En una grabación real, la mitad de los términos propuestos eran programas del escritorio que
-nadie mencionaba (Trello, Jira…).
+**Por qué:** la pantalla puede mostrar contenido de la reunión, pero también el escritorio, pestañas o
+programas ajenos a ella, y lo que es ruido en un vídeo es lo importante en otro: la pestaña de un gestor de
+tareas no pinta nada en una llamada de soporte, pero es el centro de una reunión de planificación. Una regla
+fija (un mínimo de fotogramas, aparecer en varios momentos) no lo distingue: medido con vídeos reales,
+dejaba pasar pestañas del navegador y, a la vez, quitaba términos reales del contenido.
+
+**Consecuencia:** a veces verás propuestas **dudosas**. «Aceptar todas» no las incluye.
 
 ## Identidades y apodos deducidos por el contexto
 
@@ -143,6 +153,29 @@ Coincidencia parcial de {{v:apodo_parecido}} o más sobre 100 entre el apodo y e
 espacios. Una identidad deducida por el contexto tiene confianza {{v:contexto_confianza}} y nunca se
 confirma sola.
 :::
+
+## Seguimientos
+
+**Qué:**
+- el vídeo se añade a un seguimiento solo si tú lo eliges; la app no lo sugiere;
+- el estado de un seguimiento lo actualiza la IA sin pedirte confirmación, pero cada cambio guarda antes
+  una versión y lo que cambias tú no lo toca;
+- cada vídeo recibe solo el estado de los vídeos **anteriores** en fecha;
+- el seguimiento no alimenta el aprendizaje del perfil.
+
+**Por qué:**
+- Las sugerencias costarían una llamada a la IA por vídeo y, con pocos seguimientos, aportan poco frente
+  a marcarlo tú al encolar.
+- Confirmar cada hito (tarea hecha, decisión cambiada…) sería lento. A cambio, cada hito lleva su vídeo y su
+  momento para comprobarlo, la app descarta los que no puede comprobar y siempre puedes restaurar una
+  versión anterior.
+- Un vídeo no puede «saber» lo que se dijo después: si analizas uno antiguo, ve el tema como estaba
+  entonces.
+- Las tareas de un tema concreto no son conocimiento general: llenarían el perfil de asuntos que no
+  sirven para otros vídeos.
+
+**Consecuencia:** si se analiza un vídeo anterior a otros del seguimiento, o se cambia uno del medio, el
+estado queda desactualizado hasta que lo rehaces. Ver [Seguimientos](ayuda:seguimientos#desactualizado-y-rehacer).
 
 ## Nada se confirma solo
 

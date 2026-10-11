@@ -8,6 +8,8 @@ paths:
   - "backend/app/knowledge_store.py"
   - "backend/app/proposals.py"
   - "backend/app/people.py"
+  - "backend/app/followups.py"
+  - "backend/app/followups_store.py"
 ---
 
 # Datos, API y ajustes
@@ -21,6 +23,9 @@ Lee `docs/ai/AI_BACKEND.md` antes de editar.
 - Las pruebas de API usan `tests/conftest.py` (`client`, `session`), con la BD en memoria.
 - Después de modificar un vídeo publicado, llama a `services.export_video` y `services.index_video`.
 - Los nombres de los hablantes se obtienen siempre con `services.speaker_names()`.
+- Seguimientos: antes de cambiar su estado, `followups_store.record_version`; después,
+  `followups_store.export`. Lo que toca el usuario es `manual` (y lo que borra, `hidden`): la IA nunca
+  cambia su texto ni su estado.
 - Si cambias una respuesta de la API, actualiza su tipo en `frontend/src/api.ts`.
 - La app nunca borra vídeos ni carpetas del usuario, salvo en «Quitar» cuando el usuario lo marca, y
   solo con `removal.plan` (ficheros que escribe la app y el vídeo elegido; una carpeta solo si queda

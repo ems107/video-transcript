@@ -13,6 +13,8 @@ claves: glosario, términos, definiciones, qué es
 | **Voz dudosa / reasignada** | Marcas de la comprobación por la voz. Ver [Hablantes](ayuda:hablantes#voz-dudosa-y-reasignada). |
 | **Cambio manual de hablante** | «De tal momento a tal momento habla esta persona», escrito por ti. Se mantiene en todas las regeneraciones. |
 | **Perfil** | Un tipo de vídeo, con su vocabulario, sus personas y su contexto. Ver [Perfiles](ayuda:perfiles). |
+| **Seguimiento** | Los vídeos de un mismo tema y su estado: tareas, decisiones, dudas y cómo ha evolucionado. Ver [Seguimientos](ayuda:seguimientos). |
+| **Desactualizado** | Un seguimiento cuyo estado no incluye aún algún cambio (un vídeo regenerado, quitado o anterior a los demás). Se arregla con **Rehacer el estado**. |
 | **Glosario** | Los términos de un perfil que deben escribirse bien, con sus formas mal oídas. |
 | **Propuesta (de aprendizaje)** | Algo que la IA ha aprendido de un vídeo y que tú aceptas o rechazas. Ver [Propuestas](ayuda:propuestas). |
 | **Aprendido** | Lo que aceptaste de las propuestas. La IA lo usa en los vídeos siguientes. |

@@ -108,20 +108,29 @@ la descripción de lo que se ve en pantalla.
 """ + ANALYSIS_RULES
 
 ITEM_T = {"type": "string"}
+# Marca de tiempo con formato obligatorio (la gramática de llama.cpp lo impone). Sin él, el modelo a veces
+# ponía en «t» el texto de la tarea o una fecha copiada del contexto; y con una hora libre escribía «20:42:00»
+# por el minuto 20:42. La hora empieza por 0 (hasta 9 h de vídeo), como en las marcas de la transcripción.
+TS_T = {"type": "string", "pattern": "^0[0-9]:[0-5][0-9]:[0-5][0-9]$"}
 TASK_SCHEMA = {
     "type": "object",
     "properties": {
         "responsable": {"type": "string"},
         "tarea": {"type": "string"},
         "plazo": {"type": "string"},
-        "t": {"type": "string"},
+        "t": TS_T,
     },
     "required": ["responsable", "tarea", "plazo", "t"],
 }
 DECISION_SCHEMA = {
     "type": "object",
-    "properties": {"decision": {"type": "string"}, "t": {"type": "string"}},
+    "properties": {"decision": {"type": "string"}, "t": TS_T},
     "required": ["decision", "t"],
+}
+PENDING_SCHEMA = {
+    "type": "object",
+    "properties": {"pendiente": {"type": "string"}, "t": TS_T},
+    "required": ["pendiente", "t"],
 }
 
 CHUNK_SCHEMA = {
@@ -131,7 +140,7 @@ CHUNK_SCHEMA = {
         "temas": {"type": "array", "items": ITEM_T},
         "tareas": {"type": "array", "items": TASK_SCHEMA},
         "decisiones": {"type": "array", "items": DECISION_SCHEMA},
-        "pendientes": {"type": "array", "items": ITEM_T},
+        "pendientes": {"type": "array", "items": PENDING_SCHEMA},
         "identidades": {
             "type": "array",
             "items": {
@@ -195,9 +204,10 @@ Devuelve:
 - resumen: resumen detallado en Markdown de este fragmento, por temas, con viñetas, citando marcas \
 de tiempo. Incluye argumentos, datos, problemas, lo que se muestra en pantalla y quién dice qué.
 - temas: lista de temas tratados.
-- tareas: acciones acordadas o encargadas (responsable o "" si no consta, plazo o "", marca de tiempo).
-- decisiones: decisiones tomadas (con marca de tiempo).
-- pendientes: dudas abiertas o asuntos sin cerrar.
+- tareas: acciones acordadas o encargadas (responsable o "" si no consta, plazo tal como se dice o "", marca de \
+tiempo hh:mm:ss de este vídeo).
+- decisiones: decisiones tomadas (con su marca de tiempo hh:mm:ss).
+- pendientes: dudas abiertas o asuntos sin cerrar (con la marca de tiempo hh:mm:ss donde se plantean).
 - identidades: solo para hablantes que aparecen como «Hablante N»: su nombre, si este fragmento lo deja \
 claro (por ejemplo, se presenta, o alguien se dirige a él por su nombre y es él quien responde). Indica \
 el motivo y la marca de tiempo. Lista vacía si no está claro.
@@ -228,7 +238,7 @@ FINAL_SCHEMA = {
         "temas": {"type": "array", "items": ITEM_T},
         "tareas": {"type": "array", "items": TASK_SCHEMA},
         "decisiones": {"type": "array", "items": DECISION_SCHEMA},
-        "pendientes": {"type": "array", "items": ITEM_T},
+        "pendientes": {"type": "array", "items": PENDING_SCHEMA},
     },
     "required": ["titulo", "resumen_breve", "resumen_detallado", "participantes", "temas", "tareas",
                  "decisiones", "pendientes"],
@@ -256,7 +266,8 @@ Devuelve:
 - resumen_detallado: informe completo en Markdown, organizado por temas, con todo el detalle relevante \
 y marcas de tiempo. {sec}
 - participantes: quién intervino y su papel en la reunión.
-- temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados.
+- temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados, cada punto con la marca \
+de tiempo hh:mm:ss de este vídeo donde se trata; el plazo, tal como se dice.
 {("\nInstrucciones adicionales del usuario:\n" + extra) if extra else ""}"""
 
 
@@ -364,11 +375,160 @@ el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabil
 {sections}"""
 
 
+# --------------------------------------------------------------------------- seguimientos
+
+def followup_block(states: list[str]) -> str:
+    """Estado de los seguimientos del vídeo, como contexto del análisis."""
+    states = [s for s in states if s.strip()]
+    if not states:
+        return ""
+    return ("Este vídeo continúa uno o varios temas tratados en vídeos anteriores. Estado del tema según \
+esos vídeos (solo para entender referencias y relacionar; no es parte de este vídeo):\n\n"
+            + "\n\n".join(states) + """
+
+Usa este estado solo para entender a qué se refiere lo que se dice y para relacionarlo con lo anterior \
+(por ejemplo, «continúa lo de…» o «da por hecha la tarea de…»), solo si se dice en este vídeo y con la \
+marca de tiempo de este vídeo. No añadas al resumen, a las tareas ni a las decisiones nada que no se \
+diga o se vea en este vídeo.""")
+
+
+FOLLOW_SYSTEM = """Mantienes el estado de un tema que se trata a lo largo de varias grabaciones (reuniones \
+o sesiones de trabajo): sus tareas, decisiones y dudas, y un resumen de su evolución. Recibes el estado \
+según los vídeos anteriores y el análisis de un vídeo nuevo, y devuelves solo lo que cambia.
+
+""" + ANALYSIS_RULES
+
+FOLLOW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "mismos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"nuevo": {"type": "string"}, "existente": {"type": "string"}},
+                "required": ["nuevo", "existente"],
+            },
+        },
+        "resumen": {"type": "string"},
+        "aporte": {"type": "string"},
+    },
+    "required": ["mismos", "resumen", "aporte"],
+}
+
+# Qué dice el vídeo de cada punto abierto. Va aparte y con el modo razonamiento: dentro del resumen, o sin
+# razonar, el modelo no encontraba los cierres dichos de pasada («lo que ayer fallaba ya ha funcionado») e
+# inventaba momentos y citas (medido con vídeos reales)
+FOLLOW_CHECK_SYSTEM = """Revisas la transcripción de una reunión para saber qué dice sobre asuntos pendientes \
+de reuniones anteriores. Solo cuenta lo que se dice en la transcripción; no deduzcas nada que no se diga."""
+
+FOLLOW_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "menciones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada",
+                                                          "anulada", "resuelta"]},
+                    "t": TS_T,
+                    "cita": {"type": "string"},
+                },
+                "required": ["id", "evento", "t", "cita"],
+            },
+        },
+    },
+    "required": ["menciones"],
+}
+
+
+def follow_check_user(points: str, video: str, part: int, total: int, body: str) -> str:
+    return f"""Asuntos pendientes de reuniones anteriores del mismo tema:
+{points}
+
+Transcripción de la reunión del {video} (parte {part} de {total}):
+{body}
+
+Para cada asunto del que se hable en esta parte, devuelve:
+- id: el del asunto ([T…] tarea, [D…] decisión, [P…] duda).
+- evento: hecha o descartada (tareas), cambiada o anulada (decisiones), resuelta (dudas), reabierta, o \
+avanza si se habla de él pero sigue igual.
+- t: la marca de tiempo de la frase.
+- cita: la frase que lo dice, copiada literalmente, sin comillas ni puntos suspensivos.
+Se puede hablar de un asunto sin nombrarlo igual (por ejemplo, «lo que ayer fallaba ya funciona» o «ya \
+sale como predeterminado»). Si no se habla de un asunto, no lo pongas."""
+
+
+def follow_user(state: str, video: str, analysis: str) -> str:
+    previous = ("Estado del tema según los vídeos anteriores:\n" + state) if state else \
+        "Es el primer vídeo del tema: aún no hay estado."
+    return f"""{previous}
+
+Vídeo nuevo: {video}
+
+{analysis}
+
+Devuelve:
+- mismos: puntos de este vídeo ([N…]) que son el mismo asunto que un punto del estado ([T…], [D…], [P…]), \
+para no duplicarlo (por ejemplo, la misma tarea encargada otra vez). nuevo: el [N…]; existente: el del \
+estado. Los demás puntos de este vídeo se añaden al estado tal cual. Una decisión que cambia otra anterior \
+no es «la misma». Lista vacía si no hay ninguno.
+- resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
+ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior y \
+consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo. Usa lo que dicen las menciones \
+comprobadas sobre los asuntos anteriores; no des por hecho lo que no dicen.
+- aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
+
+
+# --------------------------------------------------------------------------- términos vistos solo en pantalla
+
+SCREEN_SYSTEM = """Valoras si los términos que solo se han visto en pantalla durante una grabación (reunión o \
+sesión de trabajo) tienen relación con lo que se trata en ella. La pantalla puede mostrar contenido de la \
+reunión, pero también el escritorio, pestañas, notificaciones o programas ajenos a ella: depende del vídeo. \
+Razona con lo que se sabe del vídeo y de dónde aparece cada término; no lo decidas por el tipo de programa \
+ni por lo conocido que sea."""
+
+SCREEN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "terminos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "termino": {"type": "string"},
+                    "relacion": {"type": "string", "enum": ["relacionado", "dudoso", "sin_relacion"]},
+                    "motivo": {"type": "string"},
+                },
+                "required": ["termino", "relacion", "motivo"],
+            },
+        },
+    },
+    "required": ["terminos"],
+}
+
+
+def screen_user(about: str, terms: str) -> str:
+    return f"""De qué trata la grabación:
+{about}
+
+Términos que no se mencionan en la conversación y solo se ven en pantalla, con dónde aparecen:
+{terms}
+
+Para cada término, devuelve:
+- relacion: «relacionado» si forma parte de lo que se trabaja, se muestra o se consulta en la reunión; \
+«sin_relacion» si es algo de la pantalla ajeno a la reunión (por ejemplo, otras pestañas o programas abiertos \
+que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y «sin_relacion», responde «dudoso»: lo decidirá el usuario.
+- motivo: por qué, en una frase, citando lo que lo indica (cuándo y dónde aparece, qué se ve)."""
+
+
 # --------------------------------------------------------------------------- límites de las listas
 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
-LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12}
+LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
+               "mismos": 30, "menciones": 20}
 LIST_DEFAULT = 40
 
 
@@ -382,5 +542,6 @@ def _limit_lists(schema: Any) -> None:
     _limit_lists(schema.get("items"))
 
 
-for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA):
+for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FOLLOW_CHECK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA,
+                FOLLOW_SCHEMA, SCREEN_SCHEMA):
     _limit_lists(_schema)

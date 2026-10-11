@@ -59,7 +59,10 @@ quedó guardado en el `settings.json` de versiones anteriores.
   escuchando en `127.0.0.1:<llm_port>` (8091). El log se guarda en `data/llama-server.log`.
 - `chat_json(system, user, schema)` usa `response_format: json_schema`, por lo que la salida siempre se
   ajusta al esquema. Usa `chat_template_kwargs.enable_thinking = false`: sin razonamiento, para una
-  salida directa y más rápida. Reintenta 2 veces.
+  salida directa y más rápida. Reintenta 2 veces. Con `thinking=True` activa el razonamiento con el
+  muestreo `llm.THINKING_SAMPLING` (temperatura 0,6, top_p 0,95, top_k 20 y sin penalización por presencia: con 1,5, dos de cuatro ejecuciones no devolvían ninguna mención, porque hay que copiar citas literales; sin ella, las cuatro las encontraban): la gramática del esquema se
+  aplica a la respuesta, no a lo que piensa, y `max_tokens` incluye lo pensado (unos 24 000 caracteres para un
+  bloque de 25 min). Solo lo usa `followups_store.mentions`, donde se midió que hace falta.
 - Las imágenes se envían como `image_part(path)`, en base64 JPEG dentro del contenido del usuario.
 - Para cambiar de modelo GGUF hay que actualizar `download_models.py` (repositorio y fichero), las rutas
   en `config.py`, las etiquetas de `CHECK_LABELS` en `frontend/src/App.tsx` y las tablas de licencias

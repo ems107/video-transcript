@@ -11,7 +11,16 @@ from typing import Any
 
 from .. import knowledge as K
 from ..llm import LLMServer
-from ..prompts import LEARN_SCHEMA, LEARN_SYSTEM, corrections_block, learn_user, profile_block
+from ..prompts import (
+    LEARN_SCHEMA,
+    LEARN_SYSTEM,
+    SCREEN_SCHEMA,
+    SCREEN_SYSTEM,
+    corrections_block,
+    learn_user,
+    profile_block,
+    screen_user,
+)
 from .analyze import chunk_lines, timeline
 from .base import JobContext
 from .glossary import normalize
@@ -24,6 +33,7 @@ MAX_CONTEXT = 30
 MAX_PER_PERSON = 40
 MAX_NEW_PEOPLE = 15
 MAX_SECTIONS = 8
+SCREEN_BATCH = 12  # términos por consulta al valorar los vistos solo en pantalla
 
 
 def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:
@@ -75,6 +85,8 @@ def collect_proposals(
     known_terms = {normalize(g["term"]) for g in K.effective_glossary(profile)}
     person_names = {normalize(n) for p in people for n in [p["name"], *(p.get("aliases") or [])]}
     person_names |= {normalize(n) for n in speaker_names.values()}
+    # Los participantes leídos en pantalla (con todas sus lecturas) son personas, no términos
+    person_names |= {normalize(n) for g in screen_names for n in [g.get("canonical", ""), *(g.get("variants") or {})]}
     screen = {normalize(s) for s in screen_terms or []}
 
     def stamp(ts: str, rng: tuple[float, float]) -> float | None:
@@ -90,10 +102,11 @@ def collect_proposals(
             if not k or k in known_terms or k in person_names or k in terms or not looks_like_term(term, screen):
                 continue
             occ = K.term_occurrences(term, utts, vision, limit=50)
-            if occ and K.term_relevant(term, utts, vision):
+            if occ:
                 terms[k] = {"kind": "termino", "category": "", "owner": ("profile", None), "n": len(occ),
                             "data": {"term": term, "definition": x.get("definicion", "").strip()},
-                            "t": occ[0], "lines": evidence_lines(occ[0], utts, vision, term), "replaces": 0}
+                            "t": occ[0], "lines": evidence_lines(occ[0], utts, vision, term), "replaces": 0,
+                            "screen_only": not K.heard(term, utts)}
     # Formas de un mismo nombre: una sola propuesta con la más vista y las demás como otras formas
     merged = []
     for group in K.group_forms([p["data"]["term"] for p in terms.values()]):
@@ -211,5 +224,54 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str]
 
     proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile,
                                   ctx.load("names.json", []), want_sections, screen_terms)
+    proposals = judge_screen_terms(ctx, llm, proposals, vision)
     ctx.save("proposals.json", proposals)
     return proposals
+
+
+def apply_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Aplica la valoración de la IA a los términos vistos solo en pantalla.
+
+    «sin_relacion» se descarta (queda en la lista devuelta, que se guarda con el vídeo); «dudoso» se propone
+    marcado como dudoso, con su motivo; «relacionado», como siempre, con su motivo. Un término que la IA no
+    valora se trata como dudoso: siempre lo decide el usuario."""
+    verdicts = {normalize(x.get("termino", "")): x for x in answer.get("terminos") or []}
+    kept, judged = [], []
+    for p in proposals:
+        if not p.pop("screen_only", False):
+            kept.append(p)
+            continue
+        term = p["data"]["term"]
+        v = verdicts.get(normalize(term)) or {"relacion": "dudoso", "motivo": "La IA no lo valoró."}
+        relacion = v.get("relacion") if v.get("relacion") in ("relacionado", "dudoso", "sin_relacion") else "dudoso"
+        judged.append({"termino": term, "relacion": relacion, "motivo": v.get("motivo", "")})
+        if relacion != "sin_relacion":
+            p["data"]["pantalla"] = {"relacion": relacion, "motivo": v.get("motivo", "")}
+            kept.append(p)
+    return kept, judged
+
+
+def judge_screen_terms(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, Any]],
+                       vision: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """La IA razona si cada término que solo se ve en pantalla tiene que ver con el vídeo (ver `apply_judgment`)."""
+    screen = [p for p in proposals if p.get("screen_only")]
+    if not screen:
+        return proposals
+    answer = ctx.load("screen_judgment.raw.json")
+    if answer is None:
+        a = ctx.load("analysis.json", {}) or {}
+        about = "\n".join(filter(None, [a.get("titulo", ""), a.get("resumen_breve", ""),
+                                         ("Temas: " + "; ".join(a.get("temas") or [])) if a.get("temas") else ""]))
+        answer = {"terminos": []}
+        # En tandas: con 40 términos de una vez, la IA dejaba los últimos sin valorar
+        for i in range(0, len(screen), SCREEN_BATCH):
+            ctx.check_cancel()
+            batch = screen[i:i + SCREEN_BATCH]
+            ctx.report(0.95, f"Valorando términos vistos solo en pantalla ({i + len(batch)}/{len(screen)})")
+            terms = "\n".join(K.screen_summary(p["data"]["term"], vision) for p in batch)
+            r = llm.chat_json(SCREEN_SYSTEM, screen_user(about or "(sin resumen)", terms), SCREEN_SCHEMA, max_tokens=3000)
+            answer["terminos"] += r.get("terminos") or []
+        ctx.save("screen_judgment.raw.json", answer)
+    kept, judged = apply_judgment(proposals, answer)
+    ctx.save("screen_judgment.json", judged)
+    return kept

@@ -21,11 +21,12 @@ from .models import Job, Speaker, Video
 
 LEVELS = ("analysis", "speakers", "screen", "full")
 _STAGES = {
-    "analysis": ["correct", "analyze", "learn", "publish"],
-    "speakers": ["ingest", "voices", "names", "identify", "correct", "analyze", "learn", "publish"],
-    "screen": ["ingest", "frames", "vision", "voices", "names", "identify", "correct", "analyze", "learn", "publish"],
+    "analysis": ["correct", "analyze", "follow", "learn", "publish"],
+    "speakers": ["ingest", "voices", "names", "identify", "correct", "analyze", "follow", "learn", "publish"],
+    "screen": ["ingest", "frames", "vision", "voices", "names", "identify", "correct", "analyze", "follow", "learn",
+               "publish"],
     "full": ["ingest", "frames", "vision", "asr", "align", "diarize", "voices", "names", "identify", "correct",
-             "analyze", "learn", "publish"],
+             "analyze", "follow", "learn", "publish"],
 }
 # Lo que necesita cada nivel en la carpeta de trabajo (además del vídeo en `screen` y `full`)
 _NEEDS = {
@@ -71,7 +72,8 @@ def info(session: Session, v: Video, work: Path | None, max_frames: int) -> dict
     reasons = availability(work, video)
     levels = []
     for level in LEVELS:
-        est = estimates.estimate(session, stages(level), v.duration, frames, max_frames)
+        # El seguimiento se estima aparte (depende de cuántos vídeos haya que rehacer)
+        est = estimates.estimate(session, [s for s in stages(level) if s != "follow"], v.duration, frames, max_frames)
         levels.append({"level": level, "available": not reasons[level], "reason": reasons[level],
                        "seconds": round(est["total"])})
     confirmed = len(session.exec(select(Speaker).where(Speaker.video_id == v.id, Speaker.confirmed.is_(True))).all())

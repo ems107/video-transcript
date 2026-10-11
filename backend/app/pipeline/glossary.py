@@ -150,6 +150,8 @@ def find_candidates(
                 for a, b, frag, n_frag in windows(n):
                     if not n_frag or not free(a, b):
                         continue
+                    if n_term.replace(" ", "") in n_frag.replace(" ", ""):
+                        continue  # ya contiene el término escrito bien («onmicrosoft.com» con «onMicrosoft»)
                     ph = phonetic(frag)
                     score = max(fuzz.ratio(ph, k) for k in keys)
                     if score >= threshold:

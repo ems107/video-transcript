@@ -19,6 +19,7 @@ HISTORY = 10
 DEFAULT_RATES = {
     "ingest": 2.0, "frames": 8.0, "vision": 15.0, "asr": 1.5, "align": 0.6, "diarize": 0.8,
     "names": 0.05, "identify": 0.05, "correct": 0.5, "analyze": 6.0, "learn": 5.0, "publish": 0.1,
+    "follow": 6.0,  # por minuto de cada vídeo que se aplica al seguimiento (con modo razonamiento)
 }
 FRAMES_PER_MINUTE = 3.0  # si aún no se han elegido los fotogramas
 

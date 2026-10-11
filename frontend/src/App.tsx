@@ -14,6 +14,8 @@ import Proposals from './pages/Proposals'
 import ProfileDetail from './pages/ProfileDetail'
 import PersonDetail from './pages/PersonDetail'
 import Help from './pages/Help'
+import Followups from './pages/Followups'
+import FollowupDetail from './pages/FollowupDetail'
 
 const CHECK_LABELS: Record<string, string> = {
   ffmpeg: 'ffmpeg',
@@ -59,6 +61,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/buscar">Buscar</NavLink>
           <NavLink to="/perfiles">Perfiles</NavLink>
+          <NavLink to="/seguimientos">Seguimientos</NavLink>
           <NavLink to="/personas">Personas</NavLink>
           <NavLink to="/ajustes">Ajustes</NavLink>
           <NavLink to="/ayuda">Ayuda</NavLink>
@@ -80,6 +83,8 @@ export default function App() {
           <Route path="/propuestas" element={<Proposals />} />
           <Route path="/perfiles" element={<Profiles />} />
           <Route path="/perfiles/:id" element={<ProfileDetail />} />
+          <Route path="/seguimientos" element={<Followups />} />
+          <Route path="/seguimientos/:id" element={<FollowupDetail jobs={jobs} />} />
           <Route path="/personas" element={<People />} />
           <Route path="/personas/:id" element={<PersonDetail />} />
           <Route path="/ajustes" element={<SettingsPage />} />

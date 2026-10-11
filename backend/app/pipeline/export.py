@@ -31,6 +31,9 @@ def _meta_lines(meta: dict[str, Any]) -> list[str]:
     lines = [f"- **Fecha:** {meta['date']}", f"- **Duración:** {meta['duration']}"]
     if meta.get("profile"):
         lines.append(f"- **Perfil:** {meta['profile']}")
+    if meta.get("followups"):
+        links = [f"[{name}]({link})" if link else name for name, link in meta["followups"]]
+        lines.append(f"- **Seguimientos:** {', '.join(links)}")
     if meta.get("participants"):
         lines.append(f"- **Participantes:** {', '.join(meta['participants'])}")
     if meta.get("source"):
@@ -68,7 +71,8 @@ def summary_md(meta: dict[str, Any], a: dict[str, Any]) -> str:
     if a.get("decisiones"):
         out += ["## Decisiones", ""] + [f"- {x['decision']} ({x.get('t', '')})" for x in a["decisiones"]] + [""]
     if a.get("pendientes"):
-        out += ["## Pendientes", ""] + [f"- {x}" for x in a["pendientes"]] + [""]
+        pend = [x if isinstance(x, str) else f"{x.get('pendiente', '')} ({x.get('t', '')})" for x in a["pendientes"]]
+        out += ["## Pendientes", ""] + [f"- {x}" for x in pend] + [""]
     if a.get("temas"):
         out += ["## Temas", ""] + [f"- {x}" for x in a["temas"]] + [""]
     return "\n".join(out)

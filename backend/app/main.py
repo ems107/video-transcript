@@ -25,13 +25,15 @@ from sse_starlette.sse import EventSourceResponse
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
 from . import regenerate as regen
+from . import followups as FL
+from . import followups_store as FS
 from . import help_values, removal, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
-    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video,
-    SpeakerOverride, VideoCorrection, VoiceEmbedding,
+    Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person,
+    Profile, ProfilePersonLink, Segment, Speaker, Video, SpeakerOverride, VideoCorrection, VoiceEmbedding,
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
@@ -118,6 +120,7 @@ def probe_file(path: str) -> dict[str, Any]:
 class JobCreate(BaseModel):
     path: str
     profile_id: Optional[int] = None
+    followup_ids: list[int] = []
     options: dict[str, Any] = {}
 
 
@@ -140,9 +143,14 @@ def create_job(body: JobCreate, session: Session = SessionDep) -> dict[str, Any]
     ).first()
     if active:
         raise HTTPException(409, "Ese vídeo ya está en la cola")
+    followups = [_404(session.get(Followup, fid), "Seguimiento") for fid in dict.fromkeys(body.followup_ids)]
+    if any(f.status != "abierto" for f in followups):
+        raise HTTPException(400, "Un seguimiento archivado no admite vídeos nuevos")
     video = Video(source_path=str(p), title=p.stem, profile_id=body.profile_id)
     session.add(video)
     session.commit()
+    for f in followups:
+        session.add(FollowupVideo(followup_id=f.id, video_id=video.id))
     job = Job(video_id=video.id, options=body.options)
     session.add(job)
     session.commit()
@@ -261,6 +269,9 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
         "video_corrections": services.with_applied(v.analysis, vc := services.video_corrections(session, v.id)),
         "corrections_pending": bool(v.analysis) and services.corrections_pending(v.analysis, vc),
         "overrides_pending": bool(v.analysis) and speaker_fix.pending(v.analysis, speaker_fix.overrides(session, v.id)),
+        "followups": [{"id": f.id, "name": f.name, "status": f.status,
+                       "applied": session.get(FollowupVideo, (f.id, v.id)).applied}
+                      for f in FS.for_video(session, v.id)],
         "segments": [{"id": s.id, "start": s.start, "end": s.end, "speaker": s.speaker,
                       "name": names.get(s.speaker, s.speaker), "text": s.text,
                       "original_text": s.original_text, "corrections": s.corrections, "voice": s.voice} for s in segs],
@@ -406,7 +417,10 @@ def video_words(video_id: int, start: float, end: float, session: Session = Sess
 @app.get("/api/videos/{video_id}/removal")
 def removal_info(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     """Rutas y datos a los que afectaría quitar el vídeo."""
-    return removal.info(session, _404(session.get(Video, video_id), "Vídeo"))
+    v = _404(session.get(Video, video_id), "Vídeo")
+    return {**removal.info(session, v),
+            "followups": [{"id": f.id, "name": f.name, "applied": session.get(FollowupVideo, (f.id, v.id)).applied}
+                          for f in FS.for_video(session, v.id)]}
 
 
 class RemoveIn(BaseModel):
@@ -414,6 +428,7 @@ class RemoveIn(BaseModel):
     delete_video: bool = False
     delete_original: bool = False
     forget: bool = False
+    follow_rebuild: list[int] = []  # seguimientos cuyo estado se rehace sin este vídeo
 
 
 @app.post("/api/videos/{video_id}/remove")
@@ -422,7 +437,9 @@ def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -
     v = _404(session.get(Video, video_id), "Vídeo")
     if v.status == "processing":
         raise HTTPException(400, "El vídeo se está procesando")
-    return removal.remove(session, v, removal.Options(**body.model_dump()))
+    for f in FS.for_video(session, v.id):
+        _detach(session, f, v, f.id in body.follow_rebuild)
+    return removal.remove(session, v, removal.Options(**body.model_dump(exclude={"follow_rebuild"})))
 
 
 @app.delete("/api/videos/{video_id}")
@@ -476,13 +493,18 @@ def regenerate_info(video_id: int, session: Session = SessionDep) -> dict[str, A
     v = _404(session.get(Video, video_id), "Vídeo")
     last = _last_job(session, v)
     work = WORK_DIR / f"job_{last.id}" if last else None
-    return regen.info(session, v, work, load_settings().max_frames)
+    out = regen.info(session, v, work, load_settings().max_frames)
+    out["followups"] = [{"id": f.id, "name": f.name, "status": f.status,
+                         "seconds": round(FS.rebuild_seconds(session, f, FS.date_of(v)))}
+                        for f in FS.for_video(session, v.id)]
+    return out
 
 
 class RegenerateIn(BaseModel):
     level: str = "analysis"
     min_speakers: int | None = None  # solo en «full»: ayudan a la separación de voces
     max_speakers: int | None = None
+    follow_rebuild: list[int] = []  # seguimientos cuyo estado se rehace desde este vídeo
 
 
 @app.post("/api/videos/{video_id}/regenerate")
@@ -498,7 +520,8 @@ def regenerate(video_id: int, body: RegenerateIn | None = None, session: Session
         raise HTTPException(400, reason)
     if level == "full":
         regen.unconfirm_speakers(session, v.id)
-    job = _requeue(session, v, regen.stages(level), "Regenerando análisis", check_work=False)
+    job = _requeue(session, v, regen.stages(level), "Regenerando análisis", check_work=False,
+                   extra={"follow_rebuild": (body or RegenerateIn()).follow_rebuild})
     if level == "full":
         opts = {k: val for k, val in (job.options or {}).items() if k not in ("min_speakers", "max_speakers", "num_speakers")}
         b = body or RegenerateIn()
@@ -509,7 +532,12 @@ def regenerate(video_id: int, body: RegenerateIn | None = None, session: Session
     return {"ok": True, "job_id": job.id}
 
 
-def _requeue(session: Session, v: Video, redo: list[str], message: str, check_work: bool = True) -> Job:
+# Opciones que valen solo para un encolado: no se arrastran al siguiente
+ONE_SHOT_OPTIONS = ("only", "follow_rebuild")
+
+
+def _requeue(session: Session, v: Video, redo: list[str], message: str, check_work: bool = True,
+             extra: dict[str, Any] | None = None) -> Job:
     """Vuelve a encolar el último trabajo del vídeo repitiendo solo las fases indicadas."""
     last = _last_job(session, v)
     if not last or last.status in ("queued", "running"):
@@ -518,7 +546,8 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
         raise HTTPException(400, "Faltan los datos intermedios de este vídeo; hay que analizarlo de nuevo desde cero")
     last.status, last.message, last.error, last.progress = "queued", message, "", 0.0
     last.started_at, last.finished_at = None, None  # el tiempo de este trabajo empieza ahora
-    last.options = {**(last.options or {}), "redo": redo}
+    kept = {k: val for k, val in (last.options or {}).items() if k not in ONE_SHOT_OPTIONS}
+    last.options = {**kept, **(extra or {}), "redo": redo}
     v.status = "processing"
     session.add(last), session.add(v)
     session.commit()
@@ -934,6 +963,279 @@ def learn_all(profile_id: int, session: Session = SessionDep) -> dict[str, Any]:
         except HTTPException:
             skipped += 1
     return {"queued": queued, "skipped": skipped}
+
+
+# --------------------------------------------------------------------------- seguimientos
+
+class FollowupIn(BaseModel):
+    name: str
+    description: str = ""
+
+
+class FollowupUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    status: str | None = None  # abierto | archivado
+    summary: str | None = None  # resumen escrito por el usuario («» vuelve al de la IA)
+    use_ai_summary: bool = False
+
+
+def _followup(session: Session, fid: int) -> Followup:
+    return _404(session.get(Followup, fid), "Seguimiento")
+
+
+def _queue_follow(session: Session, f: Followup, v: Video, message: str) -> Job:
+    """Encola un trabajo que solo rehace el estado del seguimiento desde ese vídeo."""
+    try:
+        return _requeue(session, v, ["follow"], message, check_work=False,
+                        extra={"only": ["follow"], "follow_rebuild": [f.id]})
+    except HTTPException as e:
+        raise HTTPException(400, f"No se puede rehacer ahora: «{v.title}» tiene un trabajo en curso") from e
+
+
+def _no_ask(*_: Any) -> dict[str, Any]:
+    raise RuntimeError("No hay vídeos que aplicar")
+
+
+def _detach(session: Session, f: Followup, v: Video, rebuild: bool) -> None:
+    """Quita un vídeo del seguimiento: rehace el estado sin él o lo deja como está (desactualizado)."""
+    fv = session.get(FollowupVideo, (f.id, v.id))
+    applied = fv.applied
+    session.delete(fv)
+    session.commit()
+    if applied and rebuild:
+        FS.record_version(session, f, f"Antes de quitar «{v.title}»")
+        FS.revert_videos(session, f, {v.id})
+        nxt = FS.first_from(session, f, FS.date_of(v))
+        if nxt:
+            try:
+                _queue_follow(session, f, nxt, f"Actualizando el seguimiento «{f.name}»")
+            except HTTPException:
+                FS.mark_stale(session, f, FS.date_of(v), f"Se quitó «{v.title}» y falta rehacer el estado")
+    elif applied:
+        FS.mark_stale(session, f, FS.date_of(v), f"Se quitó «{v.title}»; el estado aún incluye lo que aportó")
+    FS.export(session, f)
+
+
+@app.get("/api/followups")
+def list_followups(session: Session = SessionDep) -> list[dict[str, Any]]:
+    rows = session.exec(select(Followup).order_by(Followup.updated_at.desc())).all()
+    return [FS.out(session, f) for f in rows]
+
+
+@app.post("/api/followups")
+def create_followup(body: FollowupIn, session: Session = SessionDep) -> dict[str, Any]:
+    if not body.name.strip():
+        raise HTTPException(400, "Indica un nombre para el seguimiento")
+    f = Followup(name=body.name.strip(), description=body.description.strip())
+    session.add(f)
+    session.commit()
+    FS.record_version(session, f, "Creado")
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
+
+
+@app.get("/api/followups/{followup_id}")
+def get_followup(followup_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    return FS.out(session, _followup(session, followup_id), full=True)
+
+
+@app.put("/api/followups/{followup_id}")
+def update_followup(followup_id: int, body: FollowupUpdate, session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    if body.status is not None and body.status not in ("abierto", "archivado"):
+        raise HTTPException(400, "Estado desconocido")
+    reason = []
+    if body.name is not None and body.name.strip() and body.name.strip() != f.name:
+        f.name = body.name.strip()
+    if body.description is not None:
+        f.description = body.description.strip()
+    if body.status is not None:
+        f.status = body.status
+    if body.use_ai_summary or (body.summary is not None and not body.summary.strip()):
+        latest = [fv for fv, _ in FS.links(session, f.id) if fv.applied]
+        f.summary, f.summary_manual, f.summary_ai = latest[-1].summary if latest else "", False, ""
+        reason.append("Resumen de la IA")
+    elif body.summary is not None and body.summary.strip() != f.summary:
+        FS.record_version(session, f, "Antes de editar el resumen")
+        if not f.summary_manual:
+            f.summary_ai = f.summary
+        f.summary, f.summary_manual = body.summary.strip(), True
+        reason.append("Resumen editado")
+    FS.touch(session, f)
+    if reason:
+        FS.record_version(session, f, ", ".join(reason))
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
+
+
+@app.post("/api/followups/{followup_id}/open-folder")
+def open_followup_folder(followup_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    FS.export(session, f)
+    if not f.folder or not Path(f.folder).is_dir():
+        raise HTTPException(404, "La carpeta no existe")
+    os.startfile(f.folder)  # noqa: S606  (abre el Explorador de Windows)
+    return {"ok": True}
+
+
+@app.delete("/api/followups/{followup_id}")
+def delete_followup(followup_id: int, delete_folder: bool = False, session: Session = SessionDep) -> dict[str, Any]:
+    FS.delete(session, _followup(session, followup_id), delete_folder)
+    return {"ok": True}
+
+
+class FollowupVideoIn(BaseModel):
+    apply: bool = True  # aplicar el vídeo al estado (rehace desde su fecha)
+    regenerate: bool = False  # además, regenerar el resumen del vídeo con el contexto del seguimiento
+
+
+@app.post("/api/followups/{followup_id}/videos/{video_id}")
+def add_followup_video(followup_id: int, video_id: int, body: FollowupVideoIn | None = None,
+                       session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    v = _404(session.get(Video, video_id), "Vídeo")
+    body = body or FollowupVideoIn()
+    if f.status != "abierto":
+        raise HTTPException(400, "El seguimiento está archivado: reábrelo para añadir vídeos")
+    if session.get(FollowupVideo, (f.id, v.id)):
+        raise HTTPException(409, "El vídeo ya está en ese seguimiento")
+    if v.status != "done":
+        raise HTTPException(400, "Espera a que termine el análisis del vídeo")
+    session.add(FollowupVideo(followup_id=f.id, video_id=v.id))
+    session.commit()
+    job = None
+    if body.regenerate:
+        job = regenerate(v.id, RegenerateIn(level="analysis", follow_rebuild=[f.id]), session)
+    elif body.apply:
+        job = {"job_id": _queue_follow(session, f, v, f"Añadiendo al seguimiento «{f.name}»").id}
+    else:
+        FS.mark_stale(session, f, FS.date_of(v), f"«{v.title}» se añadió sin aplicarlo al estado")
+    FS.export(session, f)
+    return {**FS.out(session, f, full=True), "job_id": job["job_id"] if job else None}
+
+
+@app.delete("/api/followups/{followup_id}/videos/{video_id}")
+def remove_followup_video(followup_id: int, video_id: int, rebuild: bool = False,
+                          session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    v = _404(session.get(Video, video_id), "Vídeo")
+    _404(session.get(FollowupVideo, (f.id, v.id)), "Vídeo del seguimiento")
+    _detach(session, f, v, rebuild)
+    return FS.out(session, f, full=True)
+
+
+@app.post("/api/followups/{followup_id}/rebuild")
+def rebuild_followup(followup_id: int, all_videos: bool = False, session: Session = SessionDep) -> dict[str, Any]:
+    """Rehace el estado desde que está desactualizado (o desde el principio)."""
+    f = _followup(session, followup_id)
+    since = None if all_videos else f.stale_from
+    if not all_videos and since is None:
+        raise HTTPException(400, "El estado ya está al día")
+    first = FS.first_from(session, f, since)
+    if first:
+        job = _queue_follow(session, f, first, f"Rehaciendo el seguimiento «{f.name}»")
+        return {**FS.out(session, f, full=True), "job_id": job.id}
+    FS.rebuild_from(session, f, since, _no_ask)  # no queda ningún vídeo que aplicar: solo deshacer
+    return {**FS.out(session, f, full=True), "job_id": None}
+
+
+class FollowupItemIn(BaseModel):
+    kind: str | None = None
+    text: str | None = None
+    owner: str | None = None
+    due: str | None = None
+    status: str | None = None
+
+
+def _item(session: Session, fid: int, item_id: int) -> FollowupItem:
+    it = _404(session.get(FollowupItem, item_id), "Punto")
+    if it.followup_id != fid:
+        raise HTTPException(404, "Punto no encontrado")
+    return it
+
+
+def _manual_event(evento: str, nota: str = "") -> dict[str, Any]:
+    return {"video_id": None, "date": None, "t": "", "evento": evento, "nota": nota, "source": "manual",
+            "at": models_now().isoformat()}
+
+
+@app.post("/api/followups/{followup_id}/items")
+def add_followup_item(followup_id: int, body: FollowupItemIn, session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    if body.kind not in FL.KINDS or not (body.text or "").strip():
+        raise HTTPException(400, "Indica el tipo y el texto")
+    FS.record_version(session, f, "Antes de añadir un punto a mano")
+    events = [_manual_event("creada")]
+    status = body.status or FL.INITIAL[body.kind]
+    if status != FL.INITIAL[body.kind]:
+        ev = FL.status_for_event(body.kind, status)
+        if not ev:
+            raise HTTPException(400, "Estado no válido para ese tipo")
+        events.append(_manual_event(ev))
+    session.add(FollowupItem(followup_id=f.id, kind=body.kind, text=body.text.strip(), owner=(body.owner or "").strip(),
+                             due=(body.due or "").strip(), status=FL.derive_status(body.kind, events), manual=True,
+                             events=events))
+    FS.touch(session, f)
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
+
+
+@app.put("/api/followups/{followup_id}/items/{item_id}")
+def update_followup_item(followup_id: int, item_id: int, body: FollowupItemIn,
+                         session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    it = _item(session, f.id, item_id)
+    FS.record_version(session, f, "Antes de editar un punto")
+    for field in ("text", "owner", "due"):
+        val = getattr(body, field)
+        if val is not None and (field != "text" or val.strip()):
+            setattr(it, field, val.strip())
+    if body.status is not None and body.status != it.status:
+        ev = FL.status_for_event(it.kind, body.status)
+        if not ev or body.status not in FL.STATUSES[it.kind]:
+            raise HTTPException(400, "Estado no válido para ese tipo")
+        it.events = FL.sort_events([*(it.events or []), _manual_event(ev)])
+        it.status = FL.derive_status(it.kind, it.events)
+    it.manual = True
+    session.add(it)
+    FS.touch(session, f)
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
+
+
+@app.delete("/api/followups/{followup_id}/items/{item_id}")
+def delete_followup_item(followup_id: int, item_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Lo oculta en vez de borrarlo: así la IA no lo vuelve a crear al rehacer el estado."""
+    f = _followup(session, followup_id)
+    it = _item(session, f.id, item_id)
+    FS.record_version(session, f, f"Antes de borrar «{it.text}»")
+    it.hidden, it.manual = True, True
+    session.add(it)
+    FS.touch(session, f)
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
+
+
+@app.get("/api/followups/{followup_id}/versions")
+def followup_versions(followup_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _followup(session, followup_id)
+    rows = session.exec(select(FollowupVersion).where(FollowupVersion.followup_id == followup_id)
+                        .order_by(FollowupVersion.id.desc())).all()
+    return [{"id": r.id, "reason": r.reason, "created_at": r.created_at,
+             "items": sum(1 for it in r.snapshot.get("items", []) if not it.get("hidden")),
+             "videos": sum(1 for x in r.snapshot.get("videos", []) if x.get("applied"))} for r in rows]
+
+
+@app.post("/api/followups/{followup_id}/versions/{version_id}/restore")
+def restore_followup_version(followup_id: int, version_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    ver = _404(session.get(FollowupVersion, version_id), "Versión")
+    if ver.followup_id != f.id:
+        raise HTTPException(404, "Versión no encontrada")
+    FS.restore(session, f, ver)
+    FS.export(session, f)
+    return FS.out(session, f, full=True)
 
 
 # --------------------------------------------------------------------------- búsqueda

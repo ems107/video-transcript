@@ -104,8 +104,12 @@ class LLMServer:
         max_tokens: int = 4096,
         temperature: float | None = None,
         retries: int = 2,
+        thinking: bool = False,
     ) -> dict[str, Any]:
-        """Petición de chat con salida restringida a un esquema JSON."""
+        """Petición de chat con salida restringida a un esquema JSON.
+
+        `thinking`: con el «modo razonamiento» del modelo, que piensa antes de responder. Es mucho más lento y
+        solo se usa donde se ha medido que hace falta (`max_tokens` incluye lo que piensa)."""
         body = {
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "temperature": self.s.llm_temperature if temperature is None else temperature,
@@ -115,9 +119,11 @@ class LLMServer:
             "presence_penalty": self.s.llm_presence_penalty,
             "max_tokens": max_tokens,
             "response_format": {"type": "json_schema", "json_schema": {"name": "respuesta", "schema": schema}},
-            # Sin «modo razonamiento»: salida directa
-            "chat_template_kwargs": {"enable_thinking": False},
+            # Sin «modo razonamiento» salvo que se pida: salida directa
+            "chat_template_kwargs": {"enable_thinking": thinking},
         }
+        if thinking:
+            body.update(THINKING_SAMPLING)
         last: Exception | None = None
         for _ in range(retries + 1):
             try:
@@ -141,6 +147,10 @@ class LLMServer:
                                    f"(guardada en {saved})") from e
                 log.warning("Respuesta del LLM no válida (guardada en %s): %s", saved, e)
         raise LLMError(f"El modelo de lenguaje no devolvió una respuesta válida: {last}")
+
+
+# Muestreo recomendado por Qwen para el modo razonamiento
+THINKING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0}
 
 
 def save_failure(body: dict[str, Any], content: str, finish_reason: str | None) -> Path:

@@ -58,11 +58,15 @@ las fases.
   - Un término debe aparecer literalmente (`term_occurrences`). Además debe parecer un término
     (`looks_like_term`: con mayúsculas o cifras, o visto en pantalla). No puede ser ya conocido ni el
     nombre de una persona.
-  - Y debe ser relevante (`term_relevant`): oírse en la conversación o estar en el `texto_relevante`
-    de al menos 3 fotogramas. La lista `terminos` del análisis de imagen recoge todo lo legible, incluida
-    la barra de tareas y las pestañas. Con una grabación real, la mitad de los términos propuestos eran
-    programas del escritorio (Trello, Jira…), que salían en esa lista en casi todos los fotogramas pero en
-    el texto relevante en 0–2. El contenido de la reunión salía en 5–15.
+  - Si no se oye (`K.heard`), es un término **solo de pantalla** y la IA razona si tiene relación con el
+    vídeo (`learn.judge_screen_terms`, `SCREEN_*`): recibe título, resumen y temas, y por cada término
+    `K.screen_summary` (fotogramas, momentos, escenas, si está en el contenido principal o solo en lo
+    demás legible, y descripciones). `apply_judgment`: «sin_relacion» no se propone (queda en
+    `screen_judgment.json`); «dudoso» se propone con `data.pantalla = {relacion, motivo}`, y la web lo marca y
+    lo deja fuera de «Aceptar todas»; lo no valorado cuenta como dudoso. Antes había una regla fija (estar en
+    el `texto_relevante` de 3 fotogramas): dejaba pasar pestañas del navegador (Trello, Jira y Firefox
+    aparecían en el texto relevante de 4–5 fotogramas seguidos antes de una llamada) y una regla más dura
+    quitaba términos reales del contenido. Lo que es ruido depende del vídeo: hay que razonarlo.
   - Las formas de un mismo nombre se juntan en una propuesta (`group_forms`: una contiene a la otra sin
     espacios ni signos, mínimo 6 letras). La más vista es el término y las demás van en `data.forms`, que
     se muestran en la web, entran en el contexto del LLM («también …») y orientan a Whisper. **No** son
@@ -243,6 +247,36 @@ pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` 
 `correcciones_aplicadas` (`id` y `updated_at`): `services.with_applied` marca cada corrección y
 `services.corrections_pending` avisa si las actuales no coinciden. La IA no ve el análisis anterior, así
 que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
+
+**Marcas de tiempo.** El campo `t` de tareas, decisiones, pendientes, señales y eventos usa `TS_T`, un
+`pattern` `0h:mm:ss` que la gramática de llama.cpp impone (comprobado en vivo). La hora empieza por 0: con una
+hora libre, el modelo escribía «20:42:00» por el minuto 20:42. Sin él, el modelo a veces ponía
+en `t` el texto de la tarea o una fecha copiada del contexto. Los pendientes son objetos `{pendiente, t}`;
+los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «tal
+como se dice»: el modelo convertía «el lunes» en una fecha.
+
+**Seguimientos** (`prompts.followup_block`, `FOLLOW_CHECK_*`, `FOLLOW_*`, `followups.py`).
+- **Al resumir**, cada fragmento recibe el estado de cada seguimiento del vídeo según los vídeos
+  **anteriores** a su fecha (`followups.context_block`, sin ids), solo para entender referencias.
+- **Fase `follow`**, por seguimiento y vídeo (`followups_store.apply_video`):
+  1. `mentions`: por cada bloque de la transcripción, `FOLLOW_CHECK_*` **con modo razonamiento** pregunta de
+     qué puntos del estado (con ids `[T3]`, `[D2]`, `[P1]`) se habla, con evento, `t` y la cita literal.
+     `followups.check_signals` comprueba cada cita (`quoted`: `partial_ratio` ≥ `QUOTE_SIMILAR` en
+     ±`QUOTE_WINDOW` s; troceada con «…», cada trozo; mínimo `QUOTE_MIN_CHARS`) y marca `verified`.
+     Medido con dos vídeos reales: dentro del resumen o sin razonar, el modelo no encontraba los cierres
+     dichos de pasada («lo que ayer fallaba ya ha funcionado») e inventaba momentos («00:57:33» en un vídeo
+     de 25 min) y citas; con razonamiento, todas las citas existían y encontró el cierre (unos 2 min por
+     bloque de 25 min).
+  2. `FOLLOW_*` sin razonamiento: con el estado, los **puntos del vídeo** (`followups.analysis_points`:
+     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones y el resumen, devuelve
+     `mismos` (qué `[N…]` es un punto existente), `resumen` y `aporte`.
+  3. `followups.apply_update`: los hitos salen de las menciones (un cambio de estado con cita comprobada se
+     aplica; sin ella queda como «avanza» con `posible: <evento>`, que la web muestra como «¿hecha?» con un
+     botón Confirmar); a un punto manual solo se le anotan avances. Los puntos nuevos son los del análisis
+     menos los «mismos» y los parecidos a uno existente o borrado (`DUPLICATE`): no los inventa la IA, que
+     variaba en cada ejecución.
+
+El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se

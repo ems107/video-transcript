@@ -10,10 +10,12 @@ import inspect
 from typing import Any
 
 from . import estimates
+from . import followups
 from . import knowledge as K
 from .config import load_settings
 from .pipeline import analyze, identify, learn, names, transcript, voices
 from .pipeline.voice import assign_visual_names
+from .prompts import LIST_LIMITS
 from .services import CONTEXT_CONFIDENCE
 
 
@@ -49,7 +51,13 @@ def values() -> dict[str, Any]:
         "aprender_max_por_persona": learn.MAX_PER_PERSON,
         "aprender_max_personas_nuevas": learn.MAX_NEW_PEOPLE,
         "aprender_max_secciones": learn.MAX_SECTIONS,
-        "termino_fotogramas": K.SCREEN_MIN_FRAMES,
+        # Seguimientos
+        "seguimiento_contexto": followups.FOLLOW_CONTEXT_CHARS,
+        "seguimiento_recientes": followups.RECENT_VIDEOS,
+        "seguimiento_parecido": followups.DUPLICATE,
+        "seguimiento_max_menciones": LIST_LIMITS["menciones"],
+        "seguimiento_cita_parecido": followups.QUOTE_SIMILAR,
+        "seguimiento_cita_ventana": round(followups.QUOTE_WINDOW),
         # Estimaciones de tiempo (segundos por minuto de audio, o por fotograma en «vision»)
         "estimacion_historial": estimates.HISTORY,
         **{f"ritmo_{stage}": rate for stage, rate in estimates.DEFAULT_RATES.items()},

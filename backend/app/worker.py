@@ -16,6 +16,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
+from . import followups_store as FS
 from . import knowledge_store as KS
 from . import estimates, removal, services, speaker_fix
 from . import regenerate as regen
@@ -41,8 +42,9 @@ STAGES = [
     ("names", "Unificando nombres", 0.01),
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
-    ("analyze", "Resumiendo", 0.20),
-    ("learn", "Aprendiendo del vídeo", 0.10),
+    ("analyze", "Resumiendo", 0.19),
+    ("follow", "Actualizando seguimientos", 0.02),
+    ("learn", "Aprendiendo del vídeo", 0.09),
     ("publish", "Publicando resultados", 0.02),
 ]
 GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices"}
@@ -50,7 +52,7 @@ GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices"}
 PARTIALS = {
     "vision": ("vision.partial.json",),
     "analyze": ("analysis.partial.json",),
-    "learn": ("learn.partial.json", "learn_error.json"),
+    "learn": ("learn.partial.json", "learn_error.json", "screen_judgment.raw.json"),
 }
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
@@ -127,6 +129,7 @@ class Worker:
                 voice=services.voice_db(s),
                 video_id=video.id,
                 corrections=services.video_corrections(s, video.id),
+                followups=FS.context_for_video(s, video.id),
             )
 
         weights_before = {}
@@ -152,14 +155,17 @@ class Worker:
         ctx = JobContext(
             job_id=job_id, video_id=ctx_data["video_id"], source_path=source, work_dir=wd, settings=settings,
             options=options, profile=ctx_data["profile"], people=ctx_data["people"], report=report,
-            corrections=ctx_data["corrections"],
+            corrections=ctx_data["corrections"], followups=ctx_data["followups"],
             cancel_event=cancel_ev,
         )
         llm = LLMServer(settings)
+        only = set(options.get("only") or [])  # trabajos de una sola fase (p. ej. rehacer un seguimiento)
         try:
             for key, label, _ in STAGES:
                 marker = wd / f"{key}.done"
                 state["stage"] = key
+                if only and key not in only:
+                    continue
                 if key == "vision" and options.get("skip_vision"):
                     ctx.save("vision.json", []), ctx.save("screen_terms.json", [])
                     marker.touch()
@@ -172,11 +178,12 @@ class Worker:
                 if key in GPU_TORCH_STAGES:
                     llm.stop()  # liberar VRAM antes de cargar Whisper / pyannote
                 t0 = time.monotonic()
-                self._run_stage(key, ctx, llm, ctx_data["voice"])
+                minutes = self._run_stage(key, ctx, llm, ctx_data["voice"])
                 if key not in GPU_TORCH_STAGES:
                     free_gpu()
                 marker.touch()
-                self._record_time(ctx, key, time.monotonic() - t0)
+                if key != "follow" or minutes:  # sin seguimientos no hay nada que medir
+                    self._record_time(ctx, key, time.monotonic() - t0, minutes)
                 report(1.0, label + ": hecho")
             self._finish(job_id, "done", "Completado")
             self._cleanup(wd)
@@ -202,17 +209,22 @@ class Worker:
         voices.rebuild(ctx, overrides, labels)
 
     @staticmethod
-    def _record_time(ctx: JobContext, stage: str, seconds: float) -> None:
-        """Guarda cuánto ha tardado la fase, para estimar las siguientes. Nunca interrumpe el trabajo."""
+    def _record_time(ctx: JobContext, stage: str, seconds: float, minutes: float | None = None) -> None:
+        """Guarda cuánto ha tardado la fase, para estimar las siguientes. Nunca interrumpe el trabajo.
+
+        `minutes`: los minutos de vídeo que ha procesado la fase, si no son los de este vídeo (al rehacer un
+        seguimiento se aplican varios)."""
         try:
-            duration = (ctx.load("probe.json") or {}).get("duration", 0.0)
+            duration = minutes * 60 if minutes else (ctx.load("probe.json") or {}).get("duration", 0.0)
             with Session(engine) as s:
                 estimates.record(s, ctx.job_id, ctx.video_id, stage, seconds, duration,
                                  len(ctx.load("frames.json", [])))
         except Exception:
             log.exception("No se pudo guardar el tiempo de la fase %s", stage)
 
-    def _run_stage(self, key: str, ctx: JobContext, llm: LLMServer, voice: dict) -> None:
+    def _run_stage(self, key: str, ctx: JobContext, llm: LLMServer, voice: dict) -> float | None:
+        if key == "follow":
+            return self._follow(ctx, llm)
         if key == "ingest":
             ingest.run(ctx)
             info = ctx.load("probe.json")
@@ -260,6 +272,42 @@ class Worker:
         elif key == "publish":
             llm.stop()
             self._publish(ctx)
+        return None
+
+    def _follow(self, ctx: JobContext, llm: LLMServer) -> float:
+        """Actualiza los seguimientos del vídeo. Es de mejor esfuerzo: un fallo deja el seguimiento
+        desactualizado (con el motivo) pero no impide publicar el vídeo. Devuelve los minutos aplicados."""
+        rebuild = set(ctx.options.get("follow_rebuild") or [])
+        with Session(engine) as s:
+            video = s.get(Video, ctx.video_id)
+            if not FS.for_video(s, video.id):
+                return 0.0
+            # Recién analizado (aún sin publicar): el análisis y la transcripción están en la carpeta de trabajo
+            fresh = not ctx.path("publish.done").exists()
+            analysis = ctx.load("analysis.json") if fresh else video.analysis
+            utts = ctx.load("corrected.json") if fresh else None
+
+            def ask(system: str, user: str, schema: dict, thinking: bool = False) -> dict:
+                ctx.check_cancel()
+                llm.start()
+                # Con el modo razonamiento, lo que piensa también cuenta en max_tokens
+                return llm.chat_json(system, user, schema, max_tokens=16000 if thinking else 6000, thinking=thinking)
+
+            try:
+                minutes = FS.update_for_video(s, video, analysis or {}, rebuild, ask, ctx.report,
+                                              only_rebuild=bool(ctx.options.get("only")), utts=utts)
+                ctx.report(1.0, "Seguimientos actualizados")
+                return minutes
+            except Cancelled:
+                raise
+            except Exception as e:
+                log.exception("Fallo al actualizar los seguimientos del vídeo %s", ctx.video_id)
+                s.rollback()
+                for f in FS.for_video(s, video.id):
+                    if not ctx.options.get("only") or f.id in rebuild:
+                        FS.mark_stale(s, f, FS.date_of(video), f"No se pudo actualizar con «{video.title}»: {e}")
+                ctx.report(1.0, f"No se pudieron actualizar los seguimientos: {e}")
+                return 0.0
 
     def _learn(self, ctx: JobContext, llm: LLMServer) -> None:
         """Propuestas de conocimiento. Es de mejor esfuerzo: un fallo no impide publicar el vídeo."""
@@ -352,6 +400,8 @@ class Worker:
             ctx.report(0.8, "Generando documentos")
             services.export_video(s, video)
             services.index_video(s, video)
+            for f in FS.for_video(s, video.id):
+                FS.export(s, f)  # ahora ya tiene la carpeta del vídeo para enlazarla
 
     def _finish(self, job_id: int, status: str, message: str, error: str = "") -> None:
         with Session(engine) as s:

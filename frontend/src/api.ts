@@ -36,6 +36,8 @@ export type VideoCard = {
 export type Task = { responsable: string; tarea: string; plazo: string; t: string }
 export type Decision = { decision: string; t: string }
 
+export type Pending = { pendiente: string; t: string }
+
 export type Analysis = {
   titulo?: string
   resumen_breve?: string
@@ -44,7 +46,7 @@ export type Analysis = {
   temas?: string[]
   tareas?: Task[]
   decisiones?: Decision[]
-  pendientes?: string[]
+  pendientes?: (string | Pending)[] // texto solo en vídeos analizados antes de la 1.5.0
 }
 
 export type SpeakerInfo = {
@@ -108,6 +110,7 @@ export type VideoDetail = VideoCard & {
   video_corrections: { id: number; text: string; updated_at: string; applied: boolean }[] // applied: el análisis actual ya la tiene en cuenta
   corrections_pending: boolean // hay correcciones que el análisis actual aún no tiene en cuenta
   overrides_pending: boolean // hay cambios manuales de hablantes que el resumen aún no tiene en cuenta
+  followups: { id: number; name: string; status: FollowupStatus; applied: boolean }[] // applied: el estado ya incluye este vídeo
 }
 
 export type GlossaryEntry = { term: string; variants: string[]; definition: string }
@@ -160,6 +163,7 @@ export type Knowledge = {
     term?: string
     definition?: string
     forms?: string[] // otras formas del mismo nombre (términos)
+    pantalla?: { relacion: 'relacionado' | 'dudoso'; motivo: string } // término visto solo en pantalla
     title?: string
     name?: string
     datos?: { category: string; text: string; t: number | null }[]
@@ -239,6 +243,7 @@ export type RegenerateInfo = {
   on_screen: number | null // participantes distintos vistos en pantalla
   min_speakers: number | null
   max_speakers: number | null
+  followups: { id: number; name: string; status: FollowupStatus; seconds: number }[] // seconds: rehacer su estado desde este vídeo
 }
 
 export type RemovalInfo = {
@@ -249,7 +254,60 @@ export type RemovalInfo = {
   work_dirs: string[]
   voices: number
   pending_proposals: number
+  followups: { id: number; name: string; applied: boolean }[]
 }
+
+// Seguimientos: continuidad de un tema entre vídeos
+export type FollowupStatus = 'abierto' | 'archivado'
+export type FollowupKind = 'tarea' | 'decision' | 'duda'
+export type FollowupEvent = {
+  video_id: number | null
+  video_title: string
+  date: string | null // fecha de grabación del vídeo (null si es un cambio manual)
+  t: string
+  evento: 'creada' | 'avanza' | 'hecha' | 'descartada' | 'reabierta' | 'cambiada' | 'anulada' | 'resuelta'
+  nota: string
+  cita?: string // la frase del vídeo que lo dice (comprobada)
+  posible?: FollowupEvent['evento'] // la IA cree que pasó, sin una frase que lo demuestre: lo confirma el usuario
+  source: 'ia' | 'manual'
+  at: string
+}
+export type FollowupItem = {
+  id: number
+  kind: FollowupKind
+  text: string
+  owner: string
+  due: string
+  status: string
+  manual: boolean
+  events: FollowupEvent[]
+}
+export type Followup = {
+  id: number
+  name: string
+  description: string
+  status: FollowupStatus
+  summary: string
+  summary_manual: boolean // el usuario lo ha editado: la IA ya no lo reescribe
+  summary_ai: string // resumen nuevo de la IA cuando el vigente es el del usuario
+  stale_from: string | null // el estado no está al día desde esta fecha
+  stale_reason: string
+  folder: string
+  created_at: string
+  updated_at: string
+  n_videos: number
+  last_date: string | null
+  open_tasks: number
+  profile_id: number | null // perfil más usado en sus vídeos
+  busy: boolean // hay un trabajo en cola que lo va a actualizar
+  job_id: number | null
+  rebuild_seconds: number | null
+}
+export type FollowupDetail = Followup & {
+  videos: { video_id: number; title: string; date: string; duration: number; status: string; applied: boolean; contribution: string }[]
+  items: FollowupItem[]
+}
+export type FollowupVersion = { id: number; reason: string; created_at: string; items: number; videos: number }
 
 export const api = {
   get: <T>(url: string) => req<T>('GET', url),

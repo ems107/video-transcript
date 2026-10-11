@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlmodel import Session, select
 
+from . import followups_store
 from . import knowledge_store as KS
 from .models import (
     Keyframe,
@@ -211,7 +213,19 @@ def video_meta(session: Session, video: Video) -> dict[str, Any]:
         "profile": profile.name if profile else "",
         "participants": [names[s.label] for s in sps if s.label in names],
         "source": video.source_path,
+        "followups": _followup_links(session, video),
     }
+
+
+def _followup_links(session: Session, video: Video) -> list[tuple[str, str]]:
+    """(nombre, ruta relativa a su `seguimiento.md`) de los seguimientos del vídeo, para sus documentos."""
+    out = []
+    for f in followups_store.for_video(session, video.id):
+        link = ""
+        if f.folder and video.folder:
+            link = Path(os.path.relpath(Path(f.folder) / "seguimiento.md", video.folder)).as_posix().replace(" ", "%20")
+        out.append((f.name, link))
+    return out
 
 
 def export_video(session: Session, video: Video) -> None:

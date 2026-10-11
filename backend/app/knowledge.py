@@ -14,6 +14,7 @@ import numpy as np
 from rapidfuzz import fuzz
 
 from .pipeline.glossary import normalize
+from .pipeline.transcript import fmt_ts
 from .pipeline.voice import match_name
 
 PROFILE_KINDS = ("termino", "contexto", "seccion")
@@ -94,22 +95,40 @@ def term_occurrences(term: str, utts: list[dict[str, Any]], vision: list[dict[st
     return sorted(out)[:limit]
 
 
-SCREEN_MIN_FRAMES = 3
-
-
-def term_relevant(term: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]]) -> bool:
-    """Un término vale para el perfil si se oye en la conversación o es parte del contenido de la pantalla.
-
-    La lista de términos visibles del análisis de imagen recoge todo lo legible (barra de tareas,
-    pestañas, otras ventanas); el «texto relevante» es el contenido principal. Medido con una grabación
-    real: el contenido de la reunión salía en el texto relevante de 5 a 15 fotogramas, y los programas del
-    escritorio (Trello, Jira…), en 0–2, aunque estuvieran en la lista de casi todos.
-    """
+def heard(term: str, utts: list[dict[str, Any]]) -> bool:
     n = normalize(term)
-    if any(_contains(normalize(u["text"]), n) for u in utts):
-        return True
-    shown = sum(1 for v in vision if _contains(normalize(v.get("texto_relevante", "")), n))
-    return shown >= SCREEN_MIN_FRAMES
+    return any(_contains(normalize(u["text"]), n) for u in utts)
+
+
+def screen_appearances(term: str, vision: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fotogramas donde se ve el término: en el contenido principal («texto relevante») o solo en lo demás
+    (la lista de todo lo legible: barra de tareas, pestañas, otras ventanas)."""
+    n = normalize(term)
+    out = []
+    for v in vision:
+        main = _contains(normalize(v.get("texto_relevante", "")), n)
+        other = _contains(normalize(" ".join([*v.get("terminos", []), v.get("descripcion", "")])), n)
+        if main or other:
+            out.append({"t": float(v["t"]), "escena": v.get("tipo_escena", ""), "contenido": main,
+                        "descripcion": (v.get("descripcion") or "")[:220]})
+    return out
+
+
+def screen_summary(term: str, vision: list[dict[str, Any]], examples: int = 3) -> str:
+    """Dónde y cuánto se ve un término en pantalla, para que la IA valore si tiene que ver con el vídeo."""
+    seen = screen_appearances(term, vision)
+    if not seen:
+        return f"- {term}: no se ve en pantalla"
+    main = sum(1 for x in seen if x["contenido"])
+    scenes = Counter(x["escena"] for x in seen if x["escena"])
+    head = (f"- {term}: en {len(seen)} fotogramas, de {fmt_ts(seen[0]['t'])} a {fmt_ts(seen[-1]['t'])}; "
+            f"en el contenido principal de {main}"
+            + (f"; escenas: {', '.join(f'{k} ({c})' for k, c in scenes.most_common(3))}" if scenes else ""))
+    # Ejemplos repartidos por el vídeo, prefiriendo los fotogramas donde es contenido principal
+    pool = [x for x in seen if x["contenido"]] or seen
+    step = max(1, len(pool) // examples)
+    lines = [f"    [{fmt_ts(x['t'])}] {x['descripcion']}" for x in pool[::step][:examples] if x["descripcion"]]
+    return "\n".join([head, *lines])
 
 
 def group_forms(terms: list[str], min_len: int = 6) -> list[list[str]]:

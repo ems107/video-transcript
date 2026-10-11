@@ -6,6 +6,7 @@ import { api, type Job, type Person, type Proposals, type SegmentInfo, type Spea
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
 import { CorrectionsPanel } from '../CorrectionsPanel'
+import { FollowupsPanel } from '../FollowupsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
 import { OverridesList, SpeakerFixDialog, SplitDialog } from '../SpeakerFix'
 import { RemoveDialog } from '../RemoveDialog'
@@ -338,6 +339,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
             <SpeakerPanel video={video} people={people} onChange={load} seek={seek} onRegenerate={() => setRegenerating(true)} />
           )}
           <KnowledgePanel video={video} running={!!running} onChange={load} />
+          <FollowupsPanel video={video} running={!!running} onChange={load} />
           {video.status === 'done' && (
             <CorrectionsPanel video={video} running={!!running} onChange={load} onRegenerate={() => setRegenerating(true)} />
           )}
@@ -424,7 +426,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
                 <ul>{a.decisiones.map((d, i) => <li key={i}>{d.decision} <TsLink ts={d.t} seek={seek} /></li>)}</ul>
               ) : <p className="muted">No se detectaron decisiones.</p>}
               <h3>Pendientes</h3>
-              {a.pendientes?.length ? <ul>{a.pendientes.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p className="muted">Nada pendiente.</p>}
+              {a.pendientes?.length ? <ul>{a.pendientes.map((p, i) => typeof p === 'string' ? <li key={i}>{p}</li>
+                : <li key={i}>{p.pendiente} <TsLink ts={p.t} seek={seek} /></li>)}</ul> : <p className="muted">Nada pendiente.</p>}
             </div>
           )}
 
