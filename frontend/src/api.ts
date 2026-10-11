@@ -62,6 +62,8 @@ export type SpeakerInfo = {
   confidence: number
   speaking_time: number
   visual_hints: Record<string, number>
+  reason: string // por qué se propone (identidad deducida del contexto)
+  aliases: string[] // apodos con que se le llama en el vídeo
   has_embedding: boolean
 }
 

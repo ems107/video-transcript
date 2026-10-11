@@ -217,6 +217,9 @@ class Worker:
             correct.run(ctx, llm)
         elif key == "analyze":
             analyze.run(ctx, llm)
+            with Session(engine) as s:
+                services.apply_context_identities(s, ctx.video_id, ctx.load("context_identities.json", {}), ctx.people)
+            self._load_names(ctx)
         elif key == "learn":
             self._learn(ctx, llm)
         elif key == "publish":
@@ -245,6 +248,7 @@ class Worker:
     def _load_names(self, ctx: JobContext) -> None:
         with Session(engine) as s:
             ctx.speaker_names = services.speaker_names(s, ctx.video_id)
+            ctx.speaker_status = services.speaker_status(s, ctx.video_id)
             in_video = services.video_person_ids(s, ctx.video_id)
         for p in ctx.people:
             p["in_video"] = p["id"] in in_video

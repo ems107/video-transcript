@@ -22,7 +22,9 @@ from .models import (
     VoiceEmbedding,
 )
 from .pipeline.export import write_outputs
+from .pipeline.glossary import normalize
 from .pipeline.transcript import fmt_ts
+from .pipeline.voice import match_name
 
 
 def profile_dict(session: Session, profile_id: int | None) -> dict[str, Any] | None:
@@ -77,6 +79,52 @@ def speaker_names(session: Session, video_id: int) -> dict[str, str]:
         person = session.get(Person, pid) if pid else None
         names[sp.label] = person.name if person else (sp.suggested_name or f"Hablante {sp.order_idx}")
     return names
+
+
+CONTEXT_CONFIDENCE = 0.5
+
+
+def speaker_status(session: Session, video_id: int) -> dict[str, str]:
+    """Cómo se sabe quién es cada hablante, para el contexto del LLM."""
+    out = {}
+    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
+        if sp.person_id and sp.confirmed:
+            out[sp.label] = "confirmado"
+        elif sp.person_id or sp.suggested_person_id or sp.suggested_name:
+            out[sp.label] = f"probable, por {sp.source or 'propuesta'}; sin confirmar"
+        else:
+            out[sp.label] = ""
+    return out
+
+
+def apply_context_identities(session: Session, video_id: int, found: dict[str, Any],
+                             people: list[dict[str, Any]]) -> None:
+    """Propone el nombre deducido del contexto a los hablantes que no tienen ninguno. Nunca confirma.
+
+    Las pistas internas (motivo, apodos) se guardan en `visual_hints` con claves que empiezan por «_»,
+    que el resto del código ignora.
+    """
+    identities, nicknames = found.get("identidades") or {}, found.get("apodos") or {}
+    names = speaker_names(session, video_id)
+    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
+        hints = {k: v for k, v in (sp.visual_hints or {}).items() if not k.startswith("_")}
+        d = identities.get(sp.label)
+        free = not sp.confirmed and not sp.person_id and (
+            sp.source == "contexto" or not (sp.suggested_person_id or sp.suggested_name))
+        if free and d:
+            pid = match_name(d["nombre"], people) if people else None
+            sp.suggested_person_id, sp.suggested_name = (pid, "") if pid else (None, d["nombre"])
+            sp.source, sp.confidence = "contexto", CONTEXT_CONFIDENCE
+            hints["_motivo"] = f"{d.get('motivo', '')} ({d['t']})" if d.get("t") else d.get("motivo", "")
+        elif free and sp.source == "contexto":
+            sp.suggested_person_id, sp.suggested_name, sp.source, sp.confidence = None, "", "", 0.0
+        shown = d["nombre"] if free and d else names.get(sp.label, "")
+        alias = next((a for name, a in nicknames.items() if normalize(name) == normalize(shown)), None)
+        if alias:
+            hints["_apodos"] = alias
+        sp.visual_hints = hints
+        session.add(sp)
+    session.commit()
 
 
 def persist_speakers(session: Session, video_id: int, identities: dict[str, dict[str, Any]]) -> None:

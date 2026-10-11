@@ -64,6 +64,15 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
   formas («Iosu», «Iker», «Ione»…), y cada una se trataba como una persona distinta. Ahora se agrupan
   las variantes y se elige una sola forma: se tiene en cuenta lo que se oye en la transcripción y las
   personas que ya conoces, y nunca se juntan dos nombres que aparecen a la vez en pantalla.
+- **El resumen sabe quién es quién.** Recibe los participantes vistos en pantalla y la identidad probable
+  de cada hablante, y nombra a cada persona siempre de la misma forma. Los apodos y los nombres mal
+  transcritos («Selu» por José Luis) se atribuyen al participante correspondiente.
+- **Propuesta de nombre por el contexto.** Si la conversación deja claro quién es un hablante (se
+  presenta, o le llaman por su nombre y responde), se propone ese nombre con el motivo. Solo se acepta un
+  nombre que aparezca en pantalla o se oiga, y nunca se confirma solo. Al confirmarlo, sus apodos se
+  guardan como otros nombres de la persona.
+- Los otros nombres de cada persona se usan en el contexto del resumen y en las palabras que orientan a
+  Whisper.
 - **Propuesta de nombre por pantalla más fiable.** Cada nombre se asigna a un solo hablante, el que más
   coincide con él. Un nombre resaltado mientras hablan varias voces (por ejemplo, quien presenta) ya no
   se propone para todas.

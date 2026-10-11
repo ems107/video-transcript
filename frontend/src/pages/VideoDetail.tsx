@@ -82,13 +82,15 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
               {sp.confirmed ? (
                 <span className="pill ok">Confirmado</span>
               ) : sp.suggested_person_id || sp.suggested_name ? (
-                <span className="pill warn">
+                <span className="pill warn" title={sp.reason || undefined}>
                   Propuesta por {sp.source} ({Math.round(sp.confidence * 100)}%){sp.suggested_name && !sp.suggested_person_id ? ' · persona nueva' : ''}
                 </span>
               ) : (
                 <span className="pill">Sin identificar</span>
               )}
               {sp.is_owner && <span className="pill" style={{ marginLeft: 4 }}>tu micrófono</span>}
+              {!sp.confirmed && sp.reason && <div>{sp.reason}</div>}
+              {sp.aliases.length > 0 && <div>También le llaman {sp.aliases.map((a) => `«${a}»`).join(', ')}</div>}
             </div>
             {editing === sp.id && (
               <div className="row" style={{ marginTop: '0.5rem' }}>
