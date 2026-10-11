@@ -206,6 +206,14 @@ def check_signals(signals: list[dict[str, Any]], utts: list[dict[str, Any]], dur
     return out
 
 
+_ID_RE = re.compile(r"\s*[(\[][TDPN]\d+[)\]]")
+
+
+def strip_ids(text: str) -> str:
+    """Quita los identificadores internos («[T3]», «(P19)») que la IA deje en el resumen."""
+    return _ID_RE.sub("", text or "").strip()
+
+
 # --------------------------------------------------------------------------- puntos del vídeo
 
 _NO_DUE = {"", "sin especificar", "no especificado", "no consta", "ninguno", "sin plazo", "no se indica"}

@@ -230,8 +230,8 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     for n in plan["new"]:
         session.add(FollowupItem(followup_id=f.id, **n))
     fv = session.get(FollowupVideo, (f.id, video.id))
-    summary = (r.get("resumen") or "").strip()
-    fv.applied, fv.contribution, fv.summary = True, (r.get("aporte") or "").strip(), summary
+    summary = F.strip_ids(r.get("resumen") or "")
+    fv.applied, fv.contribution, fv.summary = True, F.strip_ids(r.get("aporte") or ""), summary
     session.add(fv)
     if f.summary_manual:
         f.summary_ai = summary

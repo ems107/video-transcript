@@ -120,6 +120,10 @@ def test_quotes_and_signals():
         {"id": "T2", "evento": "hecha", "t": "00:06:00", "cita": "esto no lo dice nadie en la reunión", "verified": False}]
 
 
+def test_internal_ids_out_of_the_summary():
+    assert F.strip_ids("La duda (P19) sigue abierta y la tarea [T3] está hecha.") ==         "La duda sigue abierta y la tarea está hecha."
+
+
 def test_points_from_the_analysis():
     a = {"tareas": [{"responsable": "Ana", "tarea": "Enviar el informe", "plazo": "Sin especificar", "t": "00:01:00"},
                     {"responsable": "", "tarea": " ", "plazo": "", "t": ""}],
