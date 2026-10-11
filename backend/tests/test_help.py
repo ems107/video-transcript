@@ -22,7 +22,7 @@ def pages() -> dict[str, tuple[dict[str, str], str]]:
     out = {}
     for f in sorted(HELP.glob("*.md")):
         raw = f.read_text(encoding="utf-8")
-        m = re.match(r"^---\n(.*?)\n---\n?(.*)$", raw, re.S)
+        m = re.match(r"^---\n(.*?)\n---\n?(.*)$", raw, re.DOTALL)
         assert m, f"{f.name}: falta la cabecera"
         meta = dict(line.split(":", 1) for line in m.group(1).splitlines() if ":" in line)
         out[f.stem] = ({k.strip(): v.strip() for k, v in meta.items()}, m.group(2))
@@ -45,7 +45,7 @@ def test_live_values_exist():
 
 def test_internal_links_and_anchors():
     ps = pages()
-    anchors = {slug: {slugify(h) for h in re.findall(r"^#{2,3} (.+)$", body, re.M)} for slug, (_, body) in ps.items()}
+    anchors = {slug: {slugify(h) for h in re.findall(r"^#{2,3} (.+)$", body, re.MULTILINE)} for slug, (_, body) in ps.items()}
     for slug, (_, body) in ps.items():
         for page, anchor in re.findall(r"\]\(ayuda:([a-z0-9-]+)(?:#([a-z0-9-]+))?\)", body):
             assert page in ps, f"{slug}: enlace a una página que no existe: {page}"
@@ -54,8 +54,8 @@ def test_internal_links_and_anchors():
 
 def test_technical_blocks_are_closed():
     for slug, (_, body) in pages().items():
-        opens = len(re.findall(r"^:::tecnico", body, re.M))
-        closes = len(re.findall(r"^:::\s*$", body, re.M))
+        opens = len(re.findall(r"^:::tecnico", body, re.MULTILINE))
+        closes = len(re.findall(r"^:::\s*$", body, re.MULTILINE))
         assert opens == closes, f"{slug}: bloques técnicos sin cerrar"
 
 

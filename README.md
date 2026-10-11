@@ -14,6 +14,7 @@ Qué aporta cada versión: [CHANGELOG](CHANGELOG.md).
 - [Requisitos](#requisitos)
 - [Instalación](#instalación-una-sola-vez)
 - [Uso](#uso)
+- [Ayuda](#ayuda)
 - [Cómo funciona](#cómo-funciona)
 - [Desarrollo](#desarrollo)
 - [Versiones](#versiones)
