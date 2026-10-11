@@ -24,6 +24,7 @@ def visual_hints(turns: list[dict], vision: list[dict]) -> dict[str, dict[str, i
         name = (v.get("hablante_activo") or "").strip()
         if not name:
             continue
+        # El fotograma se toma al cambiar el resaltado, un poco antes de la primera palabra: tolerancia mínima
         label = speaker_at(turns, v["t"])
         if label:
             hints.setdefault(label, {})

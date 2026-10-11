@@ -147,8 +147,13 @@ def test_speaker_at_borders_and_gaps():
 
     turns = [{"start": 0.2, "end": 5.8, "speaker": "A"}, {"start": 24.0, "end": 32.0, "speaker": "B"},
              {"start": 32.0, "end": 40.4, "speaker": "A"}]
-    assert speaker_at(turns, 0.0) == "A"  # en el silencio inicial: el más cercano
+    assert speaker_at(turns, 0.0) == "A"  # justo antes de empezar: cuenta como su borde
     assert speaker_at(turns, 32.0) == "A"  # en el borde: el que empieza
+    assert speaker_at([{"start": 24.0, "end": 32.03, "speaker": "B"}, {"start": 32.0, "end": 40.0, "speaker": "A"}],
+                      32.0) == "A"  # solapes mínimos: sigue siendo el borde
+    assert speaker_at([{"start": 24.0, "end": 31.99, "speaker": "B"}, {"start": 32.03, "end": 40.0, "speaker": "A"}],
+                      32.0) == "A"  # o un hueco mínimo
+    assert speaker_at(turns, 0.0, tolerance=0.0) is None
     assert speaker_at(turns, 28.0) == "B"
     assert speaker_at(turns, 15.0) is None  # lejos de todo
 

@@ -174,7 +174,10 @@ Fuentes, por orden de prioridad:
    confianza sube a ≥ 0.9.
 3. **Pantalla** (`voice.assign_visual_names`): con los nombres ya unificados, cada nombre se asigna a
    un solo hablante, el que más coincide con él (al menos 2 coincidencias, el nombre más leído de ese
-   hablante sin empate, y ese hablante debe concentrar al menos la mitad de las lecturas del nombre). Un nombre
+   hablante sin empate, y esa voz con al menos 1,5 veces las lecturas del nombre que la siguiente).
+   Cada fotograma se asigna con `transcript.speaker_at` sobre las intervenciones ya comprobadas por la
+   voz: el fotograma se toma al cambiar el resaltado, un poco antes de la primera palabra, así que a
+   menos de 0,3 s (`BORDER`) de un límite gana el turno que empieza; en un silencio no cuenta. Un nombre
    repartido entre varias voces, como el de quien presenta, no se asigna. Se busca en las personas por
    nombre o alias (`token_set_ratio` ≥ 85). Si no existe, queda como `suggested_name`.
 4. **Contexto** (en `analyze`, ver abajo): para los hablantes que siguen sin nombre, el LLM propone una
