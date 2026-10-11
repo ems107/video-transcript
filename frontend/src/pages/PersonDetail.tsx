@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Person, type PersonDetail as PD } from '../api'
 import { KnowledgeList, ProposalList, VersionHistory } from '../knowledge'
 import { fmtDate, fmtDuration, notifyKnowledge, plural } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 type Tab = 'ficha' | 'propuestas' | 'historial'
 
@@ -42,7 +43,7 @@ function MergeBox({ p, people }: { p: PD; people: Person[] }) {
   if (!others.length) return null
   return (
     <div className="card pad stack">
-      <h3 style={{ margin: 0 }}>Fusionar con otra persona</h3>
+      <h3 style={{ margin: 0 }}>Fusionar con otra persona <HelpLink to="personas#duplicados-y-fusion" /></h3>
       <p className="muted small" style={{ margin: 0 }}>
         Si «{p.name}» y otra persona son la misma, se unen su voz, sus vídeos, sus perfiles y lo aprendido. Se conserva la persona elegida.
       </p>

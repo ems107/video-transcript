@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type RemovalInfo } from './api'
 import { notifyKnowledge, plural } from './util'
+import { HelpLink } from './HelpMarkdown'
 
 type Options = { delete_files: boolean; delete_video: boolean; delete_original: boolean; forget: boolean }
 
@@ -37,7 +38,7 @@ export function RemoveDialog({ videoId, onClose, onRemoved }: { videoId: number;
 
   return (
     <dialog ref={ref} className="card dialog" onClose={onClose}>
-      <h3>Quitar el vídeo</h3>
+      <h3>Quitar el vídeo <HelpLink to="quitar" /></h3>
       {errors.length > 0 ? (
         <div className="stack">
           <p>El vídeo se ha quitado de la app, pero algunos ficheros no se pudieron borrar:</p>

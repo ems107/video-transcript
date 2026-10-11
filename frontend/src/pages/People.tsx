@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Duplicate, type Person } from '../api'
 import { notifyKnowledge } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 type Draft = { id?: number; name: string; role: string; aliases: string; notes: string }
 
@@ -33,7 +34,7 @@ export default function People() {
   return (
     <>
       <div className="spread" style={{ marginBottom: '1rem' }}>
-        <h1 style={{ margin: 0 }}>Personas</h1>
+        <h1 style={{ margin: 0 }}>Personas <HelpLink to="personas" /></h1>
         {!d && <button className="primary" onClick={() => setD({ name: '', role: '', aliases: '', notes: '' })}>+ Nueva persona</button>}
       </div>
       <p className="muted small">

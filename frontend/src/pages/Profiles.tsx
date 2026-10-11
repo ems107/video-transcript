@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type GlossaryEntry, type Person, type Profile } from '../api'
+import { HelpLink } from '../HelpMarkdown'
 
 export type Draft = Omit<Profile, 'id' | 'video_count' | 'learned_count' | 'pending_count'> & { id?: number }
 
@@ -108,7 +109,7 @@ export default function Profiles() {
   return (
     <>
       <div className="spread" style={{ marginBottom: '1rem' }}>
-        <h1 style={{ margin: 0 }}>Perfiles</h1>
+        <h1 style={{ margin: 0 }}>Perfiles <HelpLink to="perfiles" /></h1>
         {!editing && <button className="primary" onClick={() => setEditing(EMPTY)}>+ Nuevo perfil</button>}
       </div>
       {editing ? (

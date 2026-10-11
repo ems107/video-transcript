@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, type VideoDetail } from './api'
+import { HelpLink } from './HelpMarkdown'
 
 // Correcciones del usuario sobre el análisis de un vídeo. La IA las recibe como hechos al regenerar
 export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
@@ -24,7 +25,7 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
 
   return (
     <div className="card pad" style={{ marginTop: '1rem' }}>
-      <h3 style={{ margin: 0 }}>Correcciones</h3>
+      <h3 style={{ margin: 0 }}>Correcciones <HelpLink to="correcciones" /></h3>
       <p className="small muted" style={{ marginTop: '0.35rem' }}>
         Escribe aquí lo que el análisis ha interpretado mal, como hechos sobre lo que ocurre en el vídeo. Al regenerar, la
         IA vuelve a escribir el análisis desde cero, sin ver el anterior, y recibe estas correcciones como hechos que

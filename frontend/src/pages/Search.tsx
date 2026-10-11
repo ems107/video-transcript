@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type Person, type Profile, type SearchHit } from '../api'
 import { fmtTs } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 const KIND: Record<string, string> = { segment: 'Transcripción', summary: 'Resumen', title: 'Título', frame: 'Pantalla' }
 
@@ -43,7 +44,7 @@ export default function Search() {
 
   return (
     <>
-      <h1>Buscar en todos los vídeos</h1>
+      <h1>Buscar en todos los vídeos <HelpLink to="buscar" /></h1>
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input style={{ maxWidth: 420 }} autoFocus placeholder='Palabras o "frase exacta"…' value={q}
           onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setParams({ q })} />

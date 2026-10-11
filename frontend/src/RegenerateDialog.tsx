@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type RegenerateInfo, type RegenerateLevel } from './api'
 import { fmtDuration, plural } from './util'
+import { HelpLink } from './HelpMarkdown'
 
 const OPTIONAL: { level: RegenerateLevel; title: string; text: string }[] = [
   {
@@ -59,7 +60,7 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
 
   return (
     <dialog ref={ref} className="card dialog" onClose={onClose}>
-      <h3>Regenerar el análisis</h3>
+      <h3>Regenerar el análisis <HelpLink to="regenerar" /></h3>
       {!info ? <p className="muted">{error || 'Cargando…'}</p> : (
         <div className="stack">
           {byLevel.analysis?.available ? (

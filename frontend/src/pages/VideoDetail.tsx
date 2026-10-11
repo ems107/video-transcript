@@ -9,6 +9,7 @@ import { CorrectionsPanel } from '../CorrectionsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
 import { OverridesList, SpeakerFixDialog, SplitDialog } from '../SpeakerFix'
 import { RemoveDialog } from '../RemoveDialog'
+import { HelpLink } from '../HelpMarkdown'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
 
@@ -68,7 +69,7 @@ function SpeakerPanel({ video, people, onChange, seek, onRegenerate }: {
   return (
     <div className="card pad" style={{ marginTop: '1rem' }}>
       <div className="spread">
-        <h3 style={{ margin: 0 }}>Hablantes</h3>
+        <h3 style={{ margin: 0 }}>Hablantes <HelpLink to="hablantes" /></h3>
         {pending > 0 && (
           <button className="sm primary" disabled={busy} onClick={async () => {
             setBusy(true)
@@ -174,7 +175,7 @@ function KnowledgePanel({ video, running, onChange }: { video: VD; running: bool
   if (video.status !== 'done') return null
   return (
     <div className="card pad" style={{ marginTop: '1rem' }}>
-      <h3 style={{ marginTop: 0 }}>Aprendido de este vídeo</h3>
+      <h3 style={{ marginTop: 0 }}>Aprendido de este vídeo <HelpLink to="propuestas" /></h3>
       {counts && (
         <p className="small" style={{ marginTop: 0 }}>
           {counts.ready > 0
@@ -375,7 +376,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
                 </label>
                 {doubtful > 0 && (
                   <label className="check small" style={{ whiteSpace: 'nowrap' }} title="Tramos en los que la voz no deja claro quién habla">
-                    <input type="checkbox" checked={onlyDoubtful} onChange={(e) => setOnlyDoubtful(e.target.checked)} /> Solo dudosas ({doubtful})
+                    <input type="checkbox" checked={onlyDoubtful} onChange={(e) => setOnlyDoubtful(e.target.checked)} /> Solo dudosas ({doubtful}) <HelpLink to="hablantes#voz-dudosa-y-reasignada" />
                   </label>
                 )}
               </div>

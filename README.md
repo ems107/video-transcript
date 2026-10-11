@@ -14,6 +14,7 @@ Qué aporta cada versión: [CHANGELOG](CHANGELOG.md).
 - [Requisitos](#requisitos)
 - [Instalación](#instalación-una-sola-vez)
 - [Uso](#uso)
+- [Ayuda](#ayuda)
 - [Cómo funciona](#cómo-funciona)
 - [Desarrollo](#desarrollo)
 - [Versiones](#versiones)
@@ -140,6 +141,12 @@ cd backend; uv sync; cd ..
 
 Antes de actualizar, lee en el [CHANGELOG](CHANGELOG.md) si la versión requiere algún paso adicional.
 Las versiones mayores pueden requerirlo.
+
+## Ayuda
+
+La app incluye una ayuda completa (menú **Ayuda**): cómo se usa cada pantalla, cómo funciona por dentro y
+por qué se tomó cada decisión, con capturas y con los detalles técnicos aparte para quien quiera
+profundizar. Cada pantalla tiene un enlace «?» a su sección.
 
 ## Cómo funciona
 

@@ -1,0 +1,153 @@
+---
+titulo: Decisiones, límites y umbrales
+seccion: Por dentro
+orden: 41
+claves: decisiones, límites, umbrales, por qué, resolución, temperatura, bucle, voz, nombres, aprendizaje, ajustes de la IA
+---
+Aquí se explican las decisiones de diseño que más afectan al resultado: **qué se decidió, por qué, qué
+consecuencias tiene y si se puede cambiar**. Los valores son los de tu app en este momento.
+
+## Resolución de la pantalla
+
+**Qué:** los fotogramas se leen a {{v:frame_max_width}} píxeles de ancho como máximo.
+
+**Por qué:** con menos resolución, la IA no lee bien el texto pequeño, como los nombres bajo cada
+participante de una videollamada: inventaba letras y el mismo nombre salía de muchas formas.
+
+**Consecuencia:** leer la pantalla es la fase más lenta (unos {{v:ritmo_vision}} s por fotograma).
+
+**¿Se puede cambiar?** Sí, con `frame_max_width` en `data/settings.json` (ver [Ajustes](ayuda:ajustes)). Bajarlo
+acelera el análisis pero empeora la lectura de texto pequeño.
+
+:::tecnico Medición
+Con fotogramas de una grabación 4K: nombres leídos exactamente, el 44 % a 1600 px, el 56 % a 1920 px y el
+100 % a 2560 px; el tiempo por fotograma, unos 9, 10,5 y 14,5 s. Forzar más «tokens» de imagen en el
+modelo no mejoró nada.
+:::
+
+## Nombres en pantalla
+
+**Qué:** en cada vídeo, todas las lecturas parecidas de un nombre se juntan y se elige una sola forma.
+
+**Por qué:** la IA lee cada fotograma por separado y, con texto pequeño, el mismo nombre salía de decenas de
+formas («Iosu Urcelay», «Iker Urcelay», «Ione Urcelay»…), y el resumen trataba cada una como una persona
+distinta.
+
+**Cómo se elige la forma:** gana lo que se **oye** en la conversación (si alguien dice «Iosu», gana «Iosu»
+aunque se haya leído más veces «Iker»); después, lo más leído. Una tilde se conserva si aparece en al menos
+el {{v:nombres_tildes_pct}} % de las lecturas, porque al leer texto pequeño es más fácil
+perderla que inventarla. Si coincide con una persona que ya conoces, se usa su nombre. **Nunca se juntan
+dos nombres que aparecen a la vez en pantalla**: son dos recuadros, dos personas.
+
+**¿Se puede cambiar?** No desde la app. Si un nombre sale mal, añádelo como persona o como «otro nombre»
+de una persona.
+
+:::tecnico Agrupación
+Similitud de nombres (rapidfuzz y una clave fonética) de {{v:nombres_parecido}} o más sobre 100: el mismo
+nombre de pila con un apellido mal leído, los mismos apellidos con distinto nombre de pila, o un nombre
+corto con alguna letra cambiada («Edge» y «Edgar»). La forma final se construye palabra a palabra. En un
+vídeo real se pasó de unas 60 variantes a los 4 nombres reales.
+:::
+
+## Quién está resaltado en pantalla
+
+**Qué:** el nombre que se ve resaltado mientras alguien habla solo se propone si se concentra claramente
+en una voz, y cada nombre se asigna a un solo hablante.
+
+**Por qué:** la IA no detecta bien quién está resaltado. En una prueba dijo que hablaba la misma persona
+en 4 fotogramas de 4, y solo era así en 2. Además, quien presenta suele salir resaltado mientras hablan
+otros.
+
+**Consecuencia:** a veces un hablante se queda sin propuesta por pantalla aunque su nombre aparezca. Lo
+cubren la voz y el contexto, o lo confirmas tú.
+
+:::tecnico Criterio
+Al menos {{v:pantalla_minimo}} coincidencias, que sea el nombre más leído de ese hablante sin empate, y que
+esa voz tenga al menos {{v:pantalla_dominancia}} veces las lecturas del nombre que la siguiente. Un
+fotograma a menos de {{v:borde_turno}} s de un cambio de turno se asigna a quien empieza a hablar, porque
+el fotograma se toma justo al cambiar el resaltado; uno que cae en un silencio no cuenta.
+:::
+
+## Comprobación por la voz
+
+**Qué:** se reasigna un tramo a otro hablante solo cuando la voz lo deja claro; si no, se marca como dudoso.
+
+**Por qué:** es preferible avisarte de lo dudoso a cambiar algo bien por algo mal.
+
+**Consecuencia:** las frases muy cortas y los momentos en que hablan varios a la vez no se resuelven solos.
+Para eso está [cambiar quién habla](ayuda:hablantes#cambiar-quien-habla).
+
+Los valores y cómo se midieron están en [Hablantes](ayuda:hablantes#voz-dudosa-y-reasignada).
+
+## Ajustes de la IA
+
+**Qué:** la IA se usa con los ajustes que recomienda su fabricante (Qwen) para este modelo: temperatura
+{{v:llm_temperature}} y una penalización por repetir de {{v:llm_presence_penalty}}.
+
+**Por qué:** la IA escribe palabra a palabra, y cada palabra se elige según lo ya escrito. Con poca
+variación y sin penalización, a veces entraba en un **bucle**: copiaba el elemento anterior de una lista una
+y otra vez (el mismo apodo decenas de veces, o el mismo dato alternando entre dos personas) hasta agotar la
+respuesta. La temperatura controla cuánto varía; la penalización castiga repetir lo ya escrito.
+
+**Consecuencia:** al regenerar, el resultado varía un poco (otro título, alguna propuesta más o menos),
+aunque el fondo es el mismo.
+
+**¿Se puede cambiar?** Sí, en `data/settings.json`, pero no conviene sin volver a medir.
+
+:::tecnico Medición y protecciones
+Antes se usaba temperatura 0,2 sin penalización. Con el mismo vídeo de 37 minutos, el aprendizaje pasó de
+31 datos repetidos por bucle a ninguno en dos ejecuciones, sin respuestas cortadas ni mezcla de idiomas (la
+ficha del modelo avisa de que una penalización alta puede provocarla). Ajustes completos: temperatura
+{{v:llm_temperature}}, top_p {{v:llm_top_p}}, top_k {{v:llm_top_k}}, min_p {{v:llm_min_p}} y
+presence_penalty {{v:llm_presence_penalty}}, sin «modo razonamiento». Además, todas las listas que devuelve
+la IA tienen un máximo de elementos, y si una respuesta llega cortada o no es válida se guarda en
+`data/llm_failures/` para poder diagnosticarla.
+:::
+
+## Límites del aprendizaje
+
+**Qué:** como mucho, {{v:aprender_max_por_persona}} datos por persona y vídeo, {{v:aprender_max_terminos}}
+términos, {{v:aprender_max_contexto}} hechos de contexto, {{v:aprender_max_personas_nuevas}} personas
+nuevas y {{v:aprender_max_secciones}} secciones.
+
+**Por qué:** son solo una protección ante una respuesta anómala. Lo que evita el ruido son las
+comprobaciones de cada propuesta (ver [Propuestas](ayuda:propuestas)).
+
+**Antes:** eran 8 datos por persona, 15 términos, 10 hechos y 5 personas nuevas, y se perdían datos buenos
+solo por llegar tarde en la lista.
+
+## Términos que se proponen para un perfil
+
+**Qué:** un término solo se propone si se oye en la conversación o forma parte del contenido de la pantalla
+en al menos {{v:termino_fotogramas}} fotogramas.
+
+**Por qué:** la lectura de la pantalla anota todo lo legible, incluidas la barra de tareas y las pestañas del
+navegador. En una grabación real, la mitad de los términos propuestos eran programas del escritorio que
+nadie mencionaba (Trello, Jira…).
+
+## Identidades y apodos deducidos por el contexto
+
+**Qué:** la IA puede deducir quién es un hablante por la conversación, o que un apodo es de alguien, pero
+solo se acepta si se puede comprobar.
+
+**Por qué:** una versión anterior le pedía relacionar los apodos con los participantes «si correspondían»,
+y adivinaba: atribuyó a una persona el apodo de otra. Ahora un nombre deducido debe verse en pantalla u
+oírse; un apodo debe oírse y parecerse al nombre de la persona (por ejemplo, «Selu» está dentro de
+«JoSELUis»). Si no está claro, se deja tal como se oye.
+
+**Consecuencia:** a veces un apodo no se relaciona con nadie. Lo arreglas con una
+[corrección](ayuda:correcciones).
+
+:::tecnico Parecido de apodos
+Coincidencia parcial de {{v:apodo_parecido}} o más sobre 100 entre el apodo y el nombre completo sin
+espacios. Una identidad deducida por el contexto tiene confianza {{v:contexto_confianza}} y nunca se
+confirma sola.
+:::
+
+## Nada se confirma solo
+
+**Qué:** ni los hablantes, ni lo aprendido, ni las identidades deducidas se dan por buenos sin que los
+confirmes.
+
+**Por qué:** un error confirmado se refuerza: una huella de voz equivocada haría que la app reconociera mal
+a esa persona en todos los vídeos siguientes.

@@ -53,6 +53,13 @@ Cada versión publicada tiene un **tag anotado** `vX.Y.Z` en git y una **release
    git merge --no-ff feature/exportar-docx
    ```
 
+Si la versión cambia la interfaz, antes de publicar comprueba que la ayuda de la app
+(`frontend/src/help/`) está al día y rehaz las capturas:
+
+```powershell
+cd backend;  uv run python ../scripts/help_screenshots.py
+```
+
 ## Publicar una versión
 
 Desde `main`, con el árbol de trabajo limpio:

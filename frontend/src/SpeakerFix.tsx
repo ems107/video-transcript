@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type Person, type SegmentInfo, type SpeakerOverride, type VideoDetail, type Word } from './api'
 import { fmtTs, notifyKnowledge } from './util'
+import { HelpLink } from './HelpMarkdown'
 
 type Scope = 'line' | 'part' | 'lines'
 
@@ -74,7 +75,7 @@ export function SpeakerFixDialog({ video, people, segment, onClose, onSaved }: {
 
   return (
     <dialog ref={ref} className="card dialog" onClose={onClose}>
-      <h3>Cambiar quién habla</h3>
+      <h3>Cambiar quién habla <HelpLink to="hablantes#cambiar-quien-habla" /></h3>
       <div className="stack">
         <p className="small muted">
           Se guarda como «de tal momento a tal momento habla esta persona»: se ve al momento en la transcripción y se
@@ -152,7 +153,7 @@ export function SplitDialog({ video, people, speakerId, seek, onClose, onSaved }
 
   return (
     <dialog ref={ref} className="card dialog" onClose={onClose}>
-      <h3>¿Dos voces en «{sp.name}»?</h3>
+      <h3>¿Dos voces en «{sp.name}»? <HelpLink to="hablantes#dos-voces-en-un-hablante" /></h3>
       <div className="stack">
         <p className="small muted">
           Las intervenciones de este hablante forman dos grupos de voz distintos. Escucha unas frases de cada grupo y
