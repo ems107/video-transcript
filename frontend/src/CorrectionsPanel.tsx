@@ -30,7 +30,8 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
         IA vuelve a escribir el análisis desde cero, sin ver el anterior, y recibe estas correcciones como hechos que
         prevalecen sobre la grabación. Por eso cada corrección debe entenderse por sí sola, sin referirse a partes del
         resumen. Se aplican en cada regeneración: mantenlas aunque el resumen ya salga bien. Afectan al resumen, las tareas
-        y el aprendizaje, no al texto de la transcripción; para eso está el glosario del perfil. La IA nunca las modifica.
+        y el aprendizaje, no al texto de la transcripción; para eso está el glosario del perfil. Para corregir quién es
+        un hablante, usa el panel Hablantes: así también se guarda su voz. La IA nunca las modifica.
       </p>
       {video.video_corrections.length > 0 && (
         <ul className="corrections">
