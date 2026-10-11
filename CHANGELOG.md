@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Corregir y mejorar un vídeo ya analizado sin perder lo que ya has revisado.
+
 ### Añadido
 
 - **Correcciones del vídeo.** En la página de cada vídeo puedes escribir lo que el análisis ha
