@@ -50,6 +50,9 @@ class Settings(BaseModel):
     llm_ctx: int = 65536
     llm_n_cpu_moe: int = 24  # capas MoE cuyos expertos se ejecutan en CPU/RAM
     llm_temperature: float = 0.2
+    # Tokens por imagen del modelo de visión (0 = lo que indique el modelo). Más tokens = más detalle
+    llm_image_min_tokens: int = 0
+    llm_image_max_tokens: int = 0
 
     # Fotogramas
     frame_sample_every: float = 2.0  # muestreo para detectar cambios de escena
@@ -57,6 +60,9 @@ class Settings(BaseModel):
     frame_min_interval: float = 4.0  # segundos mínimos entre fotogramas
     frame_max_interval: float = 60.0  # como máximo un fotograma cada N segundos
     frame_hash_distance: int = 6  # distancia de hash perceptual para considerar duplicado
+    # Ancho máximo de los fotogramas para el modelo de visión. Con 1600 px, los nombres pequeños de una
+    # grabación 4K se leían bien solo el 44 % de las veces; con 2560 px, el 100 % (≈ 1,6× más lento)
+    frame_max_width: int = 2560
 
     # Resumen por bloques
     chunk_minutes: float = 30.0

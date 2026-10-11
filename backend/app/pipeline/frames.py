@@ -54,7 +54,7 @@ def run(ctx: JobContext) -> None:
         ctx.check_cancel()
         dst = frames_dir / f"kf_{int(t):06d}.jpg"
         if not dst.exists():
-            extract_frame(ctx.source_path, t, dst, max_width=1600)
+            extract_frame(ctx.source_path, t, dst, max_width=s.frame_max_width)
         out.append({"t": t, "file": dst.name})
         if i % 10 == 0:
             ctx.report(0.5 + 0.45 * i / max(1, len(kept)), f"Extrayendo fotograma {i + 1}/{len(kept)}")

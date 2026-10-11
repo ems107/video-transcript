@@ -68,6 +68,9 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
 
 ### Corregido
 
+- **La pantalla se analiza con más resolución** (2560 px de ancho como máximo, antes 1600). En una
+  grabación 4K, los nombres pequeños se leían bien el 44 % de las veces y ahora el 100 %. El análisis de
+  la pantalla tarda alrededor de 1,6 veces más.
 - **Un solo nombre por persona en cada vídeo.** El análisis de la pantalla leía el mismo nombre de muchas
   formas («Iosu», «Iker», «Ione»…), y cada una se trataba como una persona distinta. Ahora se agrupan
   las variantes y se elige una sola forma: se tiene en cuenta lo que se oye en la transcripción y las

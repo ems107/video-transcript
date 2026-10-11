@@ -51,6 +51,10 @@ class LLMServer:
         ]
         if mmproj.exists():
             args += ["--mmproj", str(mmproj)]
+            if self.s.llm_image_min_tokens:
+                args += ["--image-min-tokens", str(self.s.llm_image_min_tokens)]
+            if self.s.llm_image_max_tokens:
+                args += ["--image-max-tokens", str(self.s.llm_image_max_tokens)]
         log.info("Arrancando llama-server: %s", " ".join(args))
         self._logf = open(self.log_path, "ab")
         self.proc = subprocess.Popen(
