@@ -13,6 +13,7 @@ import SettingsPage from './pages/Settings'
 import Proposals from './pages/Proposals'
 import ProfileDetail from './pages/ProfileDetail'
 import PersonDetail from './pages/PersonDetail'
+import Help from './pages/Help'
 
 const CHECK_LABELS: Record<string, string> = {
   ffmpeg: 'ffmpeg',
@@ -60,6 +61,7 @@ export default function App() {
           <NavLink to="/perfiles">Perfiles</NavLink>
           <NavLink to="/personas">Personas</NavLink>
           <NavLink to="/ajustes">Ajustes</NavLink>
+          <NavLink to="/ayuda">Ayuda</NavLink>
         </nav>
         {status?.version && <div className="version">v{status.version}</div>}
       </aside>
@@ -81,6 +83,8 @@ export default function App() {
           <Route path="/personas" element={<People />} />
           <Route path="/personas/:id" element={<PersonDetail />} />
           <Route path="/ajustes" element={<SettingsPage />} />
+          <Route path="/ayuda" element={<Help />} />
+          <Route path="/ayuda/:pagina" element={<Help />} />
         </Routes>
       </main>
     </div>
