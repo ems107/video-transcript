@@ -249,7 +249,8 @@ pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` 
 que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
 
 **Marcas de tiempo.** El campo `t` de tareas, decisiones, pendientes, señales y eventos usa `TS_T`, un
-`pattern` hh:mm:ss que la gramática de llama.cpp impone (comprobado en vivo). Sin él, el modelo a veces ponía
+`pattern` `0h:mm:ss` que la gramática de llama.cpp impone (comprobado en vivo). La hora empieza por 0: con una
+hora libre, el modelo escribía «20:42:00» por el minuto 20:42. Sin él, el modelo a veces ponía
 en `t` el texto de la tarea o una fecha copiada del contexto. Los pendientes son objetos `{pendiente, t}`;
 los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «tal
 como se dice»: el modelo convertía «el lunes» en una fecha.
@@ -268,7 +269,9 @@ como se dice»: el modelo convertía «el lunes» en una fecha.
    `resumen` y `aporte`. Los puntos nuevos son los del análisis menos los «mismos» y los parecidos a uno
    existente o borrado (`DUPLICATE`): no los inventa la IA, que variaba en cada ejecución.
    `followups.apply_update` exige que un cambio de estado traiga una cita que se diga en ese momento (con la
-   transcripción del vídeo; si no, solo puede ser «avanza»), ids que existan, `t` dentro del vídeo, evento
+   transcripción del vídeo; `quoted` acepta citas troceadas con «…» si cada trozo se dice ahí). Sin ella, el
+   evento queda como «avanza» con `posible: <evento>`: la web lo muestra como «¿hecha?» con un botón
+   Confirmar (un cambio manual). Además exige ids que existan, `t` dentro del vídeo, evento
    válido para el tipo y nada que cambie un punto manual.
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.

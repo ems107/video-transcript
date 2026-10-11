@@ -268,6 +268,7 @@ export type FollowupEvent = {
   evento: 'creada' | 'avanza' | 'hecha' | 'descartada' | 'reabierta' | 'cambiada' | 'anulada' | 'resuelta'
   nota: string
   cita?: string // la frase del vídeo que lo dice (comprobada)
+  posible?: FollowupEvent['evento'] // la IA cree que pasó, sin una frase que lo demuestre: lo confirma el usuario
   source: 'ia' | 'manual'
   at: string
 }

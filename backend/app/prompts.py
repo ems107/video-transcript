@@ -109,8 +109,9 @@ la descripción de lo que se ve en pantalla.
 
 ITEM_T = {"type": "string"}
 # Marca de tiempo con formato obligatorio (la gramática de llama.cpp lo impone). Sin él, el modelo a veces
-# ponía en «t» el texto de la tarea o una fecha copiada del contexto (medido en vídeos reales).
-TS_T = {"type": "string", "pattern": "^[0-9]{1,2}:[0-9]{2}:[0-9]{2}$"}
+# ponía en «t» el texto de la tarea o una fecha copiada del contexto; y con una hora libre escribía «20:42:00»
+# por el minuto 20:42. La hora empieza por 0 (hasta 9 h de vídeo), como en las marcas de la transcripción.
+TS_T = {"type": "string", "pattern": "^0[0-9]:[0-5][0-9]:[0-5][0-9]$"}
 TASK_SCHEMA = {
     "type": "object",
     "properties": {
@@ -215,7 +216,8 @@ CHUNK_FOLLOW_INSTR = """
 - seguimiento: puntos del estado del seguimiento ([T…] tareas, [D…] decisiones, [P…] dudas) de los que se \
 habla en este fragmento. id: el del punto. evento: avanza (se trata pero sigue igual), hecha o descartada \
 (tareas), cambiada o anulada (decisiones), resuelta (dudas) o reabierta. t: la marca de tiempo. cita: la \
-frase de la transcripción que lo dice, copiada literalmente. Solo lo que se dice; si se sobreentiende pero \
+frase de la transcripción que lo dice, copiada literalmente, sin comillas ni puntos suspensivos. Solo lo \
+que se dice; si se sobreentiende pero \
 nadie lo dice, no lo pongas. Lista vacía si no se habla de ninguno. No escribas los identificadores [T…] en \
 el resumen ni en las otras listas."""
 

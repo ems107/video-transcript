@@ -173,12 +173,15 @@ QUOTE_MIN_CHARS = 12  # una cita más corta («sí», «vale») podría estar en
 
 
 def quoted(cita: str, utts: list[dict[str, Any]], t: float) -> bool:
-    """¿Se dice de verdad esa frase cerca de ese momento? Así un cambio de estado no se puede inventar."""
-    n = normalize(cita)
-    if len(n) < QUOTE_MIN_CHARS:
+    """¿Se dice de verdad esa frase cerca de ese momento? Así un cambio de estado no se puede inventar.
+
+    La IA a veces junta trozos con «…»: cada trozo debe decirse cerca de ese momento."""
+    pieces = [normalize(x) for x in re.split(r"\.\.\.|…", cita)]
+    pieces = [x for x in pieces if len(x) >= 8]
+    if not pieces or max(len(x) for x in pieces) < QUOTE_MIN_CHARS:
         return False
     near = normalize(" ".join(u["text"] for u in utts if abs(u["start"] - t) <= QUOTE_WINDOW))
-    return bool(near) and fuzz.partial_ratio(n, near) >= QUOTE_SIMILAR
+    return bool(near) and all(fuzz.partial_ratio(x, near) >= QUOTE_SIMILAR for x in pieces)
 
 
 def verify_signals(signals: list[dict[str, Any]], utts: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
@@ -253,7 +256,7 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
       («mismos») y los que repiten uno existente, también uno borrado por el usuario."""
     by_id = {short_id(it): it for it in items}
     events, new, discarded = [], [], []
-    seen: set[tuple[int, str]] = set()
+    seen: set[tuple[int, str, str]] = set()
     for e in update.get("eventos") or []:
         it = by_id.get(str(e.get("id", "")).strip().strip("[]").upper())
         t = _valid_t(e.get("t", ""), duration)
@@ -271,19 +274,22 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
         if evento == "avanza" and it["events"] and it["events"][0].get("video_id") == video_id:
             discarded.append(f"{e.get('id')}: avance en el mismo vídeo en que aparece")
             continue
-        if evento != "avanza" and utts is not None and not quoted(cita, utts, t):
-            discarded.append(f"{e.get('id')}: «{evento}» sin una cita que lo diga en {fmt_ts(t)} ({cita!r})")
-            continue
         nota = (e.get("nota") or "").strip()
-        if it.get("manual") and evento != "avanza":
+        possible = ""
+        if evento != "avanza" and utts is not None and not quoted(cita, utts, t):
+            # Sin una frase que lo demuestre, el cambio queda como posible: lo confirma el usuario
+            possible, evento = evento, "avanza"
+        elif it.get("manual") and evento != "avanza":
             # Lo decidió el usuario: el vídeo solo se anota como avance
             nota, evento = f"(el vídeo dice: {evento}) {nota}".strip(), "avanza"
-        if (it["id"], evento) in seen:
+        if (it["id"], evento, possible) in seen:
             continue
-        seen.add((it["id"], evento))
-        events.append((it["id"], {"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t),
-                                  "evento": evento, "nota": nota, "cita": cita if quoted(cita, utts or [], t) else "",
-                                  "source": "ia", "at": at.isoformat()}))
+        seen.add((it["id"], evento, possible))
+        ev = {"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t), "evento": evento, "nota": nota,
+              "cita": cita if quoted(cita, utts or [], t) else "", "source": "ia", "at": at.isoformat()}
+        if possible:
+            ev["posible"] = possible
+        events.append((it["id"], ev))
     same = {str(m.get("nuevo", "")).strip().strip("[]").upper() for m in update.get("mismos") or []
             if str(m.get("existente", "")).strip().strip("[]").upper() in by_id}
     existing = [(it["kind"], it["text"]) for it in items]
@@ -385,7 +391,10 @@ def render_markdown(f: dict[str, Any], items: list[dict[str, Any]], videos: list
                     if e.get("cita"):
                         note += f" («{e['cita']}»)"
                     w = where(e)
-                    out.append(f"  - {EVENT_LABELS.get(e['evento'], e['evento'])}{(' · ' + w) if w else ''}{note}")
+                    label = EVENT_LABELS.get(e["evento"], e["evento"])
+                    if e.get("posible"):
+                        label += f" (posible: {EVENT_LABELS.get(e['posible'], e['posible'])}, sin confirmar)"
+                    out.append(f"  - {label}{(' · ' + w) if w else ''}{note}")
         out.append("")
     if videos:
         out += ["## Vídeos", ""]

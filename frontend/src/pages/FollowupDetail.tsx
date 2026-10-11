@@ -8,6 +8,10 @@ import { fmtDate, fmtDuration, plural } from '../util'
 
 type Tab = 'estado' | 'videos' | 'historial'
 const KINDS: FollowupKind[] = ['tarea', 'decision', 'duda']
+// Estado en que deja un punto cada evento (igual que EVENT_STATUS en backend/app/followups.py)
+const STATUS_AFTER: Record<string, string> = {
+  hecha: 'hecha', descartada: 'descartada', cambiada: 'cambiada', anulada: 'anulada', resuelta: 'resuelta',
+}
 
 export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
@@ -208,6 +212,7 @@ function ItemsCard({ f, kind, act }: { f: FD; kind: FollowupKind; act: Act }) {
 function ItemRow({ f, it, act }: { f: FD; it: FollowupItem; act: Act }) {
   const [edit, setEdit] = useState<{ text: string; owner: string; due: string } | null>(null)
   const url = `/api/followups/${f.id}/items/${it.id}`
+  const lastPossible = it.events.map((e) => !!e.posible).lastIndexOf(true)
   return (
     <li>
       <div className="followup-item">
@@ -242,7 +247,12 @@ function ItemRow({ f, it, act }: { f: FD; it: FollowupItem; act: Act }) {
           </span>
         )}
       </div>
-      <div className="events">{it.events.map((e, i) => <EventChip key={i} e={e} />)}</div>
+      <div className="events">
+        {it.events.map((e, i) => (
+          <EventChip key={i} e={e} onConfirm={e.posible && i === lastPossible && it.status !== STATUS_AFTER[e.posible]
+            ? () => act(() => api.put(url, { status: STATUS_AFTER[e.posible!] })) : undefined} />
+        ))}
+      </div>
     </li>
   )
 }

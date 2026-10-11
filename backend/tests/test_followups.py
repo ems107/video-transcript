@@ -86,13 +86,14 @@ def test_apply_update_validates_the_answer():
               {"key": "N3", "kind": "duda", "text": "¿Hay que firmar ante notario?", "owner": "", "due": "", "t": "00:09:00"},
               {"key": "N4", "kind": "tarea", "text": "Llamar al banco", "owner": "Ana", "due": "", "t": "sin hora"}]
     plan = F.apply_update(items, update, 2, D2, 25 * 60, AT, points, UTTS)
-    by_item = {iid: e for iid, e in plan["events"]}
-    assert by_item[1]["evento"] == "hecha" and by_item[1]["date"] == D2.isoformat() and by_item[1]["t"] == "00:05:00"
-    assert by_item[1]["cita"] == cita
+    evs = [(iid, e["evento"], e.get("posible")) for iid, e in plan["events"]]
+    # Un cambio sin una frase que lo diga queda como posible (no cambia el estado: lo confirma el usuario)
+    assert evs == [(1, "hecha", None), (1, "avanza", "descartada"), (2, "avanza", None)]
+    first = plan["events"][0][1]
+    assert first["date"] == D2.isoformat() and first["t"] == "00:05:00" and first["cita"] == cita
     # Lo decidió el usuario: el vídeo solo se anota como avance
-    assert by_item[2]["evento"] == "avanza" and "hecha" in by_item[2]["nota"]
-    assert len(plan["events"]) == 2 and len(plan["discarded"]) == 5
-    assert any("sin una cita" in d for d in plan["discarded"])
+    assert "hecha" in plan["events"][2][1]["nota"]
+    assert len(plan["discarded"]) == 4
     # N1 es la misma tarea; N3 la borró el usuario; N4 se relaciona con un punto que no existe: se añade, sin momento
     assert [(n["text"], n["events"][0]["t"]) for n in plan["new"]] == [("¿Hace falta el aval?", "00:08:00"),
                                                                         ("Llamar al banco", "")]
@@ -102,6 +103,9 @@ def test_quotes_and_signals():
     assert F.quoted("el informe ya se lo mandé al gestor", UTTS, 300)
     assert not F.quoted("el informe ya se lo mandé al gestor", UTTS, 600)  # dicho, pero no en ese momento
     assert not F.quoted("sí, vale", UTTS, 300)  # demasiado corta para demostrar nada
+    # La IA a veces junta trozos con puntos suspensivos y comillas: vale si cada trozo se dice ahí
+    assert F.quoted('"Por cierto, el informe... se lo mandé al gestor ayer."', UTTS, 300)
+    assert not F.quoted('"Por cierto, el informe... lo firmó el notario"', UTTS, 300)
     signals = [{"id": "[t1]", "evento": "hecha", "t": "00:04:55", "cita": "el informe ya se lo mandé al gestor"},
                {"id": "T1", "evento": "hecha", "t": "00:04:55", "cita": "el informe ya se lo mandé al gestor"},
                {"id": "T2", "evento": "hecha", "t": "00:06:00", "cita": "esto no lo dice nadie en la reunión"}]

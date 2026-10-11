@@ -55,6 +55,11 @@ Cada punto muestra su **recorrido**: una fila de hitos como «4 oct · 0:12:30 a
 hecha». Cada hito enlaza con el vídeo en ese momento. Por defecto se ven solo los puntos abiertos;
 **Ver todas** muestra también los cerrados.
 
+Cuando la IA da algo por hecho, resuelto o cambiado, el hito muestra **la frase del vídeo que lo dice**.
+Si cree que ha pasado pero no encuentra esa frase, no cambia el estado: el hito aparece como **«¿hecha?»**
+(o «¿resuelta?»…) con un botón **Confirmar**. Compruébalo en el vídeo con el enlace del hito y confírmalo
+si es así; queda como cambio tuyo.
+
 La pestaña **Vídeos** lista los vídeos en orden de fecha de grabación, con lo que aportó cada uno.
 
 ## Lo que haces tú
@@ -104,8 +109,9 @@ El trabajo se reparte en dos pasos, para que cada uno haga lo que mejor sabe hac
    dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento) y descarta las demás.
 2. **La fase «Actualizando seguimientos»** (unos {{v:ritmo_follow}} s por minuto de vídeo) recibe esas
    señales, los puntos del vídeo y su resumen, y decide los hitos y el resumen de la evolución. Un cambio
-   de estado (hecha, resuelta, cambiada…) solo se acepta si trae una cita que se dice en ese momento; sin
-   ella, la IA solo puede anotar un avance.
+   de estado (hecha, resuelta, cambiada…) solo se aplica si trae una cita que se dice en ese momento (una
+   cita troceada con «…» vale si cada trozo se dice ahí); sin ella, queda como **posible** y lo confirmas
+   tú.
 
 Los **puntos nuevos** son las tareas, decisiones y pendientes del análisis del vídeo, los mismos que ves en
 su pestaña «Tareas». La IA solo indica cuáles son el mismo asunto que uno anterior, para no duplicarlo.

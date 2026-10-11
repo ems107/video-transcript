@@ -172,8 +172,8 @@ function shortDate(iso: string): string {
 }
 
 // Un hito del recorrido de un punto: fecha y momento del vídeo (con enlace) y qué pasó
-export function EventChip({ e }: { e: FollowupEvent }) {
-  const label = EVENT_LABELS[e.evento] ?? e.evento
+export function EventChip({ e, onConfirm }: { e: FollowupEvent; onConfirm?: (evento: FollowupEvent['evento']) => void }) {
+  const label = e.posible ? `¿${EVENT_LABELS[e.posible] ?? e.posible}?` : EVENT_LABELS[e.evento] ?? e.evento
   const where = e.source === 'manual'
     ? <span title={`Cambio tuyo, ${new Date(e.at).toLocaleString('es-ES')}`}>a mano</span>
     : e.date && e.video_id
@@ -185,6 +185,10 @@ export function EventChip({ e }: { e: FollowupEvent }) {
     <span className={`event ${e.evento}`}>
       {where}<b>{label}</b>{e.nota && <span className="muted">{e.nota}</span>}
       {e.cita && <q className="muted" title="La frase del vídeo que lo dice">{e.cita}</q>}
+      {e.posible && onConfirm && (
+        <button className="sm" title="La IA cree que pasó, pero no encontró la frase que lo dice: compruébalo en el vídeo"
+          onClick={() => onConfirm(e.posible!)}>Confirmar</button>
+      )}
     </span>
   )
 }

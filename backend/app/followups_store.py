@@ -206,6 +206,9 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     touch(session, f)
     if plan["discarded"]:
         log.info("Seguimiento %s, vídeo %s: descartado %s", f.id, video.id, plan["discarded"])
+    possible = [(iid, ev["posible"]) for iid, ev in plan["events"] if ev.get("posible")]
+    if possible:
+        log.info("Seguimiento %s, vídeo %s: posibles sin cita %s", f.id, video.id, possible)
     return {"eventos": len(plan["events"]), "nuevos": len(plan["new"]), "descartados": plan["discarded"]}
 
 
