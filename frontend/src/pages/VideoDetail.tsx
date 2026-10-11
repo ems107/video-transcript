@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
+import { RegenerateDialog } from '../RegenerateDialog'
 import { RemoveDialog } from '../RemoveDialog'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
@@ -185,6 +186,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
   const nav = useNavigate()
   const [removing, setRemoving] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const [params, setParams] = useSearchParams()
   const [video, setVideo] = useState<VD | null>(null)
   const [people, setPeople] = useState<Person[]>([])
@@ -284,12 +286,11 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
         <div className="row">
           {video.folder && <button onClick={() => api.post(`/api/videos/${video.id}/open-folder`)}>Abrir carpeta</button>}
           {video.status === 'done' && (
-            <button title="Repite la corrección de términos y el resumen con los nombres y el perfil actuales"
-              onClick={async () => { await api.post(`/api/videos/${video.id}/regenerate`); load() }} disabled={!!running}>
-              Regenerar análisis
-            </button>
+            <button onClick={() => setRegenerating(true)} disabled={!!running}>Regenerar análisis</button>
           )}
           <button className="danger" disabled={!!running} onClick={() => setRemoving(true)}>Quitar</button>
+          {regenerating && <RegenerateDialog videoId={video.id} onClose={() => setRegenerating(false)}
+            onQueued={() => { setRegenerating(false); load() }} />}
           {removing && <RemoveDialog videoId={video.id} onClose={() => setRemoving(false)} onRemoved={() => nav('/')} />}
         </div>
       </div>

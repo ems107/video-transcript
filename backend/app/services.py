@@ -133,15 +133,23 @@ def apply_context_identities(session: Session, video_id: int, found: dict[str, A
 
 
 def persist_speakers(session: Session, video_id: int, identities: dict[str, dict[str, Any]]) -> None:
-    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
-        session.delete(sp)
+    """Guarda la identificación. Al repetirla, los hablantes confirmados conservan su persona.
+
+    Solo cambian las propuestas de los que no están confirmados; las etiquetas que ya no existen se borran.
+    """
+    existing = {sp.label: sp for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id))}
+    for label, sp in existing.items():
+        if label not in identities:
+            session.delete(sp)
     for label, d in identities.items():
-        session.add(Speaker(
-            video_id=video_id, label=label, order_idx=d["order"],
-            suggested_person_id=d["person_id"], suggested_name=d["suggested_name"], source=d["source"],
-            confidence=d["confidence"], is_owner=d["is_owner"], speaking_time=d["speaking_time"],
-            visual_hints=d["visual_hints"], embedding=d["embedding"],
-        ))
+        sp = existing.get(label) or Speaker(video_id=video_id, label=label)
+        sp.order_idx, sp.is_owner, sp.speaking_time, sp.embedding = (
+            d["order"], d["is_owner"], d["speaking_time"], d["embedding"])
+        sp.visual_hints = dict(d["visual_hints"])
+        if not sp.confirmed:
+            sp.suggested_person_id, sp.suggested_name = d["person_id"], d["suggested_name"]
+            sp.source, sp.confidence = d["source"], d["confidence"]
+        session.add(sp)
     session.commit()
 
 

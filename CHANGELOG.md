@@ -10,6 +10,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Añadido
 
+- **«Regenerar análisis» con opciones.** Una ventana explica qué se repite y qué se conserva, con el
+  tiempo estimado. Además del resumen, se puede elegir:
+  - volver a identificar a los hablantes (los confirmados no cambian);
+  - volver a analizar la pantalla;
+  - el análisis completo desde el audio, sin quitar el vídeo. Hay que volver a confirmar a los hablantes,
+    pero la app los propone por su voz.
 - La app mide cuánto tarda cada fase del análisis en tu equipo, y lo usa para estimar los tiempos.
 
 ### Corregido

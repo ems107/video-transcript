@@ -218,6 +218,13 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export type RegenerateLevel = 'analysis' | 'speakers' | 'screen' | 'full'
+export type RegenerateInfo = {
+  levels: { level: RegenerateLevel; available: boolean; reason: string; seconds: number }[]
+  video_path: string | null
+  confirmed_speakers: number
+}
+
 export type RemovalInfo = {
   folder: string | null
   video_path: string | null

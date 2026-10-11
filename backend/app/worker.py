@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 
 from . import knowledge_store as KS
 from . import estimates, removal, services
+from . import regenerate as regen
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
@@ -118,7 +119,7 @@ class Worker:
             job.options = options
             s.add(job)
             s.commit()
-            source = Path(video.video_path or video.source_path)
+            source = regen.video_file(video) or Path(video.video_path or video.source_path)
             ctx_data = dict(
                 profile=services.profile_dict(s, video.profile_id),
                 people=services.people_for(s, video.profile_id),
@@ -284,8 +285,11 @@ class Worker:
                 folder.mkdir(parents=True)
             ctx.report(0.1, "Copiando fotogramas")
             fdir = folder / "fotogramas"
+            new_frames = list(ctx.path("frames").glob("*.jpg"))
+            if new_frames and fdir.is_dir():
+                shutil.rmtree(fdir)  # se han vuelto a elegir: que no queden fotogramas viejos
             fdir.mkdir(exist_ok=True)
-            for f in ctx.path("frames").glob("*.jpg"):
+            for f in new_frames:
                 shutil.copy2(f, fdir / f.name)
             if ctx.path("thumbnail.jpg").exists():
                 shutil.copy2(ctx.path("thumbnail.jpg"), folder / "miniatura.jpg")
