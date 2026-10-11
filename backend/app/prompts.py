@@ -193,37 +193,7 @@ parezca decir la transcripción o la pantalla; tenlas en cuenta en todo lo que e
             + "\n".join(f"- {t}" for t in texts))
 
 
-FOLLOW_SIGNAL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "id": {"type": "string"},
-        "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada", "anulada",
-                                              "resuelta"]},
-        "t": TS_T,
-        "cita": {"type": "string"},
-    },
-    "required": ["id", "evento", "t", "cita"],
-}
-# Con seguimientos, cada fragmento señala además qué puntos del estado anterior se tratan: es la parte que lee
-# la transcripción, y la fase del seguimiento solo ve el resumen (ahí se perdían cierres dichos de pasada)
-CHUNK_FOLLOW_SCHEMA = {
-    **CHUNK_SCHEMA,
-    "properties": {**CHUNK_SCHEMA["properties"], "seguimiento": {"type": "array", "items": FOLLOW_SIGNAL_SCHEMA}},
-    "required": [*CHUNK_SCHEMA["required"], "seguimiento"],
-}
-
-CHUNK_FOLLOW_INSTR = """
-- seguimiento: puntos del estado del seguimiento ([T…] tareas, [D…] decisiones, [P…] dudas) de los que se \
-habla en este fragmento. id: el del punto. evento: avanza (se trata pero sigue igual), hecha o descartada \
-(tareas), cambiada o anulada (decisiones), resuelta (dudas) o reabierta. t: la marca de tiempo. cita: la \
-frase de la transcripción que lo dice, copiada literalmente, sin comillas ni puntos suspensivos. Solo lo \
-que se dice; si se sobreentiende pero \
-nadie lo dice, no lo pongas. Lista vacía si no se habla de ninguno. No escribas los identificadores [T…] en \
-el resumen ni en las otras listas."""
-
-
-def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "",
-               follow: bool = False) -> str:
+def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "") -> str:
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{(who + "\n\n") if who else ""}\
 Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
 describen lo que se ve.
@@ -243,7 +213,7 @@ claro (por ejemplo, se presenta, o alguien se dirige a él por su nombre y es é
 el motivo y la marca de tiempo. Lista vacía si no está claro.
 - apodos: nombres oídos en la transcripción que son apodos, diminutivos o malas transcripciones del \
 nombre de un participante de la lista (el apodo tal como aparece escrito, el nombre del participante y \
-la primera marca de tiempo). Cada apodo una sola vez. Lista vacía si no hay.""" + (CHUNK_FOLLOW_INSTR if follow else "")
+la primera marca de tiempo). Cada apodo una sola vez. Lista vacía si no hay."""
 
 
 FINAL_SYSTEM = """Eres un analista que redacta el informe final de una grabación (reunión o sesión de \
@@ -431,21 +401,6 @@ según los vídeos anteriores y el análisis de un vídeo nuevo, y devuelves sol
 FOLLOW_SCHEMA = {
     "type": "object",
     "properties": {
-        "eventos": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string"},
-                    "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada",
-                                                          "anulada", "resuelta"]},
-                    "t": TS_T,
-                    "nota": {"type": "string"},
-                    "cita": {"type": "string"},
-                },
-                "required": ["id", "evento", "t", "nota", "cita"],
-            },
-        },
         "mismos": {
             "type": "array",
             "items": {
@@ -457,8 +412,52 @@ FOLLOW_SCHEMA = {
         "resumen": {"type": "string"},
         "aporte": {"type": "string"},
     },
-    "required": ["eventos", "mismos", "resumen", "aporte"],
+    "required": ["mismos", "resumen", "aporte"],
 }
+
+# Qué dice el vídeo de cada punto abierto. Va aparte y con el modo razonamiento: dentro del resumen, o sin
+# razonar, el modelo no encontraba los cierres dichos de pasada («lo que ayer fallaba ya ha funcionado») e
+# inventaba momentos y citas (medido con vídeos reales)
+FOLLOW_CHECK_SYSTEM = """Revisas la transcripción de una reunión para saber qué dice sobre asuntos pendientes \
+de reuniones anteriores. Solo cuenta lo que se dice en la transcripción; no deduzcas nada que no se diga."""
+
+FOLLOW_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "menciones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada",
+                                                          "anulada", "resuelta"]},
+                    "t": TS_T,
+                    "cita": {"type": "string"},
+                },
+                "required": ["id", "evento", "t", "cita"],
+            },
+        },
+    },
+    "required": ["menciones"],
+}
+
+
+def follow_check_user(points: str, video: str, part: int, total: int, body: str) -> str:
+    return f"""Asuntos pendientes de reuniones anteriores del mismo tema:
+{points}
+
+Transcripción de la reunión del {video} (parte {part} de {total}):
+{body}
+
+Para cada asunto del que se hable en esta parte, devuelve:
+- id: el del asunto ([T…] tarea, [D…] decisión, [P…] duda).
+- evento: hecha o descartada (tareas), cambiada o anulada (decisiones), resuelta (dudas), reabierta, o \
+avanza si se habla de él pero sigue igual.
+- t: la marca de tiempo de la frase.
+- cita: la frase que lo dice, copiada literalmente, sin comillas ni puntos suspensivos.
+Se puede hablar de un asunto sin nombrarlo igual (por ejemplo, «lo que ayer fallaba ya funciona» o «ya \
+sale como predeterminado»). Si no se habla de un asunto, no lo pongas."""
 
 
 def follow_user(state: str, video: str, analysis: str) -> str:
@@ -471,20 +470,14 @@ Vídeo nuevo: {video}
 {analysis}
 
 Devuelve:
-- eventos: cambios en los puntos del estado ([T…] tareas, [D…] decisiones, [P…] dudas) que este vídeo dice. \
-Parte de las señales detectadas al leer la transcripción, si las hay: son lo más fiable. id: el del punto. \
-evento: avanza (hay novedades pero sigue igual), hecha o descartada (tareas), cambiada o anulada \
-(decisiones), resuelta (dudas) o reabierta. t: marca de tiempo de este vídeo. cita: la frase de la \
-transcripción que lo dice (cópiala de las señales; si no hay, déjala vacía). nota: qué se dice, en una \
-frase, sin interpretar ni valorar. Un cambio de estado sin una cita que lo diga no vale: si el vídeo no lo \
-dice, no lo deduzcas.
 - mismos: puntos de este vídeo ([N…]) que son el mismo asunto que un punto del estado ([T…], [D…], [P…]), \
 para no duplicarlo (por ejemplo, la misma tarea encargada otra vez). nuevo: el [N…]; existente: el del \
 estado. Los demás puntos de este vídeo se añaden al estado tal cual. Una decisión que cambia otra anterior \
-no es «la misma»: es nueva, y la anterior lleva el evento «cambiada».
+no es «la misma». Lista vacía si no hay ninguno.
 - resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
 ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior y \
-consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo.
+consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo. Usa lo que dicen las menciones \
+comprobadas sobre los asuntos anteriores; no des por hecho lo que no dicen.
 - aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
 
 
@@ -535,7 +528,7 @@ que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
 LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
-               "eventos": 30, "mismos": 30, "seguimiento": 20}
+               "mismos": 30, "menciones": 20}
 LIST_DEFAULT = 40
 
 
@@ -549,6 +542,6 @@ def _limit_lists(schema: Any) -> None:
     _limit_lists(schema.get("items"))
 
 
-for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, CHUNK_FOLLOW_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA,
+for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FOLLOW_CHECK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA,
                 FOLLOW_SCHEMA, SCREEN_SCHEMA):
     _limit_lists(_schema)

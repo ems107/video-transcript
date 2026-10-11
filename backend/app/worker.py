@@ -24,7 +24,6 @@ from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
 from .models import Job, Keyframe, Segment, Video
-from .prompts import FOLLOW_SCHEMA, FOLLOW_SYSTEM, follow_user
 from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision, voices
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
@@ -288,10 +287,11 @@ class Worker:
             analysis = ctx.load("analysis.json") if fresh else video.analysis
             utts = ctx.load("corrected.json") if fresh else None
 
-            def ask(state: str, desc: str, text: str) -> dict:
+            def ask(system: str, user: str, schema: dict, thinking: bool = False) -> dict:
                 ctx.check_cancel()
                 llm.start()
-                return llm.chat_json(FOLLOW_SYSTEM, follow_user(state, desc, text), FOLLOW_SCHEMA, max_tokens=6000)
+                # Con el modo razonamiento, lo que piensa también cuenta en max_tokens
+                return llm.chat_json(system, user, schema, max_tokens=16000 if thinking else 6000, thinking=thinking)
 
             try:
                 minutes = FS.update_for_video(s, video, analysis or {}, rebuild, ask, ctx.report,

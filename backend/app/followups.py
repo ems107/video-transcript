@@ -184,32 +184,24 @@ def quoted(cita: str, utts: list[dict[str, Any]], t: float) -> bool:
     return bool(near) and all(fuzz.partial_ratio(x, near) >= QUOTE_SIMILAR for x in pieces)
 
 
-def verify_signals(signals: list[dict[str, Any]], utts: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
-    """Señales del análisis («de este punto se habla aquí»): solo las que citan algo dicho en ese momento."""
+def check_signals(signals: list[dict[str, Any]], utts: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
+    """Menciones de la IA («de este punto se habla aquí»), con `verified` si la cita se dice de verdad en ese
+    momento. Se descartan los ids mal formados, los momentos fuera del vídeo, las repetidas y los avances sin
+    cita comprobada (no aportan nada); un cambio de estado sin cita comprobada queda como posible."""
     out, seen = [], set()
     for x in signals:
         pid = str(x.get("id", "")).strip().strip("[]").upper()
         t = _valid_t(x.get("t", ""), duration)
-        key = (pid, x.get("evento"), x.get("t"))
-        if not re.fullmatch(r"[TDP]\d+", pid) or t is None or key in seen or not quoted(x.get("cita", ""), utts, t):
+        evento = x.get("evento", "avanza")
+        if not re.fullmatch(r"[TDP]\d+", pid) or t is None or (pid, evento) in seen:
             continue
-        seen.add(key)
-        out.append({"id": pid, "evento": x.get("evento", "avanza"), "t": fmt_ts(t), "cita": x.get("cita", "").strip()})
+        cita = (x.get("cita") or "").strip().strip('"«»“”')
+        ok = quoted(cita, utts, t)
+        if evento == "avanza" and not ok:
+            continue
+        seen.add((pid, evento))
+        out.append({"id": pid, "evento": evento, "t": fmt_ts(t), "cita": cita, "verified": ok})
     return out
-
-
-_ID_RE = re.compile(r"\s*\[[TDP]\d+\]")
-
-
-def strip_ids(obj: Any) -> Any:
-    """Quita los identificadores de los puntos ([T3]…) que la IA deje escapar a los textos del análisis."""
-    if isinstance(obj, str):
-        return _ID_RE.sub("", obj)
-    if isinstance(obj, list):
-        return [strip_ids(x) for x in obj]
-    if isinstance(obj, dict):
-        return {k: strip_ids(v) for k, v in obj.items()}
-    return obj
 
 
 # --------------------------------------------------------------------------- puntos del vídeo
@@ -245,50 +237,46 @@ def analysis_points(a: dict[str, Any]) -> list[dict[str, Any]]:
 
 def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: int, video_date: datetime,
                  duration: float, at: datetime, points: list[dict[str, Any]],
-                 utts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Valida la respuesta de la IA para un vídeo y devuelve qué cambiar.
+                 signals: list[dict[str, Any]]) -> dict[str, Any]:
+    """Qué cambia en el estado con un vídeo.
 
     Devuelve `{"events": [(item_id, evento)], "new": [punto], "discarded": [motivo]}`.
-    - Eventos: se descartan las referencias a puntos que no existen, los momentos fuera del vídeo, los cambios
-      no válidos para el tipo de punto y, si hay transcripción (`utts`), los cambios de estado sin una cita
-      que se diga de verdad en ese momento.
+    - Hitos: salen de las menciones comprobadas (`check_signals`). Un cambio de estado con cita que se dice de
+      verdad se aplica; sin ella queda como avance con `posible` (lo confirma el usuario). Se descartan los
+      puntos que no existen, los cambios que no valen para el tipo de punto y los avances en el mismo vídeo en
+      que aparece el punto. A un punto manual solo se le anotan avances.
     - Puntos nuevos: todos los `points` del análisis del vídeo, salvo los que la IA relaciona con uno existente
-      («mismos») y los que repiten uno existente, también uno borrado por el usuario."""
+      («mismos» en `update`) y los que repiten uno existente, también uno borrado por el usuario."""
     by_id = {short_id(it): it for it in items}
     events, new, discarded = [], [], []
+    changes = {x["id"] for x in signals if x["evento"] != "avanza" and x["verified"]}
     seen: set[tuple[int, str, str]] = set()
-    for e in update.get("eventos") or []:
-        it = by_id.get(str(e.get("id", "")).strip().strip("[]").upper())
-        t = _valid_t(e.get("t", ""), duration)
-        evento = e.get("evento", "")
-        cita = (e.get("cita") or "").strip()
+    for x in signals:
+        it = by_id.get(x["id"])
+        evento, t = x["evento"], parse_ts(x["t"]) or 0.0
         if not it or it.get("hidden"):
-            discarded.append(f"{e.get('id')}: no existe")
-            continue
-        if t is None:
-            discarded.append(f"{e.get('id')}: momento fuera del vídeo ({e.get('t')})")
+            discarded.append(f"{x['id']}: no existe")
             continue
         if evento != "avanza" and evento not in EVENT_STATUS[it["kind"]]:
-            discarded.append(f"{e.get('id')}: «{evento}» no vale para una {it['kind']}")
+            discarded.append(f"{x['id']}: «{evento}» no vale para una {it['kind']}")
             continue
-        if evento == "avanza" and it["events"] and it["events"][0].get("video_id") == video_id:
-            discarded.append(f"{e.get('id')}: avance en el mismo vídeo en que aparece")
-            continue
-        nota = (e.get("nota") or "").strip()
-        possible = ""
-        if evento != "avanza" and utts is not None and not quoted(cita, utts, t):
+        if evento == "avanza" and (x["id"] in changes or (it["events"] and it["events"][0].get("video_id") == video_id)):
+            continue  # ya cambia de estado en este vídeo, o es el vídeo en que aparece
+        nota, possible = "", ""
+        if evento != "avanza" and not x["verified"]:
             # Sin una frase que lo demuestre, el cambio queda como posible: lo confirma el usuario
             possible, evento = evento, "avanza"
         elif it.get("manual") and evento != "avanza":
             # Lo decidió el usuario: el vídeo solo se anota como avance
-            nota, evento = f"(el vídeo dice: {evento}) {nota}".strip(), "avanza"
+            nota, evento = f"El vídeo dice: {EVENT_LABELS.get(evento, evento)}.", "avanza"
         if (it["id"], evento, possible) in seen:
             continue
         seen.add((it["id"], evento, possible))
         ev = {"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t), "evento": evento, "nota": nota,
-              "cita": cita if quoted(cita, utts or [], t) else "", "source": "ia", "at": at.isoformat()}
+              "cita": x["cita"] if x["verified"] else "", "source": "ia", "at": at.isoformat()}
         if possible:
             ev["posible"] = possible
+            ev["nota"] = f"Según la IA: «{x['cita']}»" if x["cita"] else ""
         events.append((it["id"], ev))
     same = {str(m.get("nuevo", "")).strip().strip("[]").upper() for m in update.get("mismos") or []
             if str(m.get("existente", "")).strip().strip("[]").upper() in by_id}
@@ -341,8 +329,9 @@ def analysis_text(a: dict[str, Any], points: list[dict[str, Any]], signals: list
                                  + (f" (plazo: {p['due']})" if p["due"] else "") + (f" [{p['t']}]" if p["t"] else "")
                                  for p in points))
     if signals:
-        parts.append("Señales detectadas al leer la transcripción (citas literales, verificadas):\n" + "\n".join(
-            f"- [{x['id']}] {x['evento']} en {x['t']}: «{x['cita']}»" for x in signals))
+        parts.append("Menciones de los asuntos anteriores en este vídeo:\n" + "\n".join(
+            f"- [{x['id']}] {x['evento']}{'' if x['verified'] else ' (sin comprobar)'} en {x['t']}: «{x['cita']}»"
+            for x in signals))
     if a.get("resumen_breve"):
         parts.append("Resumen breve del vídeo:\n" + a["resumen_breve"])
     if a.get("resumen_detallado"):

@@ -8,11 +8,10 @@ from typing import Any
 
 from rapidfuzz import fuzz
 
-from ..followups import pending_parts, strip_ids, verify_signals
+from ..followups import pending_parts
 from ..knowledge import effective_sections
 from ..llm import LLMServer
 from ..prompts import (
-    CHUNK_FOLLOW_SCHEMA,
     CHUNK_SCHEMA,
     CHUNK_SYSTEM,
     FINAL_SCHEMA,
@@ -188,11 +187,9 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
             ctx.report(0.05 + 0.75 * i / len(chunks), f"Resumiendo fragmento {i + 1}/{len(chunks)}")
             body = "\n".join(line for _, line in ch)
             end_t = ch[-1][0]
-            follow = bool(ctx.followups)
             r = llm.chat_json(
-                CHUNK_SYSTEM,
-                chunk_user(context, i + 1, len(chunks), fmt_ts(ch[0][0]), fmt_ts(end_t), body, who, follow=follow),
-                CHUNK_FOLLOW_SCHEMA if follow else CHUNK_SCHEMA, max_tokens=6000)
+                CHUNK_SYSTEM, chunk_user(context, i + 1, len(chunks), fmt_ts(ch[0][0]), fmt_ts(end_t), body, who),
+                CHUNK_SCHEMA, max_tokens=6000)
             r.update(inicio=fmt_ts(ch[0][0]), fin=fmt_ts(end_t))
             partial_state[key] = r
             ctx.save("analysis.partial.json", partial_state)
@@ -221,12 +218,7 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
         FINAL_SCHEMA,
         max_tokens=10000,
     )
-    final = strip_ids(final)  # los [T3]… del contexto del seguimiento no deben llegar a los textos
     final["titulo"] = final["titulo"].strip().strip('"«»').rstrip(".")
-    if ctx.followups:
-        # Qué puntos del seguimiento se tratan, según quien leyó la transcripción; solo lo que se cita de verdad
-        final["seguimiento"] = verify_signals([x for p in partials for x in p.get("seguimiento") or []], utts,
-                                              duration)
     final["fragmentos"] = partials
     final["correcciones_aplicadas"] = [{"id": c["id"], "updated_at": c["updated_at"]} for c in ctx.corrections]
     final["hablantes_aplicados"] = sorted(o["id"] for o in ctx.overrides)

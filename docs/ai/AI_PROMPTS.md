@@ -255,24 +255,26 @@ en `t` el texto de la tarea o una fecha copiada del contexto. Los pendientes son
 los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «tal
 como se dice»: el modelo convertía «el lunes» en una fecha.
 
-**Seguimientos** (`prompts.followup_block`, `CHUNK_FOLLOW_*`, `FOLLOW_*`, `followups.py`). Dos pasos:
-1. **Al resumir**, cada fragmento recibe el estado de cada seguimiento del vídeo según los vídeos
-   **anteriores** a su fecha (`followups.context_block` con ids `[T3]`, `[D2]`, `[P1]`) y usa
-   `CHUNK_FOLLOW_SCHEMA`, que añade `seguimiento`: qué puntos se tratan, con evento, `t` y la **cita literal**.
-   `followups.verify_signals` solo conserva las citas que se dicen de verdad cerca de su momento (`quoted`:
-   `partial_ratio` ≥ `QUOTE_SIMILAR` en ±`QUOTE_WINDOW` s; mínimo `QUOTE_MIN_CHARS`) y quedan en
-   `analysis["seguimiento"]`. `followups.strip_ids` quita los ids que se escapen a los textos. Es la parte que
-   lee la transcripción: la fase del seguimiento solo ve el resumen, y ahí se perdían cierres dichos de pasada.
-2. **Fase `follow`** (una llamada por seguimiento): recibe el estado con ids, los **puntos del vídeo**
-   (`followups.analysis_points`: tareas, decisiones y pendientes del análisis, con clave `[N…]`), las señales
-   verificadas y el resumen. Devuelve `eventos` (con `cita`), `mismos` (qué `[N…]` es un punto existente),
-   `resumen` y `aporte`. Los puntos nuevos son los del análisis menos los «mismos» y los parecidos a uno
-   existente o borrado (`DUPLICATE`): no los inventa la IA, que variaba en cada ejecución.
-   `followups.apply_update` exige que un cambio de estado traiga una cita que se diga en ese momento (con la
-   transcripción del vídeo; `quoted` acepta citas troceadas con «…» si cada trozo se dice ahí). Sin ella, el
-   evento queda como «avanza» con `posible: <evento>`: la web lo muestra como «¿hecha?» con un botón
-   Confirmar (un cambio manual). Además exige ids que existan, `t` dentro del vídeo, evento
-   válido para el tipo y nada que cambie un punto manual.
+**Seguimientos** (`prompts.followup_block`, `FOLLOW_CHECK_*`, `FOLLOW_*`, `followups.py`).
+- **Al resumir**, cada fragmento recibe el estado de cada seguimiento del vídeo según los vídeos
+  **anteriores** a su fecha (`followups.context_block`, sin ids), solo para entender referencias.
+- **Fase `follow`**, por seguimiento y vídeo (`followups_store.apply_video`):
+  1. `mentions`: por cada bloque de la transcripción, `FOLLOW_CHECK_*` **con modo razonamiento** pregunta de
+     qué puntos del estado (con ids `[T3]`, `[D2]`, `[P1]`) se habla, con evento, `t` y la cita literal.
+     `followups.check_signals` comprueba cada cita (`quoted`: `partial_ratio` ≥ `QUOTE_SIMILAR` en
+     ±`QUOTE_WINDOW` s; troceada con «…», cada trozo; mínimo `QUOTE_MIN_CHARS`) y marca `verified`.
+     Medido con dos vídeos reales: dentro del resumen o sin razonar, el modelo no encontraba los cierres
+     dichos de pasada («lo que ayer fallaba ya ha funcionado») e inventaba momentos («00:57:33» en un vídeo
+     de 25 min) y citas; con razonamiento, todas las citas existían y encontró el cierre (unos 2 min por
+     bloque de 25 min).
+  2. `FOLLOW_*` sin razonamiento: con el estado, los **puntos del vídeo** (`followups.analysis_points`:
+     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones y el resumen, devuelve
+     `mismos` (qué `[N…]` es un punto existente), `resumen` y `aporte`.
+  3. `followups.apply_update`: los hitos salen de las menciones (un cambio de estado con cita comprobada se
+     aplica; sin ella queda como «avanza» con `posible: <evento>`, que la web muestra como «¿hecha?» con un
+     botón Confirmar); a un punto manual solo se le anotan avances. Los puntos nuevos son los del análisis
+     menos los «mismos» y los parecidos a uno existente o borrado (`DUPLICATE`): no los inventa la IA, que
+     variaba en cada ejecución.
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 

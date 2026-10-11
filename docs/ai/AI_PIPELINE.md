@@ -22,7 +22,7 @@ worker crea `<fase>.done`.
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
 | `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `names.json`, `probe.json` | `analysis.json` (`analysis.partial.json`), `context_identities.json` y propuestas «contexto» en `Speaker` | llama-server |
-| `follow` | `worker._follow` → `followups_store.update_for_video` | `analysis.json` (o `Video.analysis` si ya está publicado) | filas `FollowupItem`/`FollowupVideo`/`FollowupVersion` y `Seguimiento - Nombre/seguimiento.md` | llama-server (solo si el vídeo está en algún seguimiento) |
+| `follow` | `worker._follow` → `followups_store.update_for_video` | `analysis.json` y `corrected.json` (o `Video.analysis` y `Segment` si ya está publicado) | filas `FollowupItem`/`FollowupVideo`/`FollowupVersion` y `Seguimiento - Nombre/seguimiento.md` | llama-server (solo si el vídeo está en algún seguimiento) |
 | `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla), `screen_judgment.json` (valoración de los términos vistos solo en pantalla; `screen_judgment.raw.json` para reanudar) y filas `KnowledgeItem` | llama-server |
 | `publish` | `worker._publish` | todo lo anterior | carpeta final (con `datos/`), `Segment`, `Keyframe`, FTS | — |
 

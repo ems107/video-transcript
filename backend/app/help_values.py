@@ -55,8 +55,7 @@ def values() -> dict[str, Any]:
         "seguimiento_contexto": followups.FOLLOW_CONTEXT_CHARS,
         "seguimiento_recientes": followups.RECENT_VIDEOS,
         "seguimiento_parecido": followups.DUPLICATE,
-        "seguimiento_max_eventos": LIST_LIMITS["eventos"],
-        "seguimiento_max_senales": LIST_LIMITS["seguimiento"],
+        "seguimiento_max_menciones": LIST_LIMITS["menciones"],
         "seguimiento_cita_parecido": followups.QUOTE_SIMILAR,
         "seguimiento_cita_ventana": round(followups.QUOTE_WINDOW),
         # Estimaciones de tiempo (segundos por minuto de audio, o por fotograma en «vision»)

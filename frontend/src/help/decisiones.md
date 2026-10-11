@@ -99,7 +99,9 @@ Antes se usaba temperatura 0,2 sin penalización. Con el mismo vídeo de 37 minu
 31 datos repetidos por bucle a ninguno en dos ejecuciones, sin respuestas cortadas ni mezcla de idiomas (la
 ficha del modelo avisa de que una penalización alta puede provocarla). Ajustes completos: temperatura
 {{v:llm_temperature}}, top_p {{v:llm_top_p}}, top_k {{v:llm_top_k}}, min_p {{v:llm_min_p}} y
-presence_penalty {{v:llm_presence_penalty}}, sin «modo razonamiento». Además, todas las listas que devuelve
+presence_penalty {{v:llm_presence_penalty}}, sin «modo razonamiento» salvo en un caso medido: buscar qué
+dice un vídeo de los puntos de un [seguimiento](ayuda:seguimientos), donde sin razonar el modelo no
+encontraba los cierres dichos de pasada e inventaba momentos. Además, todas las listas que devuelve
 la IA tienen un máximo de elementos, y si una respuesta llega cortada o no es válida se guarda en
 `data/llm_failures/` para poder diagnosticarla.
 :::

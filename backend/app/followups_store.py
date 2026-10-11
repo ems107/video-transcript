@@ -22,11 +22,19 @@ from .config import load_settings
 from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Segment, Video, now
 from .pipeline.export import safe_name, unique_dir
 from .pipeline.transcript import fmt_ts
+from .prompts import (
+    FOLLOW_CHECK_SCHEMA,
+    FOLLOW_CHECK_SYSTEM,
+    FOLLOW_SCHEMA,
+    FOLLOW_SYSTEM,
+    follow_check_user,
+    follow_user,
+)
 
 log = logging.getLogger(__name__)
 
-# (estado anterior con ids, descripción del vídeo, análisis del vídeo) -> respuesta de la IA
-Ask = Callable[[str, str, str], dict[str, Any]]
+# (sistema, usuario, esquema, modo razonamiento) -> respuesta de la IA (`llm.chat_json`)
+Ask = Callable[[str, str, dict[str, Any], bool], dict[str, Any]]
 
 
 def date_of(v: Video) -> datetime:
@@ -76,7 +84,7 @@ def context_for_video(session: Session, video_id: int) -> list[str]:
     for f in for_video(session, video_id):
         dates = [date_of(x) for _, x in links(session, f.id) if x.id != video_id]
         block = F.context_block(f.name, f.description, summary_before(session, f, date_of(v)), items(session, f.id),
-                                dates, date_of(v), with_ids=True)
+                                dates, date_of(v))
         if block:
             out.append(block)
     return out
@@ -169,11 +177,37 @@ def video_utts(session: Session, video_id: int) -> list[dict[str, Any]]:
     return [{"start": s.start, "end": s.end, "speaker": s.speaker, "text": s.text} for s in rows]
 
 
+def _points_block(items_: list[dict[str, Any]]) -> str:
+    labels = {"tarea": "tarea", "decision": "decisión", "duda": "duda"}
+    return "\n".join(f"- [{F.short_id(it)}] {labels[it['kind']]} ({it['status']}): {it['text']}"
+                     + (f" — {it['owner']}" if it.get("owner") else "") for it in items_)
+
+
+def mentions(session: Session, video: Video, state_items: list[dict[str, Any]], utts: list[dict[str, Any]],
+             ask: Ask, when: datetime) -> list[dict[str, Any]]:
+    """Qué dice el vídeo de cada punto del estado, leyendo su transcripción por bloques (con el modo
+    razonamiento), y con la cita comprobada (`followups.check_signals`)."""
+    from . import services  # services importa este módulo
+    from .pipeline.analyze import chunk_lines, timeline
+
+    if not state_items or not utts:
+        return []
+    points = _points_block(state_items)
+    chunks = chunk_lines(timeline(utts, [], services.speaker_names(session, video.id)), load_settings().chunk_minutes)
+    raw = []
+    for i, ch in enumerate(chunks):
+        body = "\n".join(line for _, line in ch)
+        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", i + 1, len(chunks), body),
+                FOLLOW_CHECK_SCHEMA, True)
+        raw += r.get("menciones") or []
+    return F.check_signals(raw, utts, video.duration)
+
+
 def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str, Any], ask: Ask,
                 utts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Actualiza el estado con un vídeo. Los vídeos posteriores ya deben estar deshechos.
 
-    `utts`: la transcripción, para comprobar las citas (si no se da, la publicada en la base de datos)."""
+    `utts`: la transcripción (si no se da, la publicada en la base de datos)."""
     when = date_of(video)
     utts = utts if utts is not None else video_utts(session, video.id)
     all_items = items(session, f.id)
@@ -182,12 +216,12 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
                             with_ids=True)
     # Antes de publicar, el título del vídeo aún es el nombre del fichero
     desc = f"{when:%Y-%m-%d} «{analysis.get('titulo') or video.title}» (duración {fmt_ts(video.duration)})"
-    visible = F.state_at(all_items, when) + [it for it in all_items if it.get("hidden")]
-    ids = {F.short_id(it) for it in visible}
-    signals = [x for x in analysis.get("seguimiento") or [] if x.get("id") in ids]
+    visible = F.state_at(all_items, when)
+    signals = mentions(session, video, visible, utts, ask, when)
     points = F.analysis_points(analysis)
-    r = ask(state, desc, F.analysis_text(analysis, points, signals))
-    plan = F.apply_update(visible, r, video.id, when, video.duration, now(), points, utts)
+    r = ask(FOLLOW_SYSTEM, follow_user(state, desc, F.analysis_text(analysis, points, signals)), FOLLOW_SCHEMA, False)
+    plan = F.apply_update(visible + [it for it in all_items if it.get("hidden")], r, video.id, when, video.duration,
+                          now(), points, signals)
     for iid, ev in plan["events"]:
         it = session.get(FollowupItem, iid)
         it.events = F.sort_events([*(it.events or []), ev])
@@ -204,11 +238,8 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     else:
         f.summary = summary
     touch(session, f)
-    if plan["discarded"]:
-        log.info("Seguimiento %s, vídeo %s: descartado %s", f.id, video.id, plan["discarded"])
-    possible = [(iid, ev["posible"]) for iid, ev in plan["events"] if ev.get("posible")]
-    if possible:
-        log.info("Seguimiento %s, vídeo %s: posibles sin cita %s", f.id, video.id, possible)
+    log.info("Seguimiento %s, vídeo %s: menciones %s; descartado %s", f.id, video.id,
+             [(x["id"], x["evento"], x["t"], x["verified"]) for x in signals], plan["discarded"])
     return {"eventos": len(plan["events"]), "nuevos": len(plan["new"]), "descartados": plan["discarded"]}
 
 

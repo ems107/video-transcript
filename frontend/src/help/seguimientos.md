@@ -100,33 +100,31 @@ del seguimiento (se grabó antes pero se analiza después): para incluirlo en su
   muestra en el Explorador.
 
 :::tecnico Cómo se actualiza el estado
-El trabajo se reparte en dos pasos, para que cada uno haga lo que mejor sabe hacer:
+La fase «Actualizando seguimientos» hace, por cada seguimiento del vídeo, dos consultas a la IA:
 
-1. **Al resumir el vídeo**, la IA lee la transcripción con el estado anterior del tema, donde cada punto
-   tiene un identificador ([T3] para una tarea, [D2] para una decisión, [P1] para una duda). Además del
-   resumen, señala de qué puntos se habla y qué pasa con ellos, **copiando la frase que lo dice**. La app
-   comprueba que esa frase se dice de verdad (parecido de {{v:seguimiento_cita_parecido}} sobre 100 con lo
-   dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento) y descarta las demás.
-2. **La fase «Actualizando seguimientos»** (unos {{v:ritmo_follow}} s por minuto de vídeo) recibe esas
-   señales, los puntos del vídeo y su resumen, y decide los hitos y el resumen de la evolución. Un cambio
-   de estado (hecha, resuelta, cambiada…) solo se aplica si trae una cita que se dice en ese momento (una
-   cita troceada con «…» vale si cada trozo se dice ahí); sin ella, queda como **posible** y lo confirmas
-   tú.
+1. **Qué dice el vídeo de cada punto del estado.** La IA lee la transcripción (por bloques de
+   {{v:chunk_minutes}} minutos) con la lista de puntos y sus identificadores ([T3] para una tarea, [D2]
+   para una decisión, [P1] para una duda), y devuelve de cuáles se habla, qué pasa con ellos y **la frase
+   que lo dice**. Esta consulta usa el **modo razonamiento** del modelo, que piensa antes de responder: sin
+   él, no encontraba los cierres dichos de pasada («lo que ayer fallaba ya ha funcionado») e inventaba
+   momentos y frases. La app comprueba cada frase (parecido de {{v:seguimiento_cita_parecido}} sobre 100 con
+   lo dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento; una frase troceada con «…» vale
+   si cada trozo se dice ahí). Un cambio de estado con la frase comprobada se aplica; sin ella queda como
+   **posible**, para que lo confirmes tú.
+2. **Qué puntos del vídeo son el mismo asunto que uno anterior y el resumen de la evolución.** Sin modo
+   razonamiento.
 
 Los **puntos nuevos** son las tareas, decisiones y pendientes del análisis del vídeo, los mismos que ves en
-su pestaña «Tareas». La IA solo indica cuáles son el mismo asunto que uno anterior, para no duplicarlo.
-Así el estado no cambia de una ejecución a otra, y corregir el análisis de un vídeo también corrige lo que
-aporta al seguimiento.
+su pestaña «Tareas»: no los inventa la IA. Así el estado no cambia de una ejecución a otra, y corregir el
+análisis de un vídeo también corrige lo que aporta al seguimiento.
 
-Además, la app:
-- descarta las referencias a puntos que no existen y los momentos que no están en el vídeo;
-- descarta los cambios que no valen para el tipo de punto (resolver una tarea, por ejemplo);
-- no vuelve a crear un punto que repite uno existente o uno que borraste (parecido de
-  {{v:seguimiento_parecido}} sobre 100 o más);
-- acepta como mucho {{v:seguimiento_max_senales}} señales por fragmento y {{v:seguimiento_max_eventos}}
-  hitos por vídeo.
+Además, la app descarta las menciones de puntos que no existen, los momentos que no están en el vídeo y los
+cambios que no valen para el tipo de punto; no vuelve a crear un punto que repite uno existente o uno que
+borraste (parecido de {{v:seguimiento_parecido}} sobre 100 o más); y acepta como mucho
+{{v:seguimiento_max_menciones}} menciones por bloque.
 
-El estado de un punto sale siempre de su último hito. Para el contexto se envía el resumen, lo abierto y lo
-cerrado en los últimos {{v:seguimiento_recientes}} vídeos, hasta {{v:seguimiento_contexto}} caracteres; si
-no cabe, se recorta primero lo cerrado.
+Tarda unos {{v:ritmo_follow}} s por minuto de vídeo, sobre todo por el modo razonamiento. El estado de un
+punto sale siempre de su último hito. Para el contexto se envía el resumen, lo abierto y lo cerrado en los
+últimos {{v:seguimiento_recientes}} vídeos, hasta {{v:seguimiento_contexto}} caracteres; si no cabe, se
+recorta primero lo cerrado.
 :::
