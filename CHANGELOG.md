@@ -27,6 +27,7 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
 
 ### Corregido
 
+- Cuando un hablante recibe un nombre por el contexto, el resumen ya no lo sigue llamando «Hablante N».
 - La IA podía entrar en un bucle repitiendo un elemento (por ejemplo, el mismo apodo decenas de veces)
   hasta cortarse la respuesta, y el resumen o el aprendizaje fallaban. Ahora todas sus listas tienen un
   máximo de elementos.

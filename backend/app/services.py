@@ -177,6 +177,15 @@ def persist_speakers(session: Session, video_id: int, identities: dict[str, dict
     session.commit()
 
 
+def rename_speakers(analysis: Any, before: dict[str, str], after: dict[str, str]) -> Any:
+    """Sustituye en el análisis los «Hablante N» que ahora tienen nombre (solo esos: ver replace_speaker_name)."""
+    for label, old in before.items():
+        new = after.get(label, old)
+        if new != old:
+            analysis = replace_speaker_name(analysis, old, new)
+    return analysis
+
+
 def replace_speaker_name(analysis: Any, old: str, new: str) -> Any:
     """Sustituye «Hablante N» por el nombre real en los textos del análisis."""
     if not re.fullmatch(r"Hablante \d+", old):

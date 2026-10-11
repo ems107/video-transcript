@@ -248,9 +248,13 @@ class Worker:
             correct.run(ctx, llm)
         elif key == "analyze":
             analyze.run(ctx, llm)
+            before = dict(ctx.speaker_names)
             with Session(engine) as s:
                 services.apply_context_identities(s, ctx.video_id, ctx.load("context_identities.json", {}), ctx.people)
             self._load_names(ctx)
+            # El resumen se escribió antes de saber quién era cada «Hablante N»: se usa el nombre propuesto,
+            # igual que en la transcripción (al confirmar o cambiar el hablante se vuelve a sustituir)
+            ctx.save("analysis.json", services.rename_speakers(ctx.load("analysis.json"), before, ctx.speaker_names))
         elif key == "learn":
             self._learn(ctx, llm)
         elif key == "publish":

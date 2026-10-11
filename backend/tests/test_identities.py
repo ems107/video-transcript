@@ -121,3 +121,13 @@ def test_regenerating_keeps_context_identities(session):
     services.apply_context_identities(session, v.id, {"identidades": {}, "evaluados": ["S0"]}, [])
     session.refresh(sp)
     assert (sp.suggested_name, sp.source) == ("", "") and "_motivo" not in sp.visual_hints
+
+
+def test_summary_uses_names_found_by_context():
+    analysis = {"resumen_breve": "Hablante 3 prepara el informe; Hablante 1 lo revisa.",
+                "tareas": [{"responsable": "Hablante 3", "tarea": "Informe"}]}
+    before = {"S0": "Hablante 3", "S1": "Hablante 1", "S2": "Iosu"}
+    after = {"S0": "Juan Pérez", "S1": "Hablante 1", "S2": "Iosu"}
+    out = services.rename_speakers(analysis, before, after)
+    assert out["resumen_breve"] == "Juan Pérez prepara el informe; Hablante 1 lo revisa."
+    assert out["tareas"][0]["responsable"] == "Juan Pérez"
