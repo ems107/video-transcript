@@ -13,7 +13,7 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `VoiceEmbedding` | huella confirmada (una por hablante confirmado y vídeo) | `vector` en JSON |
 | `Video` | un vídeo | `status`: pending, processing, done o error. `analysis` guarda el JSON completo; `folder` y `video_path` se rellenan al publicar |
 | `Job` | un trabajo de la cola | `status`: queued, running, done, error o cancelled. `options` (ver abajo). `error` incluye el traceback |
-| `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz o pantalla |
+| `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz, pantalla o contexto. En `visual_hints`, las claves con «_» son internas (`_motivo`, `_apodos`) |
 | `Segment` | intervención de la transcripción | `speaker` es la etiqueta, no el nombre. `original_text` y `corrections` vienen del glosario |
 | `Keyframe` | fotograma analizado | la ruta apunta a `<carpeta>/fotogramas/` |
 | `KnowledgeItem` | conocimiento aprendido o propuesto | ver «Conocimiento aprendido» |
@@ -83,7 +83,7 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 |---|---|
 | Sistema | `GET status` (versión, comprobación de componentes y `pending_proposals`), `GET/PUT settings`, `GET probe?path=` |
 | Trabajos | `POST jobs {path, profile_id, options}`, `GET jobs`, `POST jobs/{id}/cancel`, `POST jobs/{id}/retry`, `GET events` (SSE, evento `jobs` cada segundo si hay cambios) |
-| Vídeos | `GET videos?profile_id&person_id`, `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `POST videos/{id}/regenerate`, `POST videos/{id}/confirm-speakers` |
+| Vídeos | `GET videos?profile_id&person_id`, `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `POST videos/{id}/regenerate`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
 | Hablantes | `PUT speakers/{id} {person_id \| new_person_name, confirm}` |
 | Perfiles | CRUD de `profiles` (`person_ids[]` en el cuerpo; la respuesta incluye `learned_count` y `pending_count`), `GET profiles/{id}/knowledge`, `GET profiles/{id}/versions`, `POST profiles/{id}/versions/{vid}/restore`, `POST profiles/from-video {video_id, name}`, `POST profiles/{id}/learn-all` |
 | Personas | CRUD de `people` (`GET people/{id}` devuelve la ficha completa), `DELETE people/{id}/voices`, `GET people/{id}/knowledge`, `GET/POST people/{id}/versions[/{vid}/restore]`, `GET people/duplicates`, `POST people/duplicates/dismiss {a, b}`, `POST people/{id}/merge {into_id}` |
@@ -97,9 +97,11 @@ Las demás rutas sirven el SPA desde `frontend/dist`. Los errores se devuelven c
 ausente para mezclar todas), `owner_track`, `min_speakers`, `max_speakers`, `num_speakers` y `redo[]`
 (uso interno).
 
-`DELETE videos/{id}` solo quita el vídeo de la BD y **no borra archivos**. Ninguna operación de la app
-borra vídeos ni carpetas publicadas. Mantenlo así, salvo que el usuario pida otra cosa de forma
-explícita.
+Quitar un vídeo (`removal.py`, ver `AI_PIPELINE.md`): `POST videos/{id}/remove` lo saca de la BD,
+borra sus propuestas pendientes y, solo con las opciones que marque el usuario, borra ficheros. Sin
+opciones (y en `DELETE videos/{id}`) no se borra nada y se reescribe `datos/` para poder recuperarlo.
+Ninguna otra operación borra vídeos ni carpetas publicadas: mantenlo así. Lo que se borra lo decide
+siempre `removal.plan` (tests en `test_removal.py`).
 
 `/api/people/duplicates` va declarada antes que `/api/people/{person_id}` en `main.py`. Si no, FastAPI
 intenta convertir «duplicates» en un entero.
