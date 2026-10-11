@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.4.0] - 2026-10-11
+
 La app explica cómo se usa y cómo funciona por dentro.
 
 ### Añadido
@@ -248,7 +250,8 @@ Primera versión completa: transcripción, hablantes, visión, análisis y bibli
 - `run.ps1` arranca la app con un solo comando.
 - La versión de la app se muestra en la web y en `/api/status`.
 
-[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.3.0...HEAD
+[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/ems107/video-transcript/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/ems107/video-transcript/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ems107/video-transcript/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ems107/video-transcript/compare/v1.0.0...v1.1.0
