@@ -58,18 +58,21 @@ de ese perfil.
 
 ## Qué propone la IA para un perfil
 
-- **Términos** que se oyen en la conversación o forman parte del contenido de la pantalla. Las distintas
-  formas de un mismo nombre («Bárymont», «Gestibarymont», «Grupo Bárymont») se proponen juntas.
+- **Términos** que se oyen en la conversación o se ven en pantalla. De los que solo se ven en pantalla, la
+  IA razona si tienen relación con el vídeo; si no está claro, los propone como **dudosos** (ver
+  [Decisiones](ayuda:decisiones#terminos-que-se-proponen-para-un-perfil)). Las distintas formas de un mismo
+  nombre («Bárymont», «Gestibarymont», «Grupo Bárymont») se proponen juntas.
 - **Contexto duradero**: proyectos, clientes, sistemas, procesos y siglas. No lo puntual de esa reunión.
 - **Secciones del resumen**, solo si el perfil aún no tiene: títulos que sirvan para cualquier vídeo de
   ese tipo.
 
 :::tecnico Filtros de los términos
-Un término debe aparecer literalmente en la transcripción o en la pantalla, parecer un término (con
-mayúsculas, cifras o visto escrito) y ser relevante: oírse, o estar en el contenido principal de la
-pantalla en al menos {{v:termino_fotogramas}} fotogramas. La lectura de la pantalla devuelve también todo
-lo legible (barra de tareas, pestañas); en una grabación real, la mitad de los términos propuestos eran
-programas del escritorio que nadie mencionaba. Las otras formas de un nombre no son «variantes» del
+Un término debe aparecer literalmente en la transcripción o en la pantalla y parecer un término (con
+mayúsculas, cifras o visto escrito). Si no se oye, la IA recibe, para cada uno, en cuántos fotogramas
+aparece, entre qué momentos, en qué escenas, si está en el contenido principal o solo en lo demás legible
+(barra de tareas, pestañas) y la descripción de algunos de esos fotogramas, junto con el título, el
+resumen y los temas del vídeo. Con eso responde relacionado, dudoso o sin relación, con un motivo. Lo que
+no valora se trata como dudoso. Las otras formas de un nombre no son «variantes» del
 glosario (esas se sustituyen en el texto): se guardan aparte, se muestran en la propuesta y orientan a
 Whisper.
 :::

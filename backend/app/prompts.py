@@ -486,6 +486,48 @@ consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo.
 - aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
 
 
+# --------------------------------------------------------------------------- términos vistos solo en pantalla
+
+SCREEN_SYSTEM = """Valoras si los términos que solo se han visto en pantalla durante una grabación (reunión o \
+sesión de trabajo) tienen relación con lo que se trata en ella. La pantalla puede mostrar contenido de la \
+reunión, pero también el escritorio, pestañas, notificaciones o programas ajenos a ella: depende del vídeo. \
+Razona con lo que se sabe del vídeo y de dónde aparece cada término; no lo decidas por el tipo de programa \
+ni por lo conocido que sea."""
+
+SCREEN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "terminos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "termino": {"type": "string"},
+                    "relacion": {"type": "string", "enum": ["relacionado", "dudoso", "sin_relacion"]},
+                    "motivo": {"type": "string"},
+                },
+                "required": ["termino", "relacion", "motivo"],
+            },
+        },
+    },
+    "required": ["terminos"],
+}
+
+
+def screen_user(about: str, terms: str) -> str:
+    return f"""De qué trata la grabación:
+{about}
+
+Términos que no se mencionan en la conversación y solo se ven en pantalla, con dónde aparecen:
+{terms}
+
+Para cada término, devuelve:
+- relacion: «relacionado» si forma parte de lo que se trabaja, se muestra o se consulta en la reunión; \
+«sin_relacion» si es algo de la pantalla ajeno a la reunión (por ejemplo, otras pestañas o programas abiertos \
+que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y «sin_relacion», responde «dudoso»: lo decidirá el usuario.
+- motivo: por qué, en una frase, citando lo que lo indica (cuándo y dónde aparece, qué se ve)."""
+
+
 # --------------------------------------------------------------------------- límites de las listas
 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
@@ -506,5 +548,5 @@ def _limit_lists(schema: Any) -> None:
 
 
 for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, CHUNK_FOLLOW_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA,
-                FOLLOW_SCHEMA):
+                FOLLOW_SCHEMA, SCREEN_SCHEMA):
     _limit_lists(_schema)

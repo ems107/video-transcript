@@ -163,6 +163,7 @@ export type Knowledge = {
     term?: string
     definition?: string
     forms?: string[] // otras formas del mismo nombre (términos)
+    pantalla?: { relacion: 'relacionado' | 'dudoso'; motivo: string } // término visto solo en pantalla
     title?: string
     name?: string
     datos?: { category: string; text: string; t: number | null }[]

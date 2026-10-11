@@ -118,12 +118,20 @@ solo por llegar tarde en la lista.
 
 ## Términos que se proponen para un perfil
 
-**Qué:** un término solo se propone si se oye en la conversación o forma parte del contenido de la pantalla
-en al menos {{v:termino_fotogramas}} fotogramas.
+**Qué:** un término que se oye en la conversación se propone como siempre. Uno que **solo se ve en
+pantalla** también se analiza, pero la IA razona si tiene relación con el vídeo: con lo que trata la
+grabación y con dónde, cuándo y cuánto aparece. Según su respuesta:
+- **relacionado**: se propone, con el motivo;
+- **dudoso**: se propone marcado como **dudoso**, con el motivo, para que decidas tú;
+- **sin relación**: no se propone (queda anotado en los datos del vídeo).
 
-**Por qué:** la lectura de la pantalla anota todo lo legible, incluidas la barra de tareas y las pestañas del
-navegador. En una grabación real, la mitad de los términos propuestos eran programas del escritorio que
-nadie mencionaba (Trello, Jira…).
+**Por qué:** la pantalla puede mostrar contenido de la reunión, pero también el escritorio, pestañas o
+programas ajenos a ella, y lo que es ruido en un vídeo es lo importante en otro: la pestaña de un gestor de
+tareas no pinta nada en una llamada de soporte, pero es el centro de una reunión de planificación. Una regla
+fija (un mínimo de fotogramas, aparecer en varios momentos) no lo distingue: medido con vídeos reales,
+dejaba pasar pestañas del navegador y, a la vez, quitaba términos reales del contenido.
+
+**Consecuencia:** a veces verás propuestas **dudosas**. «Aceptar todas» no las incluye.
 
 ## Identidades y apodos deducidos por el contexto
 

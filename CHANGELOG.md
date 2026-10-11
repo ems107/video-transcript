@@ -25,6 +25,19 @@ La app sigue un tema a lo largo de varios vídeos.
   como desactualizado, con un botón para rehacerlo.
 - Los seguimientos se pueden archivar y se publican en su propia carpeta `Seguimiento - Nombre/`.
 - Nueva página de ayuda «Seguimientos».
+- Los términos que solo se ven en pantalla ya no se filtran por una regla fija: la IA razona si tienen que
+  ver con el vídeo (con lo que trata y con dónde, cuándo y cuánto aparecen). Si no está claro, se proponen
+  marcados como **dudosos**, con el motivo, y «Aceptar todas» no los incluye.
+- Los pendientes del resumen llevan su momento del vídeo, con enlace.
+
+### Corregido
+
+- El momento de las tareas y decisiones a veces salía con el texto de la tarea o con una fecha: ahora
+  siempre es una marca de tiempo.
+- El plazo de una tarea se escribe tal como se dice («el lunes»), sin convertirlo en una fecha.
+- La corrección de términos cambiaba palabras que ya contenían el término bien escrito (por ejemplo,
+  «onmicrosoft.com» por «onMicrosoft»).
+- Los nombres de los participantes leídos en pantalla ya no se proponen como términos del perfil.
 
 ## [1.4.0] - 2026-10-11
 

@@ -53,7 +53,7 @@ GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices"}
 PARTIALS = {
     "vision": ("vision.partial.json",),
     "analyze": ("analysis.partial.json",),
-    "learn": ("learn.partial.json", "learn_error.json"),
+    "learn": ("learn.partial.json", "learn_error.json", "screen_judgment.raw.json"),
 }
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 

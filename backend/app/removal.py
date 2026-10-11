@@ -28,7 +28,8 @@ DATA_DIR = "datos"
 # Ficheros de trabajo que bastan para reconstruir el análisis sin repetir las fases con GPU
 WORK_FILES = ("probe.json", "frames.json", "vision.raw.json", "vision.json", "names.json", "screen_terms.json",
               "whisper_prompt.json", "asr.json", "aligned.json", "utterances.json", "diarization.json",
-              "identities.json", "corrected.json", "context_identities.json", "analysis.json", "proposals.json")
+              "identities.json", "corrected.json", "context_identities.json", "analysis.json", "proposals.json",
+              "screen_judgment.json")
 
 
 def work_dirs(session: Session, video_id: int) -> list[Path]:

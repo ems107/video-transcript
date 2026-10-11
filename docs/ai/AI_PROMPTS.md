@@ -58,11 +58,15 @@ las fases.
   - Un término debe aparecer literalmente (`term_occurrences`). Además debe parecer un término
     (`looks_like_term`: con mayúsculas o cifras, o visto en pantalla). No puede ser ya conocido ni el
     nombre de una persona.
-  - Y debe ser relevante (`term_relevant`): oírse en la conversación o estar en el `texto_relevante`
-    de al menos 3 fotogramas. La lista `terminos` del análisis de imagen recoge todo lo legible, incluida
-    la barra de tareas y las pestañas. Con una grabación real, la mitad de los términos propuestos eran
-    programas del escritorio (Trello, Jira…), que salían en esa lista en casi todos los fotogramas pero en
-    el texto relevante en 0–2. El contenido de la reunión salía en 5–15.
+  - Si no se oye (`K.heard`), es un término **solo de pantalla** y la IA razona si tiene relación con el
+    vídeo (`learn.judge_screen_terms`, `SCREEN_*`): recibe título, resumen y temas, y por cada término
+    `K.screen_summary` (fotogramas, momentos, escenas, si está en el contenido principal o solo en lo
+    demás legible, y descripciones). `apply_judgment`: «sin_relacion» no se propone (queda en
+    `screen_judgment.json`); «dudoso» se propone con `data.pantalla = {relacion, motivo}`, y la web lo marca y
+    lo deja fuera de «Aceptar todas»; lo no valorado cuenta como dudoso. Antes había una regla fija (estar en
+    el `texto_relevante` de 3 fotogramas): dejaba pasar pestañas del navegador (Trello, Jira y Firefox
+    aparecían en el texto relevante de 4–5 fotogramas seguidos antes de una llamada) y una regla más dura
+    quitaba términos reales del contenido. Lo que es ruido depende del vídeo: hay que razonarlo.
   - Las formas de un mismo nombre se juntan en una propuesta (`group_forms`: una contiene a la otra sin
     espacios ni signos, mínimo 6 letras). La más vista es el término y las demás van en `data.forms`, que
     se muestran en la web, entran en el contexto del LLM («también …») y orientan a Whisper. **No** son

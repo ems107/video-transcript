@@ -95,6 +95,12 @@ function Body({ k }: { k: Knowledge }) {
     <div>
       <b>{k.data.term}</b>{k.data.definition && <span className="muted"> — {k.data.definition}</span>}
       {k.data.forms?.length ? <div className="small muted">También aparece como: {k.data.forms.join(', ')}</div> : null}
+      {k.data.pantalla && (
+        <div className="small muted">
+          {k.data.pantalla.relacion === 'dudoso' ? 'Solo se ve en pantalla y no está claro que tenga que ver con el vídeo: ' : 'Solo se ve en pantalla: '}
+          {k.data.pantalla.motivo}
+        </div>
+      )}
     </div>
   )
   if (k.kind === 'nueva_persona') {
@@ -142,6 +148,7 @@ export function ProposalCard({ k, showOwner, onChange }: { k: Knowledge; showOwn
             {showOwner && <span className="pill run">{ownerLabel(k)}</span>}
             <span className="pill">{KIND_LABEL[k.kind]}{k.category_label && ` · ${k.category_label}`}</span>
             {k.seen_count > 1 && <span className="pill ok">visto en {k.seen_count} vídeos</span>}
+            {k.status === 'propuesto' && isDoubtful(k) && <span className="pill warn" title="Decide tú: «Aceptar todas» no la incluye">dudosa</span>}
           </div>
           {editing ? <EditFields k={k} edit={edit} setEdit={setEdit} /> : <Body k={k} />}
           {k.replaces && <div className="small muted">Sustituye a: «{k.replaces.text}»</div>}
@@ -157,6 +164,9 @@ export function ProposalCard({ k, showOwner, onChange }: { k: Knowledge; showOwn
     </div>
   )
 }
+
+// Términos vistos solo en pantalla cuya relación con el vídeo no está clara
+const isDoubtful = (k: Knowledge) => k.data.pantalla?.relacion === 'dudoso'
 
 // Propuestas pendientes agrupadas por vídeo
 export function ProposalList({ query = '', showOwner = true, empty }: { query?: string; showOwner?: boolean; empty: string }) {
@@ -175,7 +185,7 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
   const kindRank = ['termino', 'contexto', 'seccion', 'dato', 'alias', 'nueva_persona']
   const sorted = [...data.items].sort((a, b) =>
     ownerRank[a.owner.type] - ownerRank[b.owner.type] || a.owner.name.localeCompare(b.owner.name)
-    || kindRank.indexOf(a.kind) - kindRank.indexOf(b.kind) || a.id - b.id)
+    || kindRank.indexOf(a.kind) - kindRank.indexOf(b.kind) || Number(isDoubtful(a)) - Number(isDoubtful(b)) || a.id - b.id)
   const groups = new Map<string, Knowledge[]>()
   for (const k of sorted) {
     const key = `${k.video_id ?? ''}|${k.video_title}`
@@ -203,7 +213,10 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
             <div className="spread">
               <h3 style={{ margin: 0 }}>{vid ? <Link to={`/videos/${vid}`}>{title || 'Vídeo'}</Link> : 'Sin vídeo'}</h3>
               <div className="row" style={{ gap: '0.35rem' }}>
-                <button className="sm" disabled={busy} onClick={() => bulk(items.map((k) => k.id), true)}>Aceptar todas ({items.length})</button>
+                <button className="sm" disabled={busy || items.every(isDoubtful)} title="Las dudosas no se incluyen: decide tú cada una"
+                  onClick={() => bulk(items.filter((k) => !isDoubtful(k)).map((k) => k.id), true)}>
+                  Aceptar todas ({items.filter((k) => !isDoubtful(k)).length})
+                </button>
                 <button className="sm" disabled={busy} onClick={() => {
                   if (confirm(`¿Rechazar las ${items.length} propuestas? No se volverán a proponer.`)) bulk(items.map((k) => k.id), false)
                 }}>Rechazar todas</button>

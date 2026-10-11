@@ -3,8 +3,9 @@ from datetime import datetime
 from sqlmodel import select
 
 from app import knowledge_store as KS
+from app.knowledge import screen_summary
 from app.models import KnowledgeItem, Person, Profile, Speaker, Video
-from app.pipeline.learn import collect_proposals
+from app.pipeline.learn import apply_judgment, collect_proposals
 
 UTTS = [
     {"start": 10.0, "end": 15.0, "speaker": "SPEAKER_00", "text": "Yo llevo el proyecto Atlas desde enero."},
@@ -154,18 +155,49 @@ def test_requeued_video_returns_to_done(engine, monkeypatch):
         assert s.get(Video, vid).status == "done"
 
 
-def test_screen_terms_need_to_be_content_and_forms_are_grouped():
+def test_screen_terms_are_judged_and_forms_are_grouped():
     utts = [{"start": 10.0, "end": 15.0, "speaker": "SPEAKER_00", "text": "Entra en la plataforma y crea el lead."}]
     # Bárymont es el contenido de la pantalla; Trello solo está en la barra de tareas (lista de visibles)
     vision = [{"t": 10.0 + i, "texto_relevante": "Grupo Bárymont · Gestibarymont · Bárymont · Lead",
-               "terminos": ["Bárymont", "Gestibarymont", "Grupo Bárymont", "Trello"], "descripcion": ""}
-              for i in range(4)]
+               "terminos": ["Bárymont", "Gestibarymont", "Grupo Bárymont", "Trello", "Jira"],
+               "descripcion": "Navegador con la plataforma", "tipo_escena": "navegador"} for i in range(4)]
     result = {"terminos": [{"termino": t, "definicion": d, "t": "00:00:11"} for t, d in
                            (("Bárymont", "CRM de la empresa"), ("Gestibarymont", ""), ("Grupo Bárymont", ""),
-                            ("Trello", "gestor de tareas"))],
+                            ("Trello", "gestor de tareas"), ("Jira", ""), ("lead", ""))],
               "contexto": [], "personas": [], "secciones": []}
     props = collect_proposals([result], [(0.0, 60.0)], utts, vision, NAMES, PEOPLE, PROFILE, [], False)
-    terms = [p["data"] for p in props if p["kind"] == "termino"]
-    assert len(terms) == 1 and terms[0]["term"] == "Bárymont"
-    assert sorted(terms[0]["forms"]) == ["Gestibarymont", "Grupo Bárymont"]
-    assert terms[0]["definition"] == "CRM de la empresa"
+    terms = {p["data"]["term"]: p for p in props if p["kind"] == "termino"}
+    # Las formas de un mismo nombre van juntas; todo lo visto solo en pantalla queda para que la IA lo valore
+    assert sorted(terms["Bárymont"]["data"]["forms"]) == ["Gestibarymont", "Grupo Bárymont"]
+    assert terms["Bárymont"]["data"]["definition"] == "CRM de la empresa"
+    assert terms["Bárymont"]["screen_only"] and terms["Trello"]["screen_only"]
+    answer = {"terminos": [{"termino": "Bárymont", "relacion": "relacionado", "motivo": "Es la plataforma que se usa"},
+                           {"termino": "Trello", "relacion": "sin_relacion", "motivo": "Solo en la barra de tareas"}]}
+    kept, judged = apply_judgment(props, answer)
+    kept_terms = {p["data"]["term"]: p["data"].get("pantalla") for p in kept if p["kind"] == "termino"}
+    assert kept_terms == {"Bárymont": {"relacion": "relacionado", "motivo": "Es la plataforma que se usa"},
+                          "Jira": {"relacion": "dudoso", "motivo": "La IA no lo valoró."}}
+    assert {j["termino"]: j["relacion"] for j in judged} == {"Bárymont": "relacionado", "Trello": "sin_relacion",
+                                                              "Jira": "dudoso"}
+    assert not any("screen_only" in p for p in kept)
+
+
+def test_screen_summary_says_where_a_term_is_seen():
+    vision = [{"t": 30.0, "texto_relevante": "", "terminos": ["Trello"], "descripcion": "Escritorio con pestañas",
+               "tipo_escena": "escritorio"},
+              {"t": 600.0, "texto_relevante": "Tablero de Trello del proyecto", "terminos": [],
+               "descripcion": "Se comparte el tablero", "tipo_escena": "navegador"}]
+    text = screen_summary("Trello", vision)
+    assert "en 2 fotogramas, de 0:30 a 10:00; en el contenido principal de 1" in text.replace("00:00:30", "0:30").replace("00:10:00", "10:00")
+    assert "Se comparte el tablero" in text
+
+
+def test_participants_seen_on_screen_are_not_terms():
+    utts = [{"start": 10.0, "end": 15.0, "speaker": "SPEAKER_00", "text": "Vamos con el plan."}]
+    vision = [{"t": 10.0, "texto_relevante": "Iosu Urcelay · Plan Light", "terminos": ["Iosu Urcelay", "Plan Light"],
+               "descripcion": ""}]
+    names = [{"canonical": "Iosu Urcelay", "variants": {"Iosu Urcelay": 3, "Ioni Urcelay": 1}, "readings": 4}]
+    result = {"terminos": [{"termino": t, "definicion": ""} for t in ("Iosu Urcelay", "Ioni Urcelay", "Plan Light")],
+              "contexto": [], "personas": [], "secciones": []}
+    props = collect_proposals([result], [(0.0, 60.0)], utts, vision, NAMES, PEOPLE, PROFILE, names, False)
+    assert [p["data"]["term"] for p in props if p["kind"] == "termino"] == ["Plan Light"]
