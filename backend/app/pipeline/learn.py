@@ -11,7 +11,7 @@ from typing import Any
 
 from .. import knowledge as K
 from ..llm import LLMServer
-from ..prompts import LEARN_SCHEMA, LEARN_SYSTEM, learn_user, profile_block
+from ..prompts import LEARN_SCHEMA, LEARN_SYSTEM, corrections_block, learn_user, profile_block
 from .analyze import chunk_lines, timeline
 from .base import JobContext
 from .glossary import normalize
@@ -166,7 +166,8 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str]
     vision = ctx.load("vision.json", [])
     names = ctx.speaker_names
     profile = ctx.profile
-    context = profile_block(profile, ctx.people)
+    context = "\n\n".join(filter(None, [profile_block(profile, ctx.people),
+                                         corrections_block([c["text"] for c in ctx.corrections])]))
     known = known_block(profile, ctx.people)
     # Secciones solo para un perfil sin ninguna (ni aceptada ni pendiente de revisar)
     want_sections = bool(profile) and not K.effective_sections(profile) and not sections_pending

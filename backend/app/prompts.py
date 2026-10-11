@@ -174,6 +174,16 @@ dirigen a él con ese nombre y es él quien responde. Si no está claro, escríb
 relaciones con nadie."""
 
 
+def corrections_block(texts: list[str]) -> str:
+    """Correcciones del usuario sobre el vídeo: hechos que prevalecen sobre lo que parezca decir la grabación."""
+    texts = [t.strip() for t in texts if t.strip()]
+    if not texts:
+        return ""
+    return ("Correcciones del usuario sobre este vídeo. Son hechos verificados y prevalecen sobre lo que \
+parezca decir la transcripción o la pantalla; tenlas en cuenta en todo lo que escribas:\n"
+            + "\n".join(f"- {t}" for t in texts))
+
+
 def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "") -> str:
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{(who + "\n\n") if who else ""}\
 Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \

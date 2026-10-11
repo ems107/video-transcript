@@ -30,8 +30,10 @@ from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, 
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
-    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
+    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video,
+    VideoCorrection, VoiceEmbedding,
 )
+from .models import now as models_now
 from .pipeline.glossary import normalize
 from .worker import STAGE_LABELS, worker
 
@@ -243,6 +245,8 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
         **video_card(session, v),
         "source_path": v.source_path, "video_path": v.video_path,
         "analysis": v.analysis, "speakers": speakers,
+        "video_corrections": (vc := services.video_corrections(session, v.id)),
+        "corrections_pending": bool(v.analysis) and services.corrections_pending(v.analysis, vc),
         "segments": [{"id": s.id, "start": s.start, "end": s.end, "speaker": s.speaker,
                       "name": names.get(s.speaker, s.speaker), "text": s.text,
                       "original_text": s.original_text, "corrections": s.corrections} for s in segs],
@@ -271,6 +275,46 @@ def update_video(video_id: int, body: VideoUpdate, session: Session = SessionDep
     services.export_video(session, v)
     services.index_video(session, v)
     return video_card(session, v)
+
+
+class CorrectionIn(BaseModel):
+    text: str
+
+
+@app.get("/api/videos/{video_id}/corrections")
+def list_corrections(video_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Video, video_id), "Vídeo")
+    return services.video_corrections(session, video_id)
+
+
+@app.post("/api/videos/{video_id}/corrections")
+def add_correction(video_id: int, body: CorrectionIn, session: Session = SessionDep) -> dict[str, Any]:
+    """Corrección del usuario. Se aplica al regenerar el análisis."""
+    _404(session.get(Video, video_id), "Vídeo")
+    if not body.text.strip():
+        raise HTTPException(400, "La corrección está vacía")
+    session.add(VideoCorrection(video_id=video_id, text=body.text.strip()))
+    session.commit()
+    return {"ok": True}
+
+
+@app.put("/api/corrections/{correction_id}")
+def update_correction(correction_id: int, body: CorrectionIn, session: Session = SessionDep) -> dict[str, Any]:
+    c = _404(session.get(VideoCorrection, correction_id), "Corrección")
+    if not body.text.strip():
+        raise HTTPException(400, "La corrección está vacía")
+    if body.text.strip() != c.text:
+        c.text, c.updated_at = body.text.strip(), models_now()
+        session.add(c)
+        session.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/corrections/{correction_id}")
+def delete_correction(correction_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    session.delete(_404(session.get(VideoCorrection, correction_id), "Corrección"))
+    session.commit()
+    return {"ok": True}
 
 
 @app.get("/api/videos/{video_id}/removal")

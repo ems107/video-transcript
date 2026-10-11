@@ -125,6 +125,7 @@ class Worker:
                 people=services.people_for(s, video.profile_id),
                 voice=services.voice_db(s),
                 video_id=video.id,
+                corrections=services.video_corrections(s, video.id),
             )
 
         weights_before = {}
@@ -150,6 +151,7 @@ class Worker:
         ctx = JobContext(
             job_id=job_id, video_id=ctx_data["video_id"], source_path=source, work_dir=wd, settings=settings,
             options=options, profile=ctx_data["profile"], people=ctx_data["people"], report=report,
+            corrections=ctx_data["corrections"],
             cancel_event=cancel_ev,
         )
         llm = LLMServer(settings)

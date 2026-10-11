@@ -10,6 +10,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Añadido
 
+- **Correcciones del vídeo.** En la página de cada vídeo puedes escribir lo que el análisis ha
+  interpretado mal, como un hecho («X es quien presenta, no Y»). Al regenerar, la IA las recibe como hechos
+  que prevalecen, en el resumen y en el aprendizaje, y nunca las modifica. La web avisa si hay
+  correcciones sin aplicar. Se guardan también en la copia de recuperación `datos/`.
 - **«Regenerar análisis» con opciones.** Una ventana explica qué se repite y qué se conserva, con el
   tiempo estimado. Además del resumen, se puede elegir:
   - volver a identificar a los hablantes (los confirmados no cambian);

@@ -16,6 +16,7 @@ from ..prompts import (
     FINAL_SCHEMA,
     FINAL_SYSTEM,
     chunk_user,
+    corrections_block,
     final_user,
     profile_block,
     who_block,
@@ -160,7 +161,8 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     vision = ctx.load("vision.json", [])
     duration = ctx.load("probe.json")["duration"]
     names = ctx.speaker_names
-    context = profile_block(ctx.profile, ctx.people)
+    context = "\n\n".join(filter(None, [profile_block(ctx.profile, ctx.people),
+                                         corrections_block([c["text"] for c in ctx.corrections])]))
     order = list(dict.fromkeys(u["speaker"] for u in utts if u["speaker"]))
     shown = {lb: names.get(lb, lb) for lb in order}
     unnamed = {name: lb for lb, name in shown.items() if re.fullmatch(r"Hablante \d+", name)}
@@ -216,5 +218,6 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     )
     final["titulo"] = final["titulo"].strip().strip('"«»').rstrip(".")
     final["fragmentos"] = partials
+    final["correcciones_aplicadas"] = [{"id": c["id"], "updated_at": c["updated_at"]} for c in ctx.corrections]
     ctx.save("analysis.json", final)
     ctx.report(1.0, f"Título: {final['titulo']}")

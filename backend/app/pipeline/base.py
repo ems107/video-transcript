@@ -32,6 +32,8 @@ class JobContext:
     speaker_names: dict[str, str] = field(default_factory=dict)
     # Etiqueta -> cómo se sabe quién es («confirmado», «probable, por pantalla; sin confirmar» o «»)
     speaker_status: dict[str, str] = field(default_factory=dict)
+    # Correcciones del usuario sobre este vídeo: [{id, text, updated_at}]
+    corrections: list[dict[str, Any]] = field(default_factory=list)
 
     def path(self, name: str) -> Path:
         return self.work_dir / name

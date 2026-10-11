@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
+import { CorrectionsPanel } from '../CorrectionsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
 import { RemoveDialog } from '../RemoveDialog'
 
@@ -307,6 +308,9 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
           {video.folder && <div className="small muted" style={{ marginTop: '0.4rem', wordBreak: 'break-all' }}>{video.folder}</div>}
           {video.speakers.length > 0 && <SpeakerPanel video={video} people={people} onChange={load} />}
           <KnowledgePanel video={video} running={!!running} onChange={load} />
+          {video.status === 'done' && (
+            <CorrectionsPanel video={video} running={!!running} onChange={load} onRegenerate={() => setRegenerating(true)} />
+          )}
         </div>
 
         <div className="card pad" style={{ minWidth: 0 }}>

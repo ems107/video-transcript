@@ -19,6 +19,7 @@ from .models import (
     Segment,
     Speaker,
     Video,
+    VideoCorrection,
     VoiceEmbedding,
 )
 from .pipeline.export import write_outputs
@@ -79,6 +80,23 @@ def speaker_names(session: Session, video_id: int) -> dict[str, str]:
         person = session.get(Person, pid) if pid else None
         names[sp.label] = person.name if person else (sp.suggested_name or f"Hablante {sp.order_idx}")
     return names
+
+
+def video_corrections(session: Session, video_id: int) -> list[dict[str, Any]]:
+    rows = session.exec(select(VideoCorrection).where(VideoCorrection.video_id == video_id)
+                        .order_by(VideoCorrection.id)).all()
+    return [{"id": c.id, "text": c.text, "updated_at": c.updated_at.isoformat()} for c in rows]
+
+
+def corrections_applied(corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Lo que se guarda en el análisis para saber con qué correcciones se generó."""
+    return [{"id": c["id"], "updated_at": c["updated_at"]} for c in corrections]
+
+
+def corrections_pending(analysis: dict[str, Any] | None, corrections: list[dict[str, Any]]) -> bool:
+    """Si las correcciones actuales no son las que se usaron al generar el análisis."""
+    used = (analysis or {}).get("correcciones_aplicadas") or []
+    return {(c["id"], c["updated_at"]) for c in used} != {(c["id"], c["updated_at"]) for c in corrections}
 
 
 CONTEXT_CONFIDENCE = 0.5
