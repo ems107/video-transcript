@@ -6,8 +6,8 @@ Uso (con la web compilada y la GPU libre; tarda unos 10 minutos):
 
 Monta una instancia aislada (carpeta temporal, puerto 8771, llama-server en 8092), analiza
 samples/videos-prueba/*.mp4, reproduce el uso normal (confirmar hablantes, crear un perfil, aceptar
-propuestas, una corrección, un cambio de hablante) y recorre las pantallas con Chrome sin ventana por
-CDP. Nunca usa los vídeos ni los datos del usuario. Al terminar borra la instancia.
+propuestas, una corrección, un cambio de hablante, un seguimiento con los dos vídeos) y recorre las
+pantallas con Chrome sin ventana por CDP. Nunca usa los vídeos ni los datos del usuario. Al terminar borra la instancia.
 """
 
 from __future__ import annotations
@@ -100,7 +100,11 @@ def prepare(c: httpx.Client) -> dict[str, int]:
                json={"ranges": [[words[0]["start"], words[min(1, len(words) - 1)]["end"]]], "person_id": other["person_id"]})
     c.post(f"/api/videos/{v1}/corrections",
            json={"text": "El informe de costes lo prepara María López, no Juan Pérez."})
-    return {"v1": v1, "v2": max(videos.values())}
+    f = c.post("/api/followups", json={"name": "Proyecto de pedidos"}).json()
+    for vid in sorted(videos.values()):
+        c.post(f"/api/followups/{f['id']}/videos/{vid}", json={"apply": True})
+        wait_jobs(c, "aplicar el vídeo al seguimiento")
+    return {"v1": v1, "v2": max(videos.values()), "followup": f["id"]}
 
 
 # --------------------------------------------------------------------------- Chrome por CDP
@@ -207,6 +211,7 @@ async def capture_all(ids: dict[str, int], ws_url: str) -> None:
         await shoot(c, "video")
         await shoot(c, "hablantes", "(" + CARD.format(json.dumps("Hablantes")) + ")")
         await shoot(c, "correcciones", "(" + CARD.format(json.dumps("Correcciones")) + ")")
+        await shoot(c, "video-seguimientos", "(" + CARD.format(json.dumps("Seguimientos")) + ")")
         await go(c, f"/videos/{v1}?tab=transcripcion")
         await shoot(c, "video-transcripcion")
         await c.js("document.querySelector('.who-btn')?.click()")
@@ -235,6 +240,10 @@ async def capture_all(ids: dict[str, int], ws_url: str) -> None:
         await shoot(c, "buscar")
         await go(c, "/ajustes")
         await shoot(c, "ajustes")
+        await go(c, f"/seguimientos/{ids['followup']}")
+        await c.js("[...document.querySelectorAll('button')].filter(b => b.textContent === 'Ver todas').forEach(b => b.click())")
+        await asyncio.sleep(0.8)
+        await shoot(c, "seguimiento")
         task.cancel()
         _ = v2
 

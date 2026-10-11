@@ -171,7 +171,8 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     dates = [date_of(v) for _, v in links(session, f.id)]
     state = F.context_block(f.name, f.description, summary_before(session, f, when), all_items, dates, when,
                             with_ids=True)
-    desc = f"{when:%Y-%m-%d} «{video.title}» (duración {fmt_ts(video.duration)})"
+    # Antes de publicar, el título del vídeo aún es el nombre del fichero
+    desc = f"{when:%Y-%m-%d} «{analysis.get('titulo') or video.title}» (duración {fmt_ts(video.duration)})"
     r = ask(state, desc, F.analysis_text(analysis))
     visible = F.state_at(all_items, when) + [it for it in all_items if it.get("hidden")]
     plan = F.apply_update(visible, r, video.id, when, video.duration, now())

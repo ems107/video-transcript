@@ -32,6 +32,9 @@ tu trabajo y va completando una ficha de cada persona. Nunca usa lo aprendido si
    lo que propone. Ver [Perfiles](ayuda:perfiles).
 5. **Revisa las [propuestas](ayuda:propuestas)** de cada vídeo nuevo: acepta lo útil y rechaza lo demás.
    Con cada vídeo, la app sabe más del perfil y de las personas.
+6. **Si varios vídeos tratan el mismo tema** (las sesiones de un curso, las reuniones de un proyecto),
+   crea un [seguimiento](ayuda:seguimientos): la app lleva sus tareas, decisiones y dudas de un vídeo a
+   otro.
 
 ## Principios de la app
 

@@ -34,6 +34,16 @@ u orden, así que **hay que volver a confirmarlos**. La app los propondrá por s
 huellas guardadas se conservan) y **Aceptar propuestas** lo deja en un clic. Tus cambios manuales de
 hablantes se mantienen.
 
+## Si el vídeo está en un seguimiento
+
+El análisis nuevo puede cambiar lo que el vídeo aporta a sus [seguimientos](ayuda:seguimientos), así que la
+ventana pregunta qué hacer con cada uno:
+
+- **Rehacer el estado**: la IA vuelve a aplicar este vídeo y los posteriores (la ventana dice cuánto
+  añade). Lo que cambiaste tú en el seguimiento se conserva.
+- **Dejarlo como está**: el estado no cambia y queda marcado como desactualizado, para rehacerlo cuando
+  quieras.
+
 ## Estimaciones
 
 El botón muestra cuánto tardará, por ejemplo «Regenerar (≈ 5 min)». La app mide lo que tarda cada fase

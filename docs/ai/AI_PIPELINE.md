@@ -22,6 +22,7 @@ worker crea `<fase>.done`.
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
 | `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `names.json`, `probe.json` | `analysis.json` (`analysis.partial.json`), `context_identities.json` y propuestas «contexto» en `Speaker` | llama-server |
+| `follow` | `worker._follow` → `followups_store.update_for_video` | `analysis.json` (o `Video.analysis` si ya está publicado) | filas `FollowupItem`/`FollowupVideo`/`FollowupVersion` y `Seguimiento - Nombre/seguimiento.md` | llama-server (solo si el vídeo está en algún seguimiento) |
 | `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla) y filas `KnowledgeItem` | llama-server |
 | `publish` | `worker._publish` | todo lo anterior | carpeta final (con `datos/`), `Segment`, `Keyframe`, FTS | — |
 
@@ -55,6 +56,10 @@ Formas clave:
     `regenerate.unconfirm_speakers`: al volver a separar las voces, las etiquetas ya no significan lo
     mismo. Las huellas de voz se conservan, así que `identify` vuelve a proponer a cada persona.
   - `videos/{id}/learn` y `profiles/from-video`: solo `learn`.
+  - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior):
+    `only` (el worker se salta todas las fases que no estén en la lista; lo usan los trabajos que solo
+    rehacen un seguimiento) y `follow_rebuild` (ids de seguimientos cuyo estado se rehace desde este
+    vídeo).
 - **`persist_speakers` fusiona:** al repetir `identify`, un hablante confirmado conserva su persona y su
   `id`. Solo cambian las propuestas de los no confirmados, y se borran las etiquetas que ya no existen.
 - **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía
@@ -75,6 +80,19 @@ Formas clave:
   `hablantes_aplicados` para avisar de los que faltan en el resumen.
 - **Correcciones del usuario:** el worker carga las del vídeo en `ctx.corrections` al empezar el
   trabajo. `analyze` y `learn` las incluyen en su contexto (ver `AI_PROMPTS.md`).
+- **Seguimientos** (`followups.py` lógica pura, `followups_store.py` BD). El worker carga en
+  `ctx.followups` el estado de cada seguimiento del vídeo **anterior a su fecha** (`context_for_video`) y
+  `analyze` lo añade al contexto (`prompts.followup_block`). La fase `follow` decide por seguimiento:
+  - rehacer desde la fecha del vídeo (`rebuild_from`: versión, `revert_videos` de ese vídeo, los
+    posteriores y los quitados sin rehacer, y `apply_video` de cada uno en orden) si está en
+    `follow_rebuild` o si el vídeo es nuevo y el último por fecha;
+  - si no, marcarlo desactualizado (`stale_from`, `stale_reason`): desde la cola no se puede preguntar.
+
+  Es de mejor esfuerzo como `learn`: si falla, el seguimiento queda desactualizado con el motivo. Sin
+  seguimientos no hace nada y no guarda `StageRun` (no hay nada que medir). Las unidades de su
+  `StageRun` son los minutos de **todos** los vídeos aplicados (al rehacer pueden ser varios). Rehacer
+  desde la web (`POST followups/{id}/rebuild`, añadir o quitar un vídeo) encola en el primer vídeo
+  afectado un trabajo con `only: ["follow"]` y `follow_rebuild: [id]`.
 - **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual
   (ver `test_learn_failure_does_not_break_the_job`). Si el vídeo no tiene perfil, solo propone datos
   de personas. Los detalles están en `AI_PROMPTS.md` (aprendizaje).
@@ -91,6 +109,9 @@ Formas clave:
 - **Publicación:** el vídeo se mueve o se copia una sola vez (`options.file_mode` o
   `Settings.file_mode`). Si se regenera, se reutiliza la carpeta existente. `_cleanup` borra los wav y
   los fotogramas, pero conserva los JSON para poder regenerar sin repetir ASR ni diarización.
+- **Carpeta del seguimiento:** `followups_store.export` escribe `Seguimiento - Nombre/seguimiento.md`
+  en `analyzed_dir` (renombra la carpeta si cambia el nombre) al aplicar, editar o restaurar, y
+  `_publish` la reescribe al final para enlazar la carpeta del vídeo recién creada.
 - **Copia de recuperación:** `_publish` escribe `datos/` en la carpeta publicada
   (`removal.save_recovery`): `video.json` (metadatos y hablantes con su persona, confirmación, huella y
   pistas) y los JSON de `removal.WORK_FILES`. «Quitar» sin borrar ficheros la vuelve a escribir. Si

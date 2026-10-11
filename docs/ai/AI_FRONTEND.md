@@ -17,13 +17,16 @@ de componentes ni de estado: solo `useState`/`useEffect` y CSS propio.
 | `src/RegenerateDialog.tsx` | ventana «Regenerar el análisis»: qué se repite y qué se conserva, una casilla por nivel (encadenadas) y la estimación |
 | `src/SpeakerFix.tsx` | `SpeakerFixDialog` (cambiar quién habla en una línea, en parte de ella eligiendo palabras, o en varias líneas), `SplitDialog` (asignar cada grupo de un hablante con dos voces) y `OverridesList` (cambios manuales con Deshacer) |
 | `src/CorrectionsPanel.tsx` | tarjeta «Correcciones» del vídeo: añadir, editar y borrar; estado «Aplicada/Pendiente» por corrección (`applied`) y aviso de las que faltan por aplicar. El texto de ayuda explica que el análisis se reescribe de cero: cada corrección debe entenderse sola |
+| `src/followup.ts` | constantes de los seguimientos: estados por tipo de punto (iguales que `backend/app/followups.py`), títulos y nombres de los eventos |
+| `src/FollowupsPanel.tsx` | tarjeta «Seguimientos» del vídeo con sus ventanas (añadir, `DetachDialog` para quitar), `FollowupChoice` (la pregunta «rehacer el estado / dejarlo como está», también en regenerar y quitar) y `EventChip` (un hito del recorrido, con enlace al vídeo en ese momento) |
 | `src/RemoveDialog.tsx` | ventana «Quitar el vídeo» (`<dialog>` con casillas; pide `videos/{id}/removal` para mostrar las rutas) |
 | `src/index.css` | variables de diseño en `:root`, modo oscuro con `prefers-color-scheme` y clases de utilidad |
 | `src/pages/*.tsx` | una página por ruta (ver abajo) |
 
 Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resumen\|transcripcion\|tareas\|pantalla`),
 `/propuestas` (`?video=id`), `/buscar`, `/perfiles`, `/perfiles/:id` (`?tab=manual\|aprendido\|propuestas\|historial`),
-`/personas`, `/personas/:id` (`?tab=ficha\|propuestas\|historial`), `/ajustes`. Las rutas de la interfaz
+`/personas`, `/personas/:id` (`?tab=ficha\|propuestas\|historial`), `/seguimientos`, `/seguimientos/:id`
+(`?tab=estado\|videos\|historial`), `/ajustes`. Las rutas de la interfaz
 están en español.
 
 ## Reglas

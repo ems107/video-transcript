@@ -22,6 +22,10 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `PersonPairDismissal` | parejas marcadas como «no son la misma persona» | |
 | `StageRun` | lo que tardó una fase ejecutada | `seconds` y `units`; ver `estimates.py` |
 | `VideoCorrection` | corrección escrita por el usuario sobre un vídeo | `text`, `updated_at`; la IA nunca la modifica |
+| `Followup` | seguimiento (continuidad de un tema entre vídeos) | `status` abierto o archivado; `summary` + `summary_manual` (si es del usuario, la IA deja el suyo en `summary_ai`); `stale_from`/`stale_reason` = desactualizado; `folder` |
+| `FollowupVideo` | vídeo de un seguimiento | `applied` (el estado lo incluye), `contribution` y `summary` (resumen tras aplicarlo, para volver atrás al rehacer) |
+| `FollowupItem` | tarea, decisión o duda | `status` sale del último evento de `events[{video_id, date, t, evento, nota, source, at}]`; `manual` = tocado por el usuario (la IA ya no cambia su texto ni su estado); `hidden` = borrado por el usuario (se conserva para que la IA no lo vuelva a crear) |
+| `FollowupVersion` | copia del estado antes de cada cambio | `snapshot` = `{summary, summary_manual, summary_ai, items, videos}` |
 
 - **Columnas nuevas en tablas existentes:** se declaran en `db.NEW_COLUMNS`. `init_db` las añade con
   `ALTER TABLE` si faltan (idempotente).
@@ -93,14 +97,15 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 | Perfiles | CRUD de `profiles` (`person_ids[]` en el cuerpo; la respuesta incluye `learned_count` y `pending_count`), `GET profiles/{id}/knowledge`, `GET profiles/{id}/versions`, `POST profiles/{id}/versions/{vid}/restore`, `POST profiles/from-video {video_id, name}`, `POST profiles/{id}/learn-all` |
 | Personas | CRUD de `people` (`GET people/{id}` devuelve la ficha completa), `DELETE people/{id}/voices`, `GET people/{id}/knowledge`, `GET/POST people/{id}/versions[/{vid}/restore]`, `GET people/duplicates`, `POST people/duplicates/dismiss {a, b}`, `POST people/{id}/merge {into_id}` |
 | Conocimiento | `GET proposals?video_id&profile_id&person_id` (`{items, waiting}`), `POST proposals/decide {accept, reject, edits}`, `PUT knowledge/{id}`, `POST knowledge/{id}/retire`, `POST knowledge/forget-video/{video_id}`, `POST videos/{id}/learn` |
+| Seguimientos | `GET/POST followups`, `GET/PUT/DELETE followups/{id}` (PUT: `name`, `description`, `status`, `summary`, `use_ai_summary`; DELETE `?delete_folder`), `POST followups/{id}/open-folder`, `POST followups/{id}/videos/{video_id} {apply, regenerate}`, `DELETE followups/{id}/videos/{video_id}?rebuild`, `POST followups/{id}/rebuild?all_videos`, `POST/PUT/DELETE followups/{id}/items[/{item_id}]` (DELETE oculta), `GET followups/{id}/versions`, `POST followups/{id}/versions/{vid}/restore`. `POST jobs` admite `followup_ids`; `POST videos/{id}/regenerate` y `POST videos/{id}/remove`, `follow_rebuild[]`; el detalle del vídeo, `GET …/regenerate` y `GET …/removal` incluyen `followups` |
 | Búsqueda | `GET search?q&profile_id&person_id` |
 
 Las demás rutas sirven el SPA desde `frontend/dist`. Los errores se devuelven como
 `HTTPException(código, "mensaje en español")`, y la web muestra `detail` tal cual.
 
 `Job.options` admite: `file_mode` (move o copy), `skip_vision`, `main_track` (índice de pista o
-ausente para mezclar todas), `owner_track`, `min_speakers`, `max_speakers`, `num_speakers` y `redo[]`
-(uso interno).
+ausente para mezclar todas), `owner_track`, `min_speakers`, `max_speakers`, `num_speakers` y, de uso
+interno, `redo[]`, `only[]` y `follow_rebuild[]` (ver `AI_PIPELINE.md`).
 
 Quitar un vídeo (`removal.py`, ver `AI_PIPELINE.md`): `POST videos/{id}/remove` lo saca de la BD,
 borra sus propuestas pendientes y, solo con las opciones que marque el usuario, borra ficheros. Sin

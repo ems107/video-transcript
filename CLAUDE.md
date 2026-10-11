@@ -59,6 +59,7 @@ backend/app/
   removal.py     quitar un vídeo (qué se borra) y copia de recuperación `datos/` en la carpeta publicada
   regenerate.py / estimates.py   niveles de regeneración y estimación de tiempos (tabla StageRun)
   speaker_fix.py arreglos manuales de hablantes (SpeakerOverride); la comprobación por la voz está en pipeline/voices.py
+  followups.py / followups_store.py   seguimientos: lógica pura del estado (puntos, contexto, aplicar y deshacer) y BD
   models.py      tablas SQLModel;  db.py: motor SQLite + FTS5
   config.py      Settings (persistidos en data/settings.json) y rutas
   env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA

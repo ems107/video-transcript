@@ -60,11 +60,19 @@ después redacta el informe final: título, resumen, participantes, temas, tarea
 Recibe el contexto del perfil, quién es quién y tus [correcciones](ayuda:correcciones). Aquí también puede
 deducir quién es un hablante por la conversación.
 
-## 12. Aprender
+Si el vídeo está en algún [seguimiento](ayuda:seguimientos), también recibe el estado del tema según los
+vídeos anteriores, solo para entender a qué se refiere lo que se dice y relacionarlo.
+
+## 12. Actualizar los seguimientos
+Si el vídeo está en algún [seguimiento](ayuda:seguimientos), la IA aplica lo que dice a su estado: tareas
+que avanzan o se cierran, decisiones que cambian, dudas que se resuelven y lo nuevo. Si esta fase falla, el
+seguimiento queda desactualizado y el vídeo se publica igual.
+
+## 13. Aprender
 Propone lo que ha aprendido del vídeo para el perfil y las personas. Ver [Propuestas](ayuda:propuestas). Si
 esta fase falla, el vídeo se publica igual.
 
-## 13. Publicar
+## 14. Publicar
 Crea la carpeta del vídeo con sus documentos, lo mueve o copia, y lo añade a la biblioteca y a la búsqueda.
 
 :::tecnico Ficheros de trabajo

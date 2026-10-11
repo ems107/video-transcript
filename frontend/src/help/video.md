@@ -27,6 +27,8 @@ Al abrir un vídeo de la Biblioteca ves el reproductor a la izquierda y el anál
 - **[Hablantes](ayuda:hablantes):** quién es cada voz, con las propuestas de la app.
 - **Aprendido de este vídeo:** cuántas [propuestas](ayuda:propuestas) quedan por revisar, crear un
   perfil a partir del vídeo, aprender de nuevo u olvidar lo aprendido de él.
+- **[Seguimientos](ayuda:seguimientos):** los temas que continúa este vídeo. Desde aquí lo añades a un
+  seguimiento o lo quitas.
 - **[Correcciones](ayuda:correcciones):** lo que el análisis ha interpretado mal, escrito por ti.
 
 ## Botones de arriba

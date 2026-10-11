@@ -8,6 +8,24 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+La app sigue un tema a lo largo de varios vídeos.
+
+### Añadido
+
+- **Seguimientos** (menú **Seguimientos**): reúnen los vídeos de un mismo tema y llevan su estado:
+  - un resumen de cómo ha evolucionado;
+  - las tareas, decisiones y dudas, cada una con su recorrido («aparece el día 4 → hecha el día 5») y
+    enlaces al vídeo en cada momento;
+  - lo que aportó cada vídeo.
+- Al encolar un vídeo se pueden elegir sus seguimientos: el análisis tiene en cuenta lo anterior del tema
+  y, al terminar, la IA actualiza el estado. Un vídeo ya analizado se añade desde su página.
+- Puedes cambiar el estado de cualquier punto, editarlo, borrarlo o añadir uno a mano, y editar el resumen:
+  la IA ya no lo cambia. Cada cambio guarda una versión que se puede restaurar.
+- Al quitar o regenerar un vídeo de un seguimiento, la app pregunta si rehace su estado. Si no, lo marca
+  como desactualizado, con un botón para rehacerlo.
+- Los seguimientos se pueden archivar y se publican en su propia carpeta `Seguimiento - Nombre/`.
+- Nueva página de ayuda «Seguimientos».
+
 ## [1.4.0] - 2026-10-11
 
 La app explica cómo se usa y cómo funciona por dentro.

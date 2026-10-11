@@ -22,6 +22,9 @@ marcar:
 **Sin marcar nada**, el vídeo desaparece de la app pero todos sus ficheros se conservan, incluida la copia
 de recuperación.
 
+Si el vídeo está en algún [seguimiento](ayuda:seguimientos), la ventana pregunta además si se rehace su
+estado sin él o se deja como está (desactualizado).
+
 ## Copia de recuperación
 
 Cada carpeta publicada lleva una subcarpeta `datos/` con todo lo necesario para recuperar el análisis en

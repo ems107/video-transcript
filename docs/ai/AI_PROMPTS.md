@@ -244,6 +244,17 @@ pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` 
 `services.corrections_pending` avisa si las actuales no coinciden. La IA no ve el análisis anterior, así
 que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
 
+**Seguimientos** (`prompts.followup_block`, `FOLLOW_*`, `followups.py`). El análisis recibe el estado de
+cada seguimiento del vídeo según los vídeos **anteriores** a su fecha (`followups.context_block`, sin ids),
+con la instrucción de usarlo solo para entender referencias y relacionar, nunca para añadir lo que no se
+dice en el vídeo. Después, la fase `follow` hace una llamada por seguimiento: recibe el estado con ids
+(`[T3]` tarea, `[D2]` decisión, `[P1]` duda) y el análisis del vídeo (`followups.analysis_text`: resúmenes,
+tareas, decisiones y pendientes con marca de tiempo, no la transcripción), y devuelve `eventos`, `nuevos`,
+`resumen` y `aporte`. `followups.apply_update` lo verifica en Python: ids que existen, marca de tiempo
+dentro del vídeo, evento válido para el tipo, nada que cambie un punto manual (queda como «avanza») y
+ningún punto nuevo parecido a uno existente (`DUPLICATE`). El contexto se limita a `FOLLOW_CONTEXT_CHARS`
+recortando primero lo cerrado. Tests en `test_followups.py`.
+
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se
 reintenta, porque la misma petición se volvería a cortar. Antes de subir un `max_tokens`, mira ahí el

@@ -144,6 +144,29 @@ espacios. Una identidad deducida por el contexto tiene confianza {{v:contexto_co
 confirma sola.
 :::
 
+## Seguimientos
+
+**Qué:**
+- el vídeo se añade a un seguimiento solo si tú lo eliges; la app no lo sugiere;
+- el estado de un seguimiento lo actualiza la IA sin pedirte confirmación, pero cada cambio guarda antes
+  una versión y lo que cambias tú no lo toca;
+- cada vídeo recibe solo el estado de los vídeos **anteriores** en fecha;
+- el seguimiento no alimenta el aprendizaje del perfil.
+
+**Por qué:**
+- Las sugerencias costarían una llamada a la IA por vídeo y, con pocos seguimientos, aportan poco frente
+  a marcarlo tú al encolar.
+- Confirmar cada hito (tarea hecha, decisión cambiada…) sería lento. A cambio, cada hito lleva su vídeo y su
+  momento para comprobarlo, la app descarta los que no puede comprobar y siempre puedes restaurar una
+  versión anterior.
+- Un vídeo no puede «saber» lo que se dijo después: si analizas uno antiguo, ve el tema como estaba
+  entonces.
+- Las tareas de un tema concreto no son conocimiento general: llenarían el perfil de asuntos que no
+  sirven para otros vídeos.
+
+**Consecuencia:** si se analiza un vídeo anterior a otros del seguimiento, o se cambia uno del medio, el
+estado queda desactualizado hasta que lo rehaces. Ver [Seguimientos](ayuda:seguimientos#desactualizado-y-rehacer).
+
 ## Nada se confirma solo
 
 **Qué:** ni los hablantes, ni lo aprendido, ni las identidades deducidas se dan por buenos sin que los

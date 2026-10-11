@@ -36,6 +36,8 @@ Qué aporta cada versión: [CHANGELOG](CHANGELOG.md).
   proyectos, clientes, sistemas) y de cada persona (cargo, equipo, responsabilidades, conocimientos…).
   Tú lo apruebas. Lo manual nunca se toca, cada propuesta indica de dónde sale y todo tiene historial
   con vuelta atrás.
+- **Seguimientos** de un tema a lo largo de varios vídeos: tareas, decisiones y dudas con su recorrido de
+  un vídeo a otro, y un resumen de la evolución. Cada vídeo nuevo se analiza sabiendo lo anterior.
 - **Fichas de persona** con lo aprendido, sus vídeos, el tiempo que ha hablado y las tareas que se le
   han asignado. Avisa de posibles personas duplicadas y permite fusionarlas.
 - **Carpeta de resultados por vídeo**: `AAAA-MM-DD - Título/` contiene el vídeo original (movido o
@@ -131,6 +133,14 @@ Después todo funciona sin conexión a internet.
   partir de este vídeo»: la IA propone su contenido. Para aprovechar vídeos ya analizados, usa
   «Aprender de todos sus vídeos» en el perfil.
 
+### Seguimientos (vídeos de un mismo tema)
+
+Si varios vídeos tratan el mismo tema (las sesiones de un curso, las reuniones de un proyecto), crea un
+**seguimiento** y añádelos (al encolarlos o desde la página de cada vídeo). La app lleva su estado: un
+resumen de la evolución y las tareas, decisiones y dudas, cada una con su recorrido por vídeo y momento.
+Cada vídeo nuevo se analiza sabiendo lo anterior y, al terminar, la IA actualiza el estado. Lo que cambias
+tú se respeta, y cada cambio guarda una versión. El estado se publica en `Seguimiento - Nombre/`.
+
 ### Actualizar a una nueva versión
 
 ```powershell
@@ -161,6 +171,7 @@ profundizar. Cada pantalla tiene un enlace «?» a su sección.
 | Identificación | Huellas de voz conocidas, nombres de pantalla unificados (una forma por persona), pista de micrófono y lo que se deduce de la conversación |
 | Corrección | Glosario: variantes declaradas y mayúsculas directas; los parecidos fonéticos los valida el LLM |
 | Análisis | Resumen por bloques de 30 min y redacción final: título, resumen, tareas, decisiones y pendientes |
+| Seguimientos | Si el vídeo está en algún seguimiento, aplica lo que dice a su estado (tareas, decisiones y dudas), verificado contra el vídeo |
 | Aprendizaje | Propuestas verificadas para el perfil y las personas (términos, hechos, datos de cada persona) |
 | Publicación | Carpeta propia con el vídeo y los documentos, indexada para la búsqueda |
 
@@ -172,6 +183,7 @@ fase guarda un punto de control en `data/work/`.
 ```
 backend/    API FastAPI + pipeline de IA (Python 3.12, uv, SQLite + FTS5)
   app/pipeline/   una fase por módulo (ingest, frames, vision, asr, diarize, names, identify, correct, analyze, learn, export)
+  app/followups.py, followups_store.py   seguimientos entre vídeos
   tests/          pruebas de la lógica sin GPU
 frontend/   Web React + Vite + TypeScript
 scripts/    download_models.py (modelos), release.py (versiones)
