@@ -8,6 +8,28 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Correcciones del vídeo.** En la página de cada vídeo puedes escribir lo que el análisis ha
+  interpretado mal, como un hecho («X es quien presenta, no Y»). Al regenerar, la IA las recibe como hechos
+  que prevalecen, en el resumen y en el aprendizaje, y nunca las modifica. Cada corrección indica si el
+  análisis actual ya la tiene en cuenta («Aplicada») o se aplicará al regenerar («Pendiente»). Se guardan
+  también en la copia de recuperación `datos/`.
+- **«Regenerar análisis» con opciones.** Una ventana explica qué se repite y qué se conserva, con el
+  tiempo estimado. Además del resumen, se puede elegir:
+  - volver a identificar a los hablantes (los confirmados no cambian);
+  - volver a analizar la pantalla;
+  - el análisis completo desde el audio, sin quitar el vídeo. Hay que volver a confirmar a los hablantes,
+    pero la app los propone por su voz.
+- La app mide cuánto tarda cada fase del análisis en tu equipo, y lo usa para estimar los tiempos.
+
+### Corregido
+
+- Si la IA devuelve una respuesta cortada o no válida, se guarda en `data/llm_failures/` para poder
+  diagnosticarla. Una respuesta cortada por el límite de longitud ya no se pide tres veces seguidas.
+- La hora de inicio de un trabajo se reinicia al regenerar un vídeo. Antes conservaba la del primer
+  análisis.
+
 ## [1.1.0] - 2026-10-11
 
 Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides.

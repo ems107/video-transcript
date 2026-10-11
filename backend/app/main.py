@@ -24,13 +24,16 @@ from sse_starlette.sse import EventSourceResponse
 
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
+from . import regenerate as regen
 from . import removal
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
-    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
+    Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video,
+    VideoCorrection, VoiceEmbedding,
 )
+from .models import now as models_now
 from .pipeline.glossary import normalize
 from .worker import STAGE_LABELS, worker
 
@@ -242,6 +245,8 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
         **video_card(session, v),
         "source_path": v.source_path, "video_path": v.video_path,
         "analysis": v.analysis, "speakers": speakers,
+        "video_corrections": services.with_applied(v.analysis, vc := services.video_corrections(session, v.id)),
+        "corrections_pending": bool(v.analysis) and services.corrections_pending(v.analysis, vc),
         "segments": [{"id": s.id, "start": s.start, "end": s.end, "speaker": s.speaker,
                       "name": names.get(s.speaker, s.speaker), "text": s.text,
                       "original_text": s.original_text, "corrections": s.corrections} for s in segs],
@@ -270,6 +275,46 @@ def update_video(video_id: int, body: VideoUpdate, session: Session = SessionDep
     services.export_video(session, v)
     services.index_video(session, v)
     return video_card(session, v)
+
+
+class CorrectionIn(BaseModel):
+    text: str
+
+
+@app.get("/api/videos/{video_id}/corrections")
+def list_corrections(video_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Video, video_id), "Vídeo")
+    return services.video_corrections(session, video_id)
+
+
+@app.post("/api/videos/{video_id}/corrections")
+def add_correction(video_id: int, body: CorrectionIn, session: Session = SessionDep) -> dict[str, Any]:
+    """Corrección del usuario. Se aplica al regenerar el análisis."""
+    _404(session.get(Video, video_id), "Vídeo")
+    if not body.text.strip():
+        raise HTTPException(400, "La corrección está vacía")
+    session.add(VideoCorrection(video_id=video_id, text=body.text.strip()))
+    session.commit()
+    return {"ok": True}
+
+
+@app.put("/api/corrections/{correction_id}")
+def update_correction(correction_id: int, body: CorrectionIn, session: Session = SessionDep) -> dict[str, Any]:
+    c = _404(session.get(VideoCorrection, correction_id), "Corrección")
+    if not body.text.strip():
+        raise HTTPException(400, "La corrección está vacía")
+    if body.text.strip() != c.text:
+        c.text, c.updated_at = body.text.strip(), models_now()
+        session.add(c)
+        session.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/corrections/{correction_id}")
+def delete_correction(correction_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    session.delete(_404(session.get(VideoCorrection, correction_id), "Corrección"))
+    session.commit()
+    return {"ok": True}
 
 
 @app.get("/api/videos/{video_id}/removal")
@@ -335,22 +380,49 @@ def open_folder(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     return {"ok": True}
 
 
-@app.post("/api/videos/{video_id}/regenerate")
-def regenerate(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    """Repite la corrección de términos y el análisis con los nombres y el perfil actuales."""
+def _last_job(session: Session, v: Video) -> Job | None:
+    return session.exec(select(Job).where(Job.video_id == v.id).order_by(Job.id.desc())).first()
+
+
+@app.get("/api/videos/{video_id}/regenerate")
+def regenerate_info(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Qué niveles de regeneración se pueden usar y cuánto tardaría cada uno."""
     v = _404(session.get(Video, video_id), "Vídeo")
-    job = _requeue(session, v, ["correct", "analyze", "learn", "publish"], "Regenerando análisis")
+    last = _last_job(session, v)
+    work = WORK_DIR / f"job_{last.id}" if last else None
+    return regen.info(session, v, work, load_settings().max_frames)
+
+
+class RegenerateIn(BaseModel):
+    level: str = "analysis"
+
+
+@app.post("/api/videos/{video_id}/regenerate")
+def regenerate(video_id: int, body: RegenerateIn | None = None, session: Session = SessionDep) -> dict[str, Any]:
+    """Repite el análisis desde el nivel indicado con el perfil, las personas y el glosario actuales."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    level = (body or RegenerateIn()).level
+    if level not in regen.LEVELS:
+        raise HTTPException(400, f"Nivel desconocido: {level}")
+    last = _last_job(session, v)
+    reason = regen.availability(WORK_DIR / f"job_{last.id}" if last else None, regen.video_file(v))[level]
+    if reason:
+        raise HTTPException(400, reason)
+    if level == "full":
+        regen.unconfirm_speakers(session, v.id)
+    job = _requeue(session, v, regen.stages(level), "Regenerando análisis", check_work=False)
     return {"ok": True, "job_id": job.id}
 
 
-def _requeue(session: Session, v: Video, redo: list[str], message: str) -> Job:
+def _requeue(session: Session, v: Video, redo: list[str], message: str, check_work: bool = True) -> Job:
     """Vuelve a encolar el último trabajo del vídeo repitiendo solo las fases indicadas."""
-    last = session.exec(select(Job).where(Job.video_id == v.id).order_by(Job.id.desc())).first()
+    last = _last_job(session, v)
     if not last or last.status in ("queued", "running"):
         raise HTTPException(400, "Hay un trabajo en curso para este vídeo")
-    if not (WORK_DIR / f"job_{last.id}" / "corrected.json").exists():
+    if check_work and not (WORK_DIR / f"job_{last.id}" / "corrected.json").exists():
         raise HTTPException(400, "Faltan los datos intermedios de este vídeo; hay que analizarlo de nuevo desde cero")
     last.status, last.message, last.error, last.progress = "queued", message, "", 0.0
+    last.started_at, last.finished_at = None, None  # el tiempo de este trabajo empieza ahora
     last.options = {**(last.options or {}), "redo": redo}
     v.status = "processing"
     session.add(last), session.add(v)

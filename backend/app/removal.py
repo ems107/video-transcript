@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 
 from . import __version__
 from . import proposals as PR
+from . import services
 from .config import WORK_DIR
 from .models import Job, Keyframe, KnowledgeItem, Person, Profile, Segment, Speaker, Video, VoiceEmbedding
 
@@ -57,6 +58,7 @@ def save_recovery(session: Session, video: Video, work_dir: Path | None = None) 
         "recorded_at": video.recorded_at.isoformat() if video.recorded_at else None,
         "created_at": video.created_at.isoformat(), "profile": profile.name if profile else "",
         "speakers": speakers,
+        "corrections": services.video_corrections(session, video.id),
     }
     (out / "video.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     if work_dir and work_dir.is_dir():

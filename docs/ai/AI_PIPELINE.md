@@ -47,8 +47,25 @@ Formas clave:
   continuar donde se quedaron.
 - **Repetir fases:** `options["redo"] = [...]` borra esas marcas, y los parciales de `worker.PARTIALS`,
   antes de ejecutar. Lo usa `main._requeue()`:
-  - `regenerate`: `correct`, `analyze`, `learn` y `publish`;
+  - `regenerate {level}`: las fases de `regenerate.stages(level)`. Los niveles son `analysis` (correct,
+    analyze, learn, publish), `speakers` (+ identify), `screen` (+ frames, vision, names) y `full`
+    (todo). `regenerate.availability` dice qué nivel se puede usar: `screen` y `full` necesitan el
+    archivo de vídeo, y los demás, los JSON de trabajo. `full` llama antes a
+    `regenerate.unconfirm_speakers`: al volver a separar las voces, las etiquetas ya no significan lo
+    mismo. Las huellas de voz se conservan, así que `identify` vuelve a proponer a cada persona.
   - `videos/{id}/learn` y `profiles/from-video`: solo `learn`.
+- **`persist_speakers` fusiona:** al repetir `identify`, un hablante confirmado conserva su persona y su
+  `id`. Solo cambian las propuestas de los no confirmados, y se borran las etiquetas que ya no existen.
+- **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía
+  `fotogramas/` antes de copiar los nuevos.
+- **Tiempos:** el worker guarda un `StageRun` por cada fase ejecutada: segundos y unidades (fotogramas
+  en `vision`, minutos de audio en el resto). `estimates.estimate` divide el total de segundos entre el
+  total de unidades de las últimas 10 ejecuciones (un vídeo corto, donde pesa cargar el modelo, no
+  distorsiona la estimación de uno largo) y, sin historial, usa `DEFAULT_RATES`, medidos con
+  grabaciones reales. Al reencolar, el
+  trabajo reinicia `started_at`. Si cambias mucho lo que tarda una fase, ajusta `DEFAULT_RATES`.
+- **Correcciones del usuario:** el worker carga las del vídeo en `ctx.corrections` al empezar el
+  trabajo. `analyze` y `learn` las incluyen en su contexto (ver `AI_PROMPTS.md`).
 - **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual
   (ver `test_learn_failure_does_not_break_the_job`). Si el vídeo no tiene perfil, solo propone datos
   de personas. Los detalles están en `AI_PROMPTS.md` (aprendizaje).

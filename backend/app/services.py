@@ -19,6 +19,7 @@ from .models import (
     Segment,
     Speaker,
     Video,
+    VideoCorrection,
     VoiceEmbedding,
 )
 from .pipeline.export import write_outputs
@@ -81,6 +82,29 @@ def speaker_names(session: Session, video_id: int) -> dict[str, str]:
     return names
 
 
+def video_corrections(session: Session, video_id: int) -> list[dict[str, Any]]:
+    rows = session.exec(select(VideoCorrection).where(VideoCorrection.video_id == video_id)
+                        .order_by(VideoCorrection.id)).all()
+    return [{"id": c.id, "text": c.text, "updated_at": c.updated_at.isoformat()} for c in rows]
+
+
+def corrections_applied(corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Lo que se guarda en el análisis para saber con qué correcciones se generó."""
+    return [{"id": c["id"], "updated_at": c["updated_at"]} for c in corrections]
+
+
+def with_applied(analysis: dict[str, Any] | None, corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Marca cada corrección según si el análisis actual se generó con ella (con ese mismo texto)."""
+    used = {(c["id"], c["updated_at"]) for c in (analysis or {}).get("correcciones_aplicadas") or []}
+    return [{**c, "applied": (c["id"], c["updated_at"]) in used} for c in corrections]
+
+
+def corrections_pending(analysis: dict[str, Any] | None, corrections: list[dict[str, Any]]) -> bool:
+    """Si las correcciones actuales no son las que se usaron al generar el análisis."""
+    used = (analysis or {}).get("correcciones_aplicadas") or []
+    return {(c["id"], c["updated_at"]) for c in used} != {(c["id"], c["updated_at"]) for c in corrections}
+
+
 CONTEXT_CONFIDENCE = 0.5
 
 
@@ -133,15 +157,23 @@ def apply_context_identities(session: Session, video_id: int, found: dict[str, A
 
 
 def persist_speakers(session: Session, video_id: int, identities: dict[str, dict[str, Any]]) -> None:
-    for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
-        session.delete(sp)
+    """Guarda la identificación. Al repetirla, los hablantes confirmados conservan su persona.
+
+    Solo cambian las propuestas de los que no están confirmados; las etiquetas que ya no existen se borran.
+    """
+    existing = {sp.label: sp for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id))}
+    for label, sp in existing.items():
+        if label not in identities:
+            session.delete(sp)
     for label, d in identities.items():
-        session.add(Speaker(
-            video_id=video_id, label=label, order_idx=d["order"],
-            suggested_person_id=d["person_id"], suggested_name=d["suggested_name"], source=d["source"],
-            confidence=d["confidence"], is_owner=d["is_owner"], speaking_time=d["speaking_time"],
-            visual_hints=d["visual_hints"], embedding=d["embedding"],
-        ))
+        sp = existing.get(label) or Speaker(video_id=video_id, label=label)
+        sp.order_idx, sp.is_owner, sp.speaking_time, sp.embedding = (
+            d["order"], d["is_owner"], d["speaking_time"], d["embedding"])
+        sp.visual_hints = dict(d["visual_hints"])
+        if not sp.confirmed:
+            sp.suggested_person_id, sp.suggested_name = d["person_id"], d["suggested_name"]
+            sp.source, sp.confidence = d["source"], d["confidence"]
+        session.add(sp)
     session.commit()
 
 

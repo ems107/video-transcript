@@ -175,3 +175,25 @@ class PersonPairDismissal(SQLModel, table=True):
 
     a: int = Field(foreign_key="person.id", primary_key=True, ondelete="CASCADE")
     b: int = Field(foreign_key="person.id", primary_key=True, ondelete="CASCADE")
+
+
+class StageRun(SQLModel, table=True):
+    """Cuánto tardó una fase ejecutada, para estimar las siguientes (ver `services.estimate`)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: Optional[int] = Field(default=None, foreign_key="job.id", ondelete="SET NULL")
+    video_id: Optional[int] = Field(default=None, foreign_key="video.id", ondelete="SET NULL")
+    stage: str = Field(index=True)
+    seconds: float
+    units: float  # minutos de audio, o fotogramas en «vision»
+    created_at: NaiveDatetime = Field(default_factory=now)
+
+
+class VideoCorrection(SQLModel, table=True):
+    """Corrección escrita por el usuario sobre un vídeo. La IA la recibe como un hecho y nunca la modifica."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    video_id: int = Field(foreign_key="video.id", index=True, ondelete="CASCADE")
+    text: str
+    created_at: NaiveDatetime = Field(default_factory=now)
+    updated_at: NaiveDatetime = Field(default_factory=now)

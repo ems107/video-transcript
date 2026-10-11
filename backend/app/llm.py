@@ -119,13 +119,37 @@ class LLMServer:
             try:
                 r = httpx.post(self.base + "/v1/chat/completions", json=body, timeout=1800)
                 r.raise_for_status()
-                content = r.json()["choices"][0]["message"]["content"]
-                return json.loads(content)
-            except (httpx.HTTPError, json.JSONDecodeError, KeyError) as e:
+                choice = r.json()["choices"][0]
+                content = choice["message"]["content"]
+            except (httpx.HTTPError, KeyError) as e:
                 last = e
                 log.warning("Fallo en llamada al LLM: %s", e)
                 time.sleep(2)
+                continue
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                last = e
+                saved = save_failure(body, content, choice.get("finish_reason"))
+                if choice.get("finish_reason") == "length":
+                    # Se ha cortado por el límite de tokens: repetir la misma petición daría lo mismo
+                    raise LLMError(f"La respuesta del modelo se cortó al llegar a {max_tokens} tokens "
+                                   f"(guardada en {saved})") from e
+                log.warning("Respuesta del LLM no válida (guardada en %s): %s", saved, e)
         raise LLMError(f"El modelo de lenguaje no devolvió una respuesta válida: {last}")
+
+
+def save_failure(body: dict[str, Any], content: str, finish_reason: str | None) -> Path:
+    """Guarda una respuesta no válida para poder diagnosticarla (sin las imágenes, que ocupan mucho)."""
+    out = DATA_DIR / "llm_failures"
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
+    messages = [{**m, "content": m["content"] if isinstance(m["content"], str) else
+                 [p for p in m["content"] if p.get("type") == "text"]} for m in body["messages"]]
+    path.write_text(json.dumps({"finish_reason": finish_reason, "max_tokens": body.get("max_tokens"),
+                                "response": content, "messages": messages}, ensure_ascii=False, indent=1),
+                    encoding="utf-8")
+    return path
 
 
 def image_part(path: Path) -> dict[str, Any]:

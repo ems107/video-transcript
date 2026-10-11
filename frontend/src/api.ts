@@ -96,6 +96,8 @@ export type VideoDetail = VideoCard & {
   segments: SegmentInfo[]
   keyframes: KeyframeInfo[]
   job: Job | null
+  video_corrections: { id: number; text: string; updated_at: string; applied: boolean }[] // applied: el análisis actual ya la tiene en cuenta
+  corrections_pending: boolean // hay correcciones que el análisis actual aún no tiene en cuenta
 }
 
 export type GlossaryEntry = { term: string; variants: string[]; definition: string }
@@ -216,6 +218,13 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     throw new Error(msg)
   }
   return res.json() as Promise<T>
+}
+
+export type RegenerateLevel = 'analysis' | 'speakers' | 'screen' | 'full'
+export type RegenerateInfo = {
+  levels: { level: RegenerateLevel; available: boolean; reason: string; seconds: number }[]
+  video_path: string | null
+  confirmed_speakers: number
 }
 
 export type RemovalInfo = {

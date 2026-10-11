@@ -17,7 +17,8 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from . import knowledge_store as KS
-from . import removal, services
+from . import estimates, removal, services
+from . import regenerate as regen
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
@@ -118,12 +119,13 @@ class Worker:
             job.options = options
             s.add(job)
             s.commit()
-            source = Path(video.video_path or video.source_path)
+            source = regen.video_file(video) or Path(video.video_path or video.source_path)
             ctx_data = dict(
                 profile=services.profile_dict(s, video.profile_id),
                 people=services.people_for(s, video.profile_id),
                 voice=services.voice_db(s),
                 video_id=video.id,
+                corrections=services.video_corrections(s, video.id),
             )
 
         weights_before = {}
@@ -149,6 +151,7 @@ class Worker:
         ctx = JobContext(
             job_id=job_id, video_id=ctx_data["video_id"], source_path=source, work_dir=wd, settings=settings,
             options=options, profile=ctx_data["profile"], people=ctx_data["people"], report=report,
+            corrections=ctx_data["corrections"],
             cancel_event=cancel_ev,
         )
         llm = LLMServer(settings)
@@ -167,10 +170,12 @@ class Worker:
                 report(0.0, label)
                 if key in GPU_TORCH_STAGES:
                     llm.stop()  # liberar VRAM antes de cargar Whisper / pyannote
+                t0 = time.monotonic()
                 self._run_stage(key, ctx, llm, ctx_data["voice"])
                 if key not in GPU_TORCH_STAGES:
                     free_gpu()
                 marker.touch()
+                self._record_time(ctx, key, time.monotonic() - t0)
                 report(1.0, label + ": hecho")
             self._finish(job_id, "done", "Completado")
             self._cleanup(wd)
@@ -185,6 +190,17 @@ class Worker:
             free_gpu()
             self.current = None
             self._cancel.pop(job_id, None)
+
+    @staticmethod
+    def _record_time(ctx: JobContext, stage: str, seconds: float) -> None:
+        """Guarda cuánto ha tardado la fase, para estimar las siguientes. Nunca interrumpe el trabajo."""
+        try:
+            duration = (ctx.load("probe.json") or {}).get("duration", 0.0)
+            with Session(engine) as s:
+                estimates.record(s, ctx.job_id, ctx.video_id, stage, seconds, duration,
+                                 len(ctx.load("frames.json", [])))
+        except Exception:
+            log.exception("No se pudo guardar el tiempo de la fase %s", stage)
 
     def _run_stage(self, key: str, ctx: JobContext, llm: LLMServer, voice: dict) -> None:
         if key == "ingest":
@@ -271,8 +287,11 @@ class Worker:
                 folder.mkdir(parents=True)
             ctx.report(0.1, "Copiando fotogramas")
             fdir = folder / "fotogramas"
+            new_frames = list(ctx.path("frames").glob("*.jpg"))
+            if new_frames and fdir.is_dir():
+                shutil.rmtree(fdir)  # se han vuelto a elegir: que no queden fotogramas viejos
             fdir.mkdir(exist_ok=True)
-            for f in ctx.path("frames").glob("*.jpg"):
+            for f in new_frames:
                 shutil.copy2(f, fdir / f.name)
             if ctx.path("thumbnail.jpg").exists():
                 shutil.copy2(ctx.path("thumbnail.jpg"), folder / "miniatura.jpg")
