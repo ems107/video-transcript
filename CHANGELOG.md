@@ -76,8 +76,9 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
   las variantes y se elige una sola forma: se tiene en cuenta lo que se oye en la transcripción y las
   personas que ya conoces, y nunca se juntan dos nombres que aparecen a la vez en pantalla.
 - **El resumen sabe quién es quién.** Recibe los participantes vistos en pantalla y la identidad probable
-  de cada hablante, y nombra a cada persona siempre de la misma forma. Los apodos y los nombres mal
-  transcritos («Selu» por José Luis) se atribuyen al participante correspondiente.
+  de cada hablante, y nombra a cada persona siempre de la misma forma. Un apodo o un nombre mal
+  transcrito solo se atribuye a un participante si el contexto lo deja claro; si no, se escribe tal
+  como se oye.
 - **Propuesta de nombre por el contexto.** Si la conversación deja claro quién es un hablante (se
   presenta, o le llaman por su nombre y responde), se propone ese nombre con el motivo. Solo se acepta un
   nombre que aparezca en pantalla o se oiga, y nunca se confirma solo. Al confirmarlo, sus apodos se
