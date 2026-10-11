@@ -202,3 +202,16 @@ def test_supported_requires_transcript_backing():
     assert not supported("Lleva la integración con el CRM", utts, [], 12)  # copiado de otro sitio
     assert not supported("Es del equipo de datos", utts, [], 12)
     assert not supported("Lleva la integración con Salesforce", utts, [], 500)  # lejos de donde se dijo
+
+
+def test_group_forms_and_their_use():
+    from app import knowledge as K
+
+    groups = K.group_forms(["Bárymont", "Plan Financiero", "Gestibarymont", "BÄRYMONT ADVANCE, S.L.", "Advance, S.L.",
+                            "Jira"])
+    assert groups == [["Bárymont", "Gestibarymont", "BÄRYMONT ADVANCE, S.L.", "Advance, S.L."], ["Plan Financiero"],
+                      ["Jira"]]
+    profile = {"glossary": [], "learned": [{"id": 1, "kind": "termino", "data": {
+        "term": "Bárymont", "definition": "CRM", "forms": ["Gestibarymont"]}}]}
+    assert [g["term"] for g in K.effective_glossary(profile)] == ["Bárymont", "Gestibarymont"]
+    assert "también Gestibarymont" in K.learned_block(profile)

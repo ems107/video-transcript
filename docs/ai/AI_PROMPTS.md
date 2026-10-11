@@ -58,6 +58,18 @@ las fases.
   - Un término debe aparecer literalmente (`term_occurrences`). Además debe parecer un término
     (`looks_like_term`: con mayúsculas o cifras, o visto en pantalla). No puede ser ya conocido ni el
     nombre de una persona.
+  - Y debe ser relevante (`term_relevant`): oírse en la conversación o estar en el `texto_relevante`
+    de al menos 3 fotogramas. La lista `terminos` del análisis de imagen recoge todo lo legible, incluida
+    la barra de tareas y las pestañas. Con una grabación real, la mitad de los términos propuestos eran
+    programas del escritorio (Trello, Jira…), que salían en esa lista en casi todos los fotogramas pero en
+    el texto relevante en 0–2. El contenido de la reunión salía en 5–15.
+  - Las formas de un mismo nombre se juntan en una propuesta (`group_forms`: una contiene a la otra sin
+    espacios ni signos, mínimo 6 letras). La más vista es el término y las demás van en `data.forms`, que
+    se muestran en la web, entran en el contexto del LLM («también …») y orientan a Whisper. **No** son
+    `variants` del glosario: esas se sustituyen en la transcripción, y «Gestibarymont» no es un error de
+    «Bárymont».
+  - Las secciones del resumen se piden reutilizables para cualquier vídeo del perfil (estructura, no
+    contenido): sin esa indicación proponía títulos de la reunión concreta.
   - Un hecho o dato necesita una marca de tiempo dentro del bloque y líneas reales alrededor
     (`excerpt_at`). Se descartan las frases con marcas temporales (`is_ephemeral`: «ayer», «el
     lunes», «a las 9»…).

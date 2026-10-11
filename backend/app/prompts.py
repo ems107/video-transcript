@@ -343,7 +343,10 @@ def learn_user(context: str, known: str, rejected: list[str], candidates: list[s
         "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
         if with_profile else "- terminos y contexto: listas vacías.\n"
     )
-    sections = ("- secciones: hasta 5 títulos de secciones útiles para resumir este tipo de reuniones."
+    sections = ("- secciones: hasta 5 títulos de secciones para organizar el resumen de cualquier vídeo de este \
+tipo, no solo de este. Deben servir aunque el próximo vídeo trate otro tema: describen la estructura (por \
+ejemplo, qué se trató, qué se decidió, qué queda pendiente), no el contenido concreto de esta reunión, \
+sus herramientas ni sus personas."
                 if want_sections else "- secciones: lista vacía.")
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{("Ya conocido (no lo repitas):\n" + known + "\n\n") if known else ""}\
 {("Rechazado antes por el usuario (no lo propongas):\n" + "\n".join("- " + r for r in rejected) + "\n\n") if rejected else ""}\

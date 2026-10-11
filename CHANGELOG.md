@@ -27,6 +27,13 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
 
 ### Corregido
 
+- **Términos del perfil sin ruido del escritorio.** Se proponían programas que solo se veían en la barra
+  de tareas o en otras pestañas (Trello, Jira…). Ahora un término tiene que oírse en la conversación o
+  formar parte del contenido de la pantalla.
+- Las distintas formas de un mismo nombre («Bárymont», «Gestibarymont», «Grupo Bárymont») se proponen
+  como un solo término con sus otras formas.
+- Las secciones del resumen que se proponen para un perfil sirven para cualquier vídeo de ese tipo, no
+  solo para el vídeo del que salen.
 - Cuando un hablante recibe un nombre por el contexto, el resumen ya no lo sigue llamando «Hablante N».
 - La IA podía entrar en un bucle repitiendo un elemento (por ejemplo, el mismo apodo decenas de veces)
   hasta cortarse la respuesta, y el resumen o el aprendizaje fallaban. Ahora todas sus listas tienen un

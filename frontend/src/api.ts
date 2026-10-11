@@ -159,6 +159,7 @@ export type Knowledge = {
     text?: string
     term?: string
     definition?: string
+    forms?: string[] // otras formas del mismo nombre (términos)
     title?: string
     name?: string
     datos?: { category: string; text: string; t: number | null }[]
