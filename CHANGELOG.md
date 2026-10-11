@@ -8,6 +8,15 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- La app mide cuánto tarda cada fase del análisis en tu equipo, y lo usa para estimar los tiempos.
+
+### Corregido
+
+- La hora de inicio de un trabajo se reinicia al regenerar un vídeo. Antes conservaba la del primer
+  análisis.
+
 ## [1.1.0] - 2026-10-11
 
 Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides.

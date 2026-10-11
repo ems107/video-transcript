@@ -351,6 +351,7 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str) -> Job:
     if not (WORK_DIR / f"job_{last.id}" / "corrected.json").exists():
         raise HTTPException(400, "Faltan los datos intermedios de este vídeo; hay que analizarlo de nuevo desde cero")
     last.status, last.message, last.error, last.progress = "queued", message, "", 0.0
+    last.started_at, last.finished_at = None, None  # el tiempo de este trabajo empieza ahora
     last.options = {**(last.options or {}), "redo": redo}
     v.status = "processing"
     session.add(last), session.add(v)

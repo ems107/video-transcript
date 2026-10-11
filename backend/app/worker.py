@@ -17,7 +17,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from . import knowledge_store as KS
-from . import removal, services
+from . import estimates, removal, services
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
@@ -167,10 +167,12 @@ class Worker:
                 report(0.0, label)
                 if key in GPU_TORCH_STAGES:
                     llm.stop()  # liberar VRAM antes de cargar Whisper / pyannote
+                t0 = time.monotonic()
                 self._run_stage(key, ctx, llm, ctx_data["voice"])
                 if key not in GPU_TORCH_STAGES:
                     free_gpu()
                 marker.touch()
+                self._record_time(ctx, key, time.monotonic() - t0)
                 report(1.0, label + ": hecho")
             self._finish(job_id, "done", "Completado")
             self._cleanup(wd)
@@ -185,6 +187,17 @@ class Worker:
             free_gpu()
             self.current = None
             self._cancel.pop(job_id, None)
+
+    @staticmethod
+    def _record_time(ctx: JobContext, stage: str, seconds: float) -> None:
+        """Guarda cuánto ha tardado la fase, para estimar las siguientes. Nunca interrumpe el trabajo."""
+        try:
+            duration = (ctx.load("probe.json") or {}).get("duration", 0.0)
+            with Session(engine) as s:
+                estimates.record(s, ctx.job_id, ctx.video_id, stage, seconds, duration,
+                                 len(ctx.load("frames.json", [])))
+        except Exception:
+            log.exception("No se pudo guardar el tiempo de la fase %s", stage)
 
     def _run_stage(self, key: str, ctx: JobContext, llm: LLMServer, voice: dict) -> None:
         if key == "ingest":
