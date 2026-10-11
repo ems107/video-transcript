@@ -6,6 +6,7 @@ import { api, type Job, type Person, type Proposals, type SegmentInfo, type Spea
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
 import { CorrectionsPanel } from '../CorrectionsPanel'
+import { FollowupsPanel } from '../FollowupsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
 import { OverridesList, SpeakerFixDialog, SplitDialog } from '../SpeakerFix'
 import { RemoveDialog } from '../RemoveDialog'
@@ -338,6 +339,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
             <SpeakerPanel video={video} people={people} onChange={load} seek={seek} onRegenerate={() => setRegenerating(true)} />
           )}
           <KnowledgePanel video={video} running={!!running} onChange={load} />
+          <FollowupsPanel video={video} running={!!running} onChange={load} />
           {video.status === 'done' && (
             <CorrectionsPanel video={video} running={!!running} onChange={load} onRegenerate={() => setRegenerating(true)} />
           )}

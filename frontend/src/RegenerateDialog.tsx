@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type RegenerateInfo, type RegenerateLevel } from './api'
 import { fmtDuration, plural } from './util'
 import { HelpLink } from './HelpMarkdown'
+import { FollowupChoice } from './FollowupsPanel'
 
 const OPTIONAL: { level: RegenerateLevel; title: string; text: string }[] = [
   {
@@ -29,6 +30,7 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
   const [level, setLevel] = useState<RegenerateLevel>('analysis')
   const [busy, setBusy] = useState(false)
   const [spk, setSpk] = useState<{ min: string; max: string }>({ min: '', max: '' })
+  const [rebuild, setRebuild] = useState<Record<number, boolean>>({})
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
     api.get<RegenerateInfo>(`/api/videos/${videoId}/regenerate`).then((r) => {
       setInfo(r)
       setSpk({ min: r.min_speakers ? String(r.min_speakers) : '', max: r.max_speakers ? String(r.max_speakers) : '' })
+      setRebuild(Object.fromEntries(r.followups.filter((f) => f.status === 'abierto').map((f) => [f.id, true])))
       setLevel(r.levels.find((l) => l.available)?.level ?? 'analysis')  // sin datos intermedios: solo el completo
     }).catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [videoId])
@@ -50,7 +53,8 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
     setBusy(true)
     try {
       const extra = level === 'full' ? { min_speakers: Number(spk.min) || null, max_speakers: Number(spk.max) || null } : {}
-      await api.post(`/api/videos/${videoId}/regenerate`, { level, ...extra })
+      const follow_rebuild = Object.entries(rebuild).filter(([, v]) => v).map(([k]) => Number(k))
+      await api.post(`/api/videos/${videoId}/regenerate`, { level, ...extra, follow_rebuild })
       onQueued()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -105,6 +109,16 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
             </p>
           )}
           {(level === 'screen' || level === 'full') && info.video_path && <p className="small muted">Usa el vídeo <code>{info.video_path}</code></p>}
+          {info.followups.length > 0 && (
+            <div className="stack">
+              <span className="small">El vídeo está en {info.followups.length === 1 ? 'un seguimiento' : 'varios seguimientos'}. El nuevo análisis puede cambiar lo que aporta a su estado:</span>
+              {info.followups.map((f) => (
+                <FollowupChoice key={f.id} name={f.name} rebuild={!!rebuild[f.id]} onChange={(v) => setRebuild({ ...rebuild, [f.id]: v })}
+                  rebuildText={`La IA vuelve a aplicar este vídeo y los posteriores (≈ ${fmtDuration(Math.max(f.seconds, 30))} más). Lo que cambiaste tú se conserva.`}
+                  keepText="El estado no cambia y queda marcado como desactualizado, para rehacerlo cuando quieras." />
+              ))}
+            </div>
+          )}
           {error && <p className="small danger-text">{error}</p>}
           <div className="row" style={{ justifyContent: 'flex-end' }}>
             <button onClick={() => ref.current?.close()} disabled={busy}>Cancelar</button>

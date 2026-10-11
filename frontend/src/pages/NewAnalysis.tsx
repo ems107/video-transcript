@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, type ProbeInfo, type Profile, type Settings } from '../api'
+import { api, type Followup, type ProbeInfo, type Profile, type Settings } from '../api'
 import { fmtDate, fmtDuration } from '../util'
 import { HelpLink } from '../HelpMarkdown'
 
@@ -10,6 +10,8 @@ export default function NewAnalysis() {
   const [info, setInfo] = useState<ProbeInfo | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [profileId, setProfileId] = useState('')
+  const [followups, setFollowups] = useState<Followup[]>([])
+  const [followupIds, setFollowupIds] = useState<number[]>([])
   const [mainTrack, setMainTrack] = useState('mix')
   const [ownerTrack, setOwnerTrack] = useState('')
   const [fileMode, setFileMode] = useState('')
@@ -25,6 +27,7 @@ export default function NewAnalysis() {
       if (ps.length === 1) setProfileId(String(ps[0].id))
     })
     api.get<Settings>('/api/settings').then((s) => setFileMode(String(s.file_mode)))
+    api.get<Followup[]>('/api/followups').then((fs) => setFollowups(fs.filter((f) => f.status === 'abierto')))
   }, [])
 
   async function check() {
@@ -49,7 +52,8 @@ export default function NewAnalysis() {
     if (minSpk) options.min_speakers = Number(minSpk)
     if (maxSpk) options.max_speakers = Number(maxSpk)
     try {
-      await api.post('/api/jobs', { path: info?.path ?? path, profile_id: profileId ? Number(profileId) : null, options })
+      await api.post('/api/jobs', { path: info?.path ?? path, profile_id: profileId ? Number(profileId) : null,
+        followup_ids: followupIds, options })
       nav('/cola')
     } catch (e) {
       setError((e as Error).message)
@@ -94,6 +98,25 @@ export default function NewAnalysis() {
               </select>
               <small>Aporta contexto, glosario y personas para mejorar la transcripción y el análisis.</small>
             </label>
+
+            {followups.length > 0 && (
+              <div className="field">
+                <span className="label">Seguimientos <HelpLink to="seguimientos" /></span>
+                <div className="row" style={{ gap: '0.35rem 1rem' }}>
+                  {followups.map((f) => (
+                    <label key={f.id} className="check small">
+                      <input type="checkbox" checked={followupIds.includes(f.id)} onChange={(e) => {
+                        setFollowupIds(e.target.checked ? [...followupIds, f.id] : followupIds.filter((x) => x !== f.id))
+                        // Lo normal es que los vídeos de un seguimiento usen el mismo perfil
+                        if (e.target.checked && !profileId && f.profile_id) setProfileId(String(f.profile_id))
+                      }} />
+                      {f.name}
+                    </label>
+                  ))}
+                </div>
+                <small>Si el vídeo continúa uno de estos temas: el análisis tiene en cuenta lo anterior y el estado del seguimiento se actualiza al terminar.</small>
+              </div>
+            )}
 
             {tracks.length > 1 && (
               <div className="grid2">

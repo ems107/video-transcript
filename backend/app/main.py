@@ -1069,6 +1069,16 @@ def update_followup(followup_id: int, body: FollowupUpdate, session: Session = S
     return FS.out(session, f, full=True)
 
 
+@app.post("/api/followups/{followup_id}/open-folder")
+def open_followup_folder(followup_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    f = _followup(session, followup_id)
+    FS.export(session, f)
+    if not f.folder or not Path(f.folder).is_dir():
+        raise HTTPException(404, "La carpeta no existe")
+    os.startfile(f.folder)  # noqa: S606  (abre el Explorador de Windows)
+    return {"ok": True}
+
+
 @app.delete("/api/followups/{followup_id}")
 def delete_followup(followup_id: int, delete_folder: bool = False, session: Session = SessionDep) -> dict[str, Any]:
     FS.delete(session, _followup(session, followup_id), delete_folder)
