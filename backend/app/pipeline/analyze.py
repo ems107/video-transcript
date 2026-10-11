@@ -18,6 +18,7 @@ from ..prompts import (
     chunk_user,
     corrections_block,
     final_user,
+    followup_block,
     profile_block,
     who_block,
 )
@@ -161,7 +162,7 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     vision = ctx.load("vision.json", [])
     duration = ctx.load("probe.json")["duration"]
     names = ctx.speaker_names
-    context = "\n\n".join(filter(None, [profile_block(ctx.profile, ctx.people),
+    context = "\n\n".join(filter(None, [profile_block(ctx.profile, ctx.people), followup_block(ctx.followups),
                                          corrections_block([c["text"] for c in ctx.corrections])]))
     order = list(dict.fromkeys(u["speaker"] for u in utts if u["speaker"]))
     shown = {lb: names.get(lb, lb) for lb in order}

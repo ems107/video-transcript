@@ -7,7 +7,7 @@ from app.models import Job, Person, Speaker, Video
 
 
 def test_levels_include_the_previous_ones():
-    assert regenerate.stages("analysis") == ["correct", "analyze", "learn", "publish"]
+    assert regenerate.stages("analysis") == ["correct", "analyze", "follow", "learn", "publish"]
     for shallow, deep in zip(regenerate.LEVELS, regenerate.LEVELS[1:]):
         assert set(regenerate.stages(shallow)) < set(regenerate.stages(deep))
     assert regenerate.stages("full")[0] == "ingest"

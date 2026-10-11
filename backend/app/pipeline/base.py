@@ -36,6 +36,8 @@ class JobContext:
     corrections: list[dict[str, Any]] = field(default_factory=list)
     # Arreglos manuales de hablantes aplicados en este trabajo: [{id, start, end, person_id}]
     overrides: list[dict[str, Any]] = field(default_factory=list)
+    # Estado de los seguimientos del vídeo antes de su fecha (contexto del análisis)
+    followups: list[str] = field(default_factory=list)
 
     def path(self, name: str) -> Path:
         return self.work_dir / name

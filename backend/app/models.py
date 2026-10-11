@@ -211,3 +211,58 @@ class SpeakerOverride(SQLModel, table=True):
     end: float
     person_id: int = Field(foreign_key="person.id", ondelete="CASCADE")
     created_at: NaiveDatetime = Field(default_factory=now)
+
+
+class Followup(SQLModel, table=True):
+    """Seguimiento: continuidad de un tema a lo largo de varios vídeos, con su estado acumulado.
+
+    Es independiente del perfil. El estado lo actualiza la IA con cada vídeo; lo que edita el usuario
+    queda marcado como manual y la IA ya no lo cambia (ver `followups.py`)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: str = ""
+    status: str = "abierto"  # abierto | archivado
+    summary: str = ""
+    summary_manual: bool = False  # el usuario lo ha editado: la IA ya no lo reescribe
+    summary_ai: str = ""  # último resumen de la IA cuando el vigente es el del usuario
+    # Fecha de grabación desde la que el estado no está al día (hay que rehacerlo), y por qué
+    stale_from: Optional[NaiveDatetime] = None
+    stale_reason: str = ""
+    folder: str = ""
+    created_at: NaiveDatetime = Field(default_factory=now)
+    updated_at: NaiveDatetime = Field(default_factory=now)
+
+
+class FollowupVideo(SQLModel, table=True):
+    followup_id: int = Field(foreign_key="followup.id", primary_key=True, ondelete="CASCADE")
+    video_id: int = Field(foreign_key="video.id", primary_key=True, ondelete="CASCADE")
+    applied: bool = False  # el estado ya incluye este vídeo
+    contribution: str = ""  # lo que aportó al tema
+    summary: str = ""  # resumen de la evolución tras aplicarlo (para volver atrás al rehacer)
+    added_at: NaiveDatetime = Field(default_factory=now)
+
+
+class FollowupItem(SQLModel, table=True):
+    """Tarea, decisión o duda del seguimiento. Su estado sale siempre del último evento de su recorrido."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    followup_id: int = Field(foreign_key="followup.id", index=True, ondelete="CASCADE")
+    kind: str  # tarea | decision | duda
+    text: str
+    owner: str = ""
+    due: str = ""
+    status: str = ""
+    manual: bool = False  # creado o editado por el usuario
+    hidden: bool = False  # borrado por el usuario: se conserva para que la IA no lo vuelva a crear
+    # [{video_id, t, evento, nota, source: ia|manual, at}]
+    events: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=now)
+
+
+class FollowupVersion(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    followup_id: int = Field(foreign_key="followup.id", index=True, ondelete="CASCADE")
+    reason: str = ""
+    snapshot: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: NaiveDatetime = Field(default_factory=now)

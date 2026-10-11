@@ -364,11 +364,99 @@ el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabil
 {sections}"""
 
 
+# --------------------------------------------------------------------------- seguimientos
+
+def followup_block(states: list[str]) -> str:
+    """Estado de los seguimientos del vídeo, como contexto del análisis."""
+    states = [s for s in states if s.strip()]
+    if not states:
+        return ""
+    return ("Este vídeo continúa uno o varios temas tratados en vídeos anteriores. Estado del tema según \
+esos vídeos (solo para entender referencias y relacionar; no es parte de este vídeo):\n\n"
+            + "\n\n".join(states) + """
+
+Usa este estado solo para entender a qué se refiere lo que se dice y para relacionarlo con lo anterior \
+(por ejemplo, «continúa lo de…» o «da por hecha la tarea de…»), solo si se dice en este vídeo y con la \
+marca de tiempo de este vídeo. No añadas al resumen, a las tareas ni a las decisiones nada que no se \
+diga o se vea en este vídeo.""")
+
+
+FOLLOW_SYSTEM = """Mantienes el estado de un tema que se trata a lo largo de varias grabaciones (reuniones \
+o sesiones de trabajo): sus tareas, decisiones y dudas, y un resumen de su evolución. Recibes el estado \
+según los vídeos anteriores y el análisis de un vídeo nuevo, y devuelves solo lo que cambia.
+
+""" + ANALYSIS_RULES
+
+FOLLOW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "eventos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada",
+                                                          "anulada", "resuelta"]},
+                    "t": {"type": "string"},
+                    "nota": {"type": "string"},
+                },
+                "required": ["id", "evento", "t", "nota"],
+            },
+        },
+        "nuevos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tipo": {"type": "string", "enum": ["tarea", "decision", "duda"]},
+                    "texto": {"type": "string"},
+                    "responsable": {"type": "string"},
+                    "plazo": {"type": "string"},
+                    "t": {"type": "string"},
+                },
+                "required": ["tipo", "texto", "responsable", "plazo", "t"],
+            },
+        },
+        "resumen": {"type": "string"},
+        "aporte": {"type": "string"},
+    },
+    "required": ["eventos", "nuevos", "resumen", "aporte"],
+}
+
+
+def follow_user(state: str, video: str, analysis: str) -> str:
+    previous = ("Estado del tema según los vídeos anteriores:\n" + state) if state else \
+        "Es el primer vídeo del tema: aún no hay estado."
+    return f"""{previous}
+
+Vídeo nuevo: {video}
+
+Análisis del vídeo nuevo (las marcas de tiempo son de este vídeo):
+
+{analysis}
+
+Devuelve:
+- eventos: cambios en los puntos del estado ([T…] tareas, [D…] decisiones, [P…] dudas) que este vídeo \
+dice expresamente. id: el del punto. evento: avanza (hay novedades pero sigue igual), hecha o descartada \
+(tareas), cambiada o anulada (decisiones), resuelta (dudas) o reabierta. t: marca de tiempo de este vídeo \
+donde se dice. nota: qué se dice, en una frase. Si este vídeo no lo menciona, no pongas nada: no deduzcas \
+que algo está hecho porque no se hable de ello.
+- nuevos: tareas, decisiones y dudas de este vídeo que no están ya en el estado (tipo, texto breve, \
+responsable o "", plazo o "", marca de tiempo). Solo lo relevante para el tema. No repitas como nuevo \
+un punto que ya existe: si es el mismo, usa un evento. Una decisión que cambia otra anterior va como \
+nueva y, además, como evento «cambiada» de la anterior.
+- resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
+ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior.
+- aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
+
+
 # --------------------------------------------------------------------------- límites de las listas
 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
-LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12}
+LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
+               "eventos": 30, "nuevos": 30}
 LIST_DEFAULT = 40
 
 
@@ -382,5 +470,5 @@ def _limit_lists(schema: Any) -> None:
     _limit_lists(schema.get("items"))
 
 
-for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA):
+for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA, FOLLOW_SCHEMA):
     _limit_lists(_schema)
