@@ -203,7 +203,7 @@ claro (por ejemplo, se presenta, o alguien se dirige a él por su nombre y es é
 el motivo y la marca de tiempo. Lista vacía si no está claro.
 - apodos: nombres oídos en la transcripción que son apodos, diminutivos o malas transcripciones del \
 nombre de un participante de la lista (el apodo tal como aparece escrito, el nombre del participante y \
-la marca de tiempo). Lista vacía si no hay."""
+la primera marca de tiempo). Cada apodo una sola vez. Lista vacía si no hay."""
 
 
 FINAL_SYSTEM = """Eres un analista que redacta el informe final de una grabación (reunión o sesión de \
@@ -359,3 +359,25 @@ Devuelve:
 el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento \
 (materias o sistemas que domina, no hechos concretos que sabe), relacion, personal u otro. dato: la frase.
 {sections}"""
+
+
+# --------------------------------------------------------------------------- límites de las listas
+
+# Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
+# con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
+LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12}
+LIST_DEFAULT = 40
+
+
+def _limit_lists(schema: Any) -> None:
+    if not isinstance(schema, dict):
+        return
+    for key, sub in (schema.get("properties") or {}).items():
+        if isinstance(sub, dict) and sub.get("type") == "array":
+            sub.setdefault("maxItems", LIST_LIMITS.get(key, LIST_DEFAULT))
+        _limit_lists(sub)
+    _limit_lists(schema.get("items"))
+
+
+for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA):
+    _limit_lists(_schema)

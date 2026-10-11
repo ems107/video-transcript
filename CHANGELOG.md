@@ -25,10 +25,18 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
   mantiene en cualquier regeneración, también en la completa.
 - Al regenerar el análisis completo se puede indicar el número mínimo y máximo de hablantes.
 
+### Corregido
+
+- La IA podía entrar en un bucle repitiendo un elemento (por ejemplo, el mismo apodo decenas de veces)
+  hasta cortarse la respuesta, y el resumen o el aprendizaje fallaban. Ahora todas sus listas tienen un
+  máximo de elementos.
+
 ### Cambiado
 
 - «Volver a identificar a los hablantes» también vuelve a comprobar las voces. Ahora necesita el archivo
   de vídeo, para volver a extraer el audio.
+- Las propuestas de nombre por pantalla tienen en cuenta las reasignaciones por la voz. Un fotograma que
+  cae justo en un cambio de turno se asigna a quien empieza a hablar.
 - La huella de voz de cada hablante se calcula solo con sus intervenciones largas y claras, así que al
   confirmarlo se guarda una voz más limpia.
 

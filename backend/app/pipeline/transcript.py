@@ -109,10 +109,19 @@ def speaking_time(turns: list[Turn]) -> dict[str, float]:
     return total
 
 
-def speaker_at(turns: list[Turn], t: float) -> str | None:
-    for turn in turns:
-        if turn["start"] <= t <= turn["end"]:
-            return turn["speaker"]
+def speaker_at(turns: list[Turn], t: float, tolerance: float = 1.0) -> str | None:
+    """Hablante en el instante `t`.
+
+    Entre varios turnos que lo contienen, el que lo tiene más dentro; en un empate en el borde, el que
+    empieza (quien empieza a hablar es quien aparece resaltado). Si `t` cae en un silencio, el turno más
+    cercano a menos de `tolerance` segundos.
+    """
+    inside = [x for x in turns if x["start"] <= t <= x["end"]]
+    if inside:
+        return max(inside, key=lambda x: (min(t - x["start"], x["end"] - t), x["start"]))["speaker"]
+    near = min(turns, key=lambda x: min(abs(t - x["start"]), abs(t - x["end"])), default=None)
+    if near and min(abs(t - near["start"]), abs(t - near["end"])) <= tolerance:
+        return near["speaker"]
     return None
 
 
