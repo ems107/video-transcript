@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type Settings } from '../api'
+import { HelpLink } from '../HelpMarkdown'
 
 const FIELDS: { key: string; label: string; help?: string; type?: 'number' | 'select'; options?: [string, string][] }[] = [
   { key: 'analyzed_dir', label: 'Carpeta de vídeos analizados', help: 'Cada vídeo se publica en una subcarpeta «AAAA-MM-DD - Título».' },
@@ -8,7 +9,7 @@ const FIELDS: { key: string; label: string; help?: string; type?: 'number' | 'se
   { key: 'whisper_batch_size', label: 'Lote de Whisper', type: 'number', help: 'Bájalo si hay errores de memoria de GPU.' },
   { key: 'voice_match_threshold', label: 'Umbral para proponer persona por voz (0-1)', type: 'number' },
   { key: 'voice_auto_threshold', label: 'Umbral de alta confianza por voz (0-1)', type: 'number' },
-  { key: 'max_frames', label: 'Máximo de fotogramas analizados por vídeo', type: 'number', help: 'Cada fotograma tarda ~8 s en analizarse.' },
+  { key: 'max_frames', label: 'Máximo de fotogramas analizados por vídeo', type: 'number', help: 'Cada fotograma tarda unos 15 s en analizarse.' },
   { key: 'frame_max_interval', label: 'Analizar al menos un fotograma cada (s)', type: 'number' },
   { key: 'chunk_minutes', label: 'Minutos por bloque de resumen', type: 'number' },
   { key: 'llm_n_cpu_moe', label: 'Capas MoE del LLM en CPU', type: 'number', help: 'Súbelo si llama-server falla por falta de memoria de GPU; bájalo para más velocidad.' },
@@ -37,7 +38,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <h1>Ajustes</h1>
+      <h1>Ajustes <HelpLink to="ajustes" /></h1>
       <div className="card pad stack" style={{ maxWidth: 820 }}>
         {FIELDS.map((f) => (
           <label key={f.key} className="field">

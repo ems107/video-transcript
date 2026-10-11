@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Job } from '../api'
 import { fmtDate, STATUS_LABEL } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 const PILL: Record<string, string> = { running: 'run', done: 'ok', error: 'err', cancelled: '', queued: '' }
 
@@ -45,7 +46,7 @@ export function JobRow({ job }: { job: Job }) {
 export default function Queue({ jobs }: { jobs: Job[] }) {
   return (
     <>
-      <h1>Cola de procesamiento</h1>
+      <h1>Cola de procesamiento <HelpLink to="cola" /></h1>
       <p className="muted small">Los vídeos se procesan de uno en uno. Si cierras la aplicación, el trabajo se reanuda desde la última fase completada.</p>
       <div className="stack">
         {jobs.length === 0 && <div className="card pad muted">No hay trabajos.</div>}

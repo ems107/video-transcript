@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type ProbeInfo, type Profile, type Settings } from '../api'
 import { fmtDate, fmtDuration } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 export default function NewAnalysis() {
   const nav = useNavigate()
@@ -61,7 +62,7 @@ export default function NewAnalysis() {
 
   return (
     <>
-      <h1>Nuevo análisis</h1>
+      <h1>Nuevo análisis <HelpLink to="analizar" /></h1>
       <div className="card pad stack" style={{ maxWidth: 820 }}>
         <label className="field">
           <span>Ruta del vídeo</span>

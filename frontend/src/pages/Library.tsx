@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type Person, type Profile, type VideoCard } from '../api'
 import { fmtDate, fmtDuration, STATUS_LABEL } from '../util'
+import { HelpLink } from '../HelpMarkdown'
 
 export default function Library() {
   const [videos, setVideos] = useState<VideoCard[] | null>(null)
@@ -33,7 +34,7 @@ export default function Library() {
   return (
     <>
       <div className="spread" style={{ marginBottom: '1rem' }}>
-        <h1 style={{ margin: 0 }}>Biblioteca</h1>
+        <h1 style={{ margin: 0 }}>Biblioteca <HelpLink to="primeros-pasos" /></h1>
         <Link to="/nuevo"><button className="primary">+ Analizar vídeo</button></Link>
       </div>
       <div className="row" style={{ marginBottom: '1rem' }}>
