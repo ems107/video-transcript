@@ -25,18 +25,20 @@ def test_corrections_crud_and_pending(client, session):
     client.post(f"/api/videos/{v.id}/corrections", json={"text": "Selu es José Luis, no Sandra"})
     detail = client.get(f"/api/videos/{v.id}").json()
     [c] = detail["video_corrections"]
-    assert c["text"] == "Selu es José Luis, no Sandra" and detail["corrections_pending"]
+    assert c["text"] == "Selu es José Luis, no Sandra" and detail["corrections_pending"] and not c["applied"]
 
     # El análisis guarda con qué correcciones se generó: ya no está pendiente
     vid = session.get(Video, v.id)
     vid.analysis = {"titulo": "T", "correcciones_aplicadas": services.corrections_applied([c])}
     session.add(vid)
     session.commit()
-    assert not client.get(f"/api/videos/{v.id}").json()["corrections_pending"]
+    detail = client.get(f"/api/videos/{v.id}").json()
+    assert not detail["corrections_pending"] and detail["video_corrections"][0]["applied"]
 
     # Editarla o borrarla vuelve a dejarla pendiente
     client.put(f"/api/corrections/{c['id']}", json={"text": "Selu es José Luis"})
-    assert client.get(f"/api/videos/{v.id}").json()["corrections_pending"]
+    detail = client.get(f"/api/videos/{v.id}").json()
+    assert detail["corrections_pending"] and not detail["video_corrections"][0]["applied"]
     client.delete(f"/api/corrections/{c['id']}")
     assert client.get(f"/api/videos/{v.id}").json()["video_corrections"] == []
 

@@ -199,8 +199,9 @@ todo el análisis sin llamar al LLM. «Regenerar análisis» tiene niveles (ver 
 el usuario sobre un vídeo («X es quien presenta, no Y»). Se añaden al contexto de cada bloque, del
 informe final y del aprendizaje, con la indicación de que prevalecen sobre la transcripción y la
 pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` guarda
-`correcciones_aplicadas` (`id` y `updated_at`), y `services.corrections_pending` avisa si las actuales
-no coinciden. La IA nunca las escribe ni las modifica.
+`correcciones_aplicadas` (`id` y `updated_at`): `services.with_applied` marca cada corrección y
+`services.corrections_pending` avisa si las actuales no coinciden. La IA no ve el análisis anterior, así
+que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
 
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se

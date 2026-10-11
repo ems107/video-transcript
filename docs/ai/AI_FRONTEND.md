@@ -12,7 +12,7 @@ de componentes ni de estado: solo `useState`/`useEffect` y CSS propio.
 | `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor`, `notifyKnowledge()` |
 | `src/knowledge.tsx` | componentes del conocimiento aprendido: `ProposalList`/`ProposalCard` (con evidencia), `KnowledgeList` (aceptado, editar y retirar) y `VersionHistory` (restaurar) |
 | `src/RegenerateDialog.tsx` | ventana «Regenerar el análisis»: qué se repite y qué se conserva, una casilla por nivel (encadenadas) y la estimación |
-| `src/CorrectionsPanel.tsx` | tarjeta «Correcciones» del vídeo: añadir, editar, borrar y avisar de las que faltan por aplicar |
+| `src/CorrectionsPanel.tsx` | tarjeta «Correcciones» del vídeo: añadir, editar y borrar; estado «Aplicada/Pendiente» por corrección (`applied`) y aviso de las que faltan por aplicar. El texto de ayuda explica que el análisis se reescribe de cero: cada corrección debe entenderse sola |
 | `src/RemoveDialog.tsx` | ventana «Quitar el vídeo» (`<dialog>` con casillas; pide `videos/{id}/removal` para mostrar las rutas) |
 | `src/index.css` | variables de diseño en `:root`, modo oscuro con `prefers-color-scheme` y clases de utilidad |
 | `src/pages/*.tsx` | una página por ruta (ver abajo) |

@@ -135,7 +135,11 @@ dialog.dialog code { word-break: break-all; display: block; }
 .notice { background: var(--accent-soft); padding: 0.75rem 1rem; border-radius: 8px; }
 .notice.inline { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 ul.corrections { padding-left: 1.1rem; margin: 0.5rem 0 0; }
-ul.corrections li + li { margin-top: 0.35rem; }
+ul.corrections li + li { margin-top: 0.5rem; }
+/* Texto a la izquierda y estado y botones siempre a la derecha, aunque el texto ocupe varias líneas */
+.correction-row { display: flex; gap: 0.75rem; align-items: flex-start; }
+.correction-row .grow { flex: 1; min-width: 0; }
+.correction-row .actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; }
 
 .progress { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.5s; }
@@ -195,4 +199,6 @@ table.tbl { width: 100%; border-collapse: collapse; }
   .main { padding: 1rem; }
   .grid2 { grid-template-columns: 1fr; }
   .spread > .grow { flex-basis: 100%; }
+  .correction-row { flex-wrap: wrap; }
+  .correction-row .grow { flex-basis: 100%; }
 }

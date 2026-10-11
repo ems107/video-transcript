@@ -93,6 +93,12 @@ def corrections_applied(corrections: list[dict[str, Any]]) -> list[dict[str, Any
     return [{"id": c["id"], "updated_at": c["updated_at"]} for c in corrections]
 
 
+def with_applied(analysis: dict[str, Any] | None, corrections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Marca cada corrección según si el análisis actual se generó con ella (con ese mismo texto)."""
+    used = {(c["id"], c["updated_at"]) for c in (analysis or {}).get("correcciones_aplicadas") or []}
+    return [{**c, "applied": (c["id"], c["updated_at"]) in used} for c in corrections]
+
+
 def corrections_pending(analysis: dict[str, Any] | None, corrections: list[dict[str, Any]]) -> bool:
     """Si las correcciones actuales no son las que se usaron al generar el análisis."""
     used = (analysis or {}).get("correcciones_aplicadas") or []

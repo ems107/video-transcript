@@ -245,7 +245,7 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
         **video_card(session, v),
         "source_path": v.source_path, "video_path": v.video_path,
         "analysis": v.analysis, "speakers": speakers,
-        "video_corrections": (vc := services.video_corrections(session, v.id)),
+        "video_corrections": services.with_applied(v.analysis, vc := services.video_corrections(session, v.id)),
         "corrections_pending": bool(v.analysis) and services.corrections_pending(v.analysis, vc),
         "segments": [{"id": s.id, "start": s.start, "end": s.end, "speaker": s.speaker,
                       "name": names.get(s.speaker, s.speaker), "text": s.text,

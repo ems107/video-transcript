@@ -96,7 +96,7 @@ export type VideoDetail = VideoCard & {
   segments: SegmentInfo[]
   keyframes: KeyframeInfo[]
   job: Job | null
-  video_corrections: { id: number; text: string; updated_at: string }[]
+  video_corrections: { id: number; text: string; updated_at: string; applied: boolean }[] // applied: el análisis actual ya la tiene en cuenta
   corrections_pending: boolean // hay correcciones que el análisis actual aún no tiene en cuenta
 }
 

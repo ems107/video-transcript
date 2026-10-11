@@ -26,8 +26,11 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
     <div className="card pad" style={{ marginTop: '1rem' }}>
       <h3 style={{ margin: 0 }}>Correcciones</h3>
       <p className="small muted" style={{ marginTop: '0.35rem' }}>
-        Lo que el análisis ha interpretado mal, escrito como un hecho. Por ejemplo: «Fulano es quien presenta, no Mengano»
-        o «La tarea de enviar el informe no se acordó». Se aplican al regenerar y nunca las modifica la IA.
+        Escribe aquí lo que el análisis ha interpretado mal, como hechos sobre lo que ocurre en el vídeo. Al regenerar, la
+        IA vuelve a escribir el análisis desde cero, sin ver el anterior, y recibe estas correcciones como hechos que
+        prevalecen sobre la grabación. Por eso cada corrección debe entenderse por sí sola, sin referirse a partes del
+        resumen. Se aplican en cada regeneración: mantenlas aunque el resumen ya salga bien. Afectan al resumen, las tareas
+        y el aprendizaje, no al texto de la transcripción; para eso está el glosario del perfil. La IA nunca las modifica.
       </p>
       {video.video_corrections.length > 0 && (
         <ul className="corrections">
@@ -43,9 +46,13 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
                   <button className="sm" disabled={busy} onClick={() => setEditing(null)}>Cancelar</button>
                 </div>
               ) : (
-                <div className="spread">
-                  <span>{c.text}</span>
-                  <span className="row" style={{ gap: '0.35rem', flexWrap: 'nowrap' }}>
+                <div className="correction-row">
+                  <span className="grow">{c.text}</span>
+                  <span className="actions">
+                    <span className={c.applied ? 'pill ok' : 'pill warn'}
+                      title={c.applied ? 'El análisis actual ya la tiene en cuenta' : 'Se aplicará la próxima vez que regeneres el análisis'}>
+                      {c.applied ? 'Aplicada' : 'Pendiente'}
+                    </span>
                     <button className="sm" disabled={busy} onClick={() => setEditing({ id: c.id, text: c.text })}>Editar</button>
                     <button className="sm danger" disabled={busy}
                       onClick={() => confirm('¿Borrar esta corrección?') && act(() => api.del(`/api/corrections/${c.id}`))}>Borrar</button>
