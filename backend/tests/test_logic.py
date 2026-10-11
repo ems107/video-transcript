@@ -62,6 +62,13 @@ def test_glossary_variants_case_and_phonetic():
     assert fixed == "Lo subimos a Salesforce y luego al SAP."
 
 
+def test_glossary_does_not_touch_text_that_already_contains_the_term():
+    # Caso real: con el término «onMicrosoft», «onmicrosoft.com» se cambiaba por «onMicrosoft» (perdía «.com»)
+    segs = ["El info arroba ferralum onmicrosoft.com ya funciona.", "Entra en on microsof y mira."]
+    cands = find_candidates(segs, [{"term": "onMicrosoft", "variants": []}])
+    assert [(c.segment, c.original) for c in cands] == [(1, "on microsof")]
+
+
 def test_phonetic_key():
     assert phonetic("cubernetes") == phonetic("Kubernetes")
     assert phonetic("llave") == phonetic("yabe")
