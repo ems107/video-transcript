@@ -25,7 +25,7 @@ from sse_starlette.sse import EventSourceResponse
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
 from . import regenerate as regen
-from . import removal, speaker_fix
+from . import help_values, removal, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -76,6 +76,19 @@ def status(session: Session = SessionDep) -> dict[str, Any]:
     pending = PR.pending_count(session, s.voice_auto_threshold)
     return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current,
             "pending_proposals": pending}
+
+
+@app.get("/api/help/values")
+def help_values_endpoint() -> dict[str, Any]:
+    """Ajustes y umbrales que cita la ayuda, con su valor actual."""
+    return help_values.values()
+
+
+@app.get("/api/help/changelog")
+def help_changelog() -> dict[str, str]:
+    """Historial de cambios para la página «Novedades» de la ayuda."""
+    path = Path(__file__).resolve().parents[2] / "CHANGELOG.md"
+    return {"text": path.read_text(encoding="utf-8") if path.exists() else ""}
 
 
 @app.get("/api/settings")
