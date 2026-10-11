@@ -66,6 +66,9 @@ librería de IA: es la primera línea de `main.py`. Si un script nuevo usa estos
   Se usa `exclusive_speaker_diarization` para los turnos (sin solapes) y `speaker_embeddings` en el
   orden de `speaker_diarization.labels()`. El audio se pasa ya decodificado
   (`{"waveform", "sample_rate"}`), así que torchcodec no se usa y su aviso se silencia en `env.py`.
+- **Huellas por tramo** (fase `voices`): `Model.from_pretrained(<carpeta>/embedding)` e
+  `Inference(window="whole")` con `crop`. Usa poca VRAM y se libera al terminar. En un vídeo de 37 min
+  calcula unas 3300 ventanas en unos 40 s.
 - **Primer uso de CUDA:** la primera transcripción tras instalar tarda unos 90 s más por la compilación
   JIT de los kernels. Solo pasa una vez y no indica ningún error.
 - **SQLModel 0.0.47:** los campos de fecha deben anotarse como `NaiveDatetime`. Con `datetime` a

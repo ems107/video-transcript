@@ -140,6 +140,29 @@ En cada intervención corregida se guardan `original_text` y `corrections`, y la
 **Nunca dejes que el LLM reescriba texto libremente.** Solo decide sí o no sobre sustituciones
 concretas.
 
+## Comprobación por la voz (`pipeline/voices.py`)
+
+pyannote se equivoca en saludos, cambios de turno y frases cortas, y a veces deja una línea con dos
+voces. La fase `voices` lo comprueba:
+- **Voz de cada hablante** (`clean_centroids`): la media de sus intervenciones de 3 s o más, sin las
+  que se parecen más a otro.
+- **Ventanas** de 1,5 s cada 0,5 s dentro de cada intervención de 1,5 s o más. Para cada palabra se
+  promedian las ventanas que la cubren, ponderadas hacia la centrada en ella (las de los lados ya
+  recogen la voz vecina). Se reasigna si el ganador tiene parecido ≥ `MIN_SIM` (0,35) y saca
+  ≥ `MARGIN` (0,2) al segundo. Si apunta a otro con menos margen, la palabra queda `dudosa`. Un tramo
+  reasignado de menos de `MIN_RUN` (0,4 s) se deshace y queda dudoso.
+- **Medido** con el vídeo de 37 min y 9 tramos que el usuario revisó escuchando: todas las
+  reasignaciones fueron correctas, incluidos un saludo de 0,5 s en mitad de una línea y una línea
+  partida justo donde cambia la voz. Los intercambios de varias voces en menos de 2 s («El martes 15.
+  Sí. Vale.») no se pueden resolver por la voz: quedan para el arreglo manual. Si tocas los umbrales,
+  vuelve a medir con tramos revisados.
+- **Dos voces en un hablante** (`detect_splits`): 2-medias sobre sus intervenciones largas ya
+  reasignadas. Se propone si la silueta es ≥ 0,45, cada grupo suma ≥ 15 s y los grupos se parecen
+  ≤ 0,5. Se guarda en `visual_hints["_split"]`, y el usuario asigna cada grupo con arreglos manuales.
+- Las huellas por intervención están en el mismo espacio que las de pyannote (parecido 0,92–0,99), así
+  que los centroides limpios sustituyen a los de pyannote en `diarization.json` y son los que se
+  guardan al confirmar un hablante.
+
 ## Identificación de hablantes (`pipeline/identify.py`, `pipeline/voice.py`)
 
 Fuentes, por orden de prioridad:

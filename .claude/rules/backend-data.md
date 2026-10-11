@@ -15,7 +15,7 @@ paths:
 Lee `docs/ai/AI_BACKEND.md` antes de editar.
 
 - No hay migraciones: las tablas nuevas son seguras, pero una columna nueva en una tabla existente
-  necesita un `ALTER TABLE` idempotente en `init_db()`.
+  se declara en `db.NEW_COLUMNS` (`init_db` la añade si falta).
 - Cambios en lo manual o lo aceptado de perfiles y personas: `KS.ensure_baseline` antes y
   `KS.record_version` después (o `proposals._Owners`). Nunca borres elementos aceptados: se retiran.
 - Las pruebas de API usan `tests/conftest.py` (`client`, `session`), con la BD en memoria.
