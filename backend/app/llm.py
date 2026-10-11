@@ -150,7 +150,7 @@ class LLMServer:
 
 
 # Muestreo recomendado por Qwen para el modo razonamiento
-THINKING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0}
+THINKING_SAMPLING = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0}
 
 
 def save_failure(body: dict[str, Any], content: str, finish_reason: str | None) -> Path:
