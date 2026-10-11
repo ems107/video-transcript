@@ -22,4 +22,6 @@ Lee `docs/ai/AI_BACKEND.md` antes de editar.
 - Después de modificar un vídeo publicado, llama a `services.export_video` y `services.index_video`.
 - Los nombres de los hablantes se obtienen siempre con `services.speaker_names()`.
 - Si cambias una respuesta de la API, actualiza su tipo en `frontend/src/api.ts`.
-- La app nunca borra vídeos ni carpetas del usuario.
+- La app nunca borra vídeos ni carpetas del usuario, salvo en «Quitar» cuando el usuario lo marca, y
+  solo con `removal.plan` (ficheros que escribe la app y el vídeo elegido; una carpeta solo si queda
+  vacía).

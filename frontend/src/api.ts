@@ -62,6 +62,8 @@ export type SpeakerInfo = {
   confidence: number
   speaking_time: number
   visual_hints: Record<string, number>
+  reason: string // por qué se propone (identidad deducida del contexto)
+  aliases: string[] // apodos con que se le llama en el vídeo
   has_embedding: boolean
 }
 
@@ -214,6 +216,16 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     throw new Error(msg)
   }
   return res.json() as Promise<T>
+}
+
+export type RemovalInfo = {
+  folder: string | null
+  video_path: string | null
+  source_path: string | null // original, solo si la app trabajó con una copia
+  video_in_folder: boolean
+  work_dirs: string[]
+  voices: number
+  pending_proposals: number
 }
 
 export const api = {

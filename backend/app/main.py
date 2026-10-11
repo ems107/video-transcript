@@ -24,12 +24,14 @@ from sse_starlette.sse import EventSourceResponse
 
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
+from . import removal
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
     Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video, VoiceEmbedding,
 )
+from .pipeline.glossary import normalize
 from .worker import STAGE_LABELS, worker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -223,12 +225,15 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     speakers = []
     for sp in session.exec(select(Speaker).where(Speaker.video_id == v.id).order_by(Speaker.order_idx)):
         sug = session.get(Person, sp.suggested_person_id) if sp.suggested_person_id else None
+        hints = sp.visual_hints or {}
         speakers.append({
             "id": sp.id, "label": sp.label, "name": names.get(sp.label, sp.label), "order": sp.order_idx,
             "person_id": sp.person_id, "confirmed": sp.confirmed, "is_owner": sp.is_owner,
             "suggested_person_id": sp.suggested_person_id, "suggested_person_name": sug.name if sug else None,
             "suggested_name": sp.suggested_name, "source": sp.source, "confidence": sp.confidence,
-            "speaking_time": sp.speaking_time, "visual_hints": sp.visual_hints, "has_embedding": bool(sp.embedding),
+            "speaking_time": sp.speaking_time, "has_embedding": bool(sp.embedding),
+            "visual_hints": {k: c for k, c in hints.items() if not k.startswith("_")},
+            "reason": hints.get("_motivo", ""), "aliases": hints.get("_apodos", []),
         })
     segs = session.exec(select(Segment).where(Segment.video_id == v.id).order_by(Segment.idx)).all()
     frames = session.exec(select(Keyframe).where(Keyframe.video_id == v.id).order_by(Keyframe.t)).all()
@@ -267,19 +272,32 @@ def update_video(video_id: int, body: VideoUpdate, session: Session = SessionDep
     return video_card(session, v)
 
 
-@app.delete("/api/videos/{video_id}")
-def delete_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    """Quita el vídeo de la biblioteca. No borra ningún archivo del disco."""
+@app.get("/api/videos/{video_id}/removal")
+def removal_info(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Rutas y datos a los que afectaría quitar el vídeo."""
+    return removal.info(session, _404(session.get(Video, video_id), "Vídeo"))
+
+
+class RemoveIn(BaseModel):
+    delete_files: bool = False
+    delete_video: bool = False
+    delete_original: bool = False
+    forget: bool = False
+
+
+@app.post("/api/videos/{video_id}/remove")
+def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -> dict[str, Any]:
+    """Quita el vídeo de la app. Sin opciones, los ficheros se conservan para poder recuperarlo."""
     v = _404(session.get(Video, video_id), "Vídeo")
     if v.status == "processing":
         raise HTTPException(400, "El vídeo se está procesando")
-    session.connection().execute(text("DELETE FROM search_fts WHERE video_id = :v"), {"v": v.id})
-    for model in (Segment, Keyframe, Speaker, Job):
-        for row in session.exec(select(model).where(model.video_id == v.id)):
-            session.delete(row)
-    session.delete(v)
-    session.commit()
-    return {"ok": True}
+    return removal.remove(session, v, removal.Options(**body.model_dump()))
+
+
+@app.delete("/api/videos/{video_id}")
+def delete_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Quita el vídeo de la biblioteca sin borrar ningún fichero."""
+    return remove_video(video_id, RemoveIn(), session)
 
 
 @app.get("/api/videos/{video_id}/file")
@@ -366,7 +384,10 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
 
     person_id = body.person_id
     if body.new_person_name and body.new_person_name.strip():
-        person = Person(name=body.new_person_name.strip())
+        # Al confirmar la persona propuesta, se guardan también los apodos con que la llaman en el vídeo
+        same = normalize(body.new_person_name) == normalize(sp.suggested_name)
+        person = Person(name=body.new_person_name.strip(),
+                        aliases=list((sp.visual_hints or {}).get("_apodos", [])) if same else [])
         session.add(person)
         session.commit()
         person_id = person.id

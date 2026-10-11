@@ -369,6 +369,9 @@ def person_line(p: dict[str, Any], max_facts: int = 5) -> str:
         if val:
             tags.append(f"{CATEGORY_LABELS[cat]}: {val}")
     rest = [f["text"] for f in facts if f["category"] not in SINGLE_VALUE][:max_facts]
+    aliases = [a for a in p.get("aliases") or [] if a and normalize(a) != normalize(p["name"])]
+    if aliases:
+        tags.insert(0, "también llamado " + ", ".join(aliases[:4]))
     line = f"- {p['name']}" + (f" ({'; '.join(tags)})" if tags else "")
     if p.get("notes"):
         rest.insert(0, p["notes"])

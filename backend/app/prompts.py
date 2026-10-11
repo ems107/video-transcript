@@ -132,14 +132,52 @@ CHUNK_SCHEMA = {
         "tareas": {"type": "array", "items": TASK_SCHEMA},
         "decisiones": {"type": "array", "items": DECISION_SCHEMA},
         "pendientes": {"type": "array", "items": ITEM_T},
+        "identidades": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"hablante": ITEM_T, "nombre": ITEM_T, "motivo": ITEM_T, "t": ITEM_T},
+                "required": ["hablante", "nombre", "motivo", "t"],
+            },
+        },
+        "apodos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"apodo": ITEM_T, "nombre": ITEM_T, "t": ITEM_T},
+                "required": ["apodo", "nombre", "t"],
+            },
+        },
     },
-    "required": ["resumen", "temas", "tareas", "decisiones", "pendientes"],
+    "required": ["resumen", "temas", "tareas", "decisiones", "pendientes", "identidades", "apodos"],
 }
 
 
-def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str) -> str:
-    return f"""{("Contexto:\n" + context + "\n\n") if context else ""}Fragmento {part} de {total} \
-({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» describen lo que se ve.
+def who_block(participants: list[str], speakers: list[tuple[str, str]], nicknames: dict[str, list[str]]) -> str:
+    """Quién es quién en el vídeo, para que el LLM nombre siempre igual a cada persona."""
+    lines = []
+    if participants:
+        lines.append("- Participantes que se ven en pantalla: " + "; ".join(participants) + ".")
+    if speakers:
+        lines.append("- Hablantes de la transcripción:")
+        lines += [f"  - {shown}: {status or 'sin identificar'}" for shown, status in speakers]
+    if nicknames:
+        pairs = [", ".join(f"«{a}»" for a in alias) + f" = {name}" for name, alias in nicknames.items()]
+        lines.append("- Apodos o formas oídas de sus nombres: " + "; ".join(pairs) + ".")
+    if not lines:
+        return ""
+    return "Quién es quién:\n" + "\n".join(lines) + """
+Nombra a cada persona de la lista siempre con la forma exacta que aparece en ella. Un nombre oído que \
+no está en la lista (un apodo, un diminutivo o un nombre mal transcrito) puede ser de un participante o \
+de otra persona: atribúyelo a un participante solo si el contexto lo deja claro, por ejemplo porque se \
+dirigen a él con ese nombre y es él quien responde. Si no está claro, escríbelo tal como se oye y no lo \
+relaciones con nadie."""
+
+
+def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "") -> str:
+    return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{(who + "\n\n") if who else ""}\
+Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
+describen lo que se ve.
 
 {body}
 
@@ -149,7 +187,13 @@ de tiempo. Incluye argumentos, datos, problemas, lo que se muestra en pantalla y
 - temas: lista de temas tratados.
 - tareas: acciones acordadas o encargadas (responsable o "" si no consta, plazo o "", marca de tiempo).
 - decisiones: decisiones tomadas (con marca de tiempo).
-- pendientes: dudas abiertas o asuntos sin cerrar."""
+- pendientes: dudas abiertas o asuntos sin cerrar.
+- identidades: solo para hablantes que aparecen como «Hablante N»: su nombre, si este fragmento lo deja \
+claro (por ejemplo, se presenta, o alguien se dirige a él por su nombre y es él quien responde). Indica \
+el motivo y la marca de tiempo. Lista vacía si no está claro.
+- apodos: nombres oídos en la transcripción que son apodos, diminutivos o malas transcripciones del \
+nombre de un participante de la lista (el apodo tal como aparece escrito, el nombre del participante y \
+la marca de tiempo). Lista vacía si no hay."""
 
 
 FINAL_SYSTEM = """Eres un analista que redacta el informe final de una grabación (reunión o sesión de \
@@ -181,13 +225,17 @@ FINAL_SCHEMA = {
 }
 
 
-def final_user(context: str, extra: str, sections: list[str], duration: str, speakers: str, partials: str) -> str:
+def final_user(context: str, extra: str, sections: list[str], duration: str, speakers: str, partials: str,
+               who: str = "") -> str:
     sec = ""
     if sections:
         sec = "Organiza resumen_detallado con estas secciones (## en Markdown): " + "; ".join(sections) + "."
+    names = ""
+    if who:
+        names = "\n" + who + " Si un hablante tiene un nombre probable, nómbralo así y no como «Hablante N».\n"
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}Duración: {duration}. \
 Hablantes: {speakers}.
-
+{names}
 Resúmenes parciales en orden cronológico:
 
 {partials}

@@ -40,6 +40,9 @@ librería de IA: es la primera línea de `main.py`. Si un script nuevo usa estos
 - Con Qwen3.6-35B-A3B y `-c 65536`, la caché KV en `q8_0` y `--n-cpu-moe 24`, la GPU queda cerca del
   límite. Con `--n-cpu-moe 20` llegaba a 15,6/16 GB y se subió a 24. Si aumentas el contexto o cargas
   más capas en la GPU, comprueba el uso con `nvidia-smi` durante la fase `vision`.
+- Los fotogramas van a 2560 px (`frame_max_width`), unos 3900 tokens de imagen cada uno, sin límites de
+  tokens en llama-server (`llm_image_min_tokens`/`llm_image_max_tokens` = 0). Midiendo con fotogramas
+  4K, 2560 px lee bien todos los nombres pequeños y tarda ~14,5 s por fotograma frente a ~9 s a 1600 px.
 
 ## llama-server (`backend/app/llm.py`)
 

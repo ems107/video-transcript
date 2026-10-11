@@ -42,6 +42,14 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
   - vídeos en los que aparece, tiempo hablado y última aparición.
 - **Personas duplicadas.** Aviso de posibles duplicados por nombre o voz. Se pueden fusionar (voz,
   vídeos, perfiles, lo aprendido y nombres) o marcar como distintas.
+- **«Quitar» un vídeo con opciones.** Una ventana muestra las rutas afectadas y permite elegir:
+  - borrar los ficheros del análisis (solo los que crea la app; la carpeta se elimina si queda vacía);
+  - borrar el vídeo y, si la app trabajó con una copia, también el original;
+  - olvidar lo aprendido de ese vídeo, incluidas las huellas de voz.
+
+  Sin marcar nada, el vídeo desaparece de la app pero todos sus ficheros se conservan.
+- **Copia de recuperación en cada carpeta publicada** (`datos/`): el estado de los hablantes con sus
+  huellas de voz y los datos intermedios del análisis, para poder recuperarlo en el futuro.
 - La variable de entorno `VT_DATA_DIR` permite usar otra carpeta de datos.
 - Documentación para asistentes de IA: `CLAUDE.md`, guías por tema en `docs/ai/` y reglas por zona
   del código en `.claude/rules/`.
@@ -60,6 +68,27 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
 
 ### Corregido
 
+- **La pantalla se analiza con más resolución** (2560 px de ancho como máximo, antes 1600). En una
+  grabación 4K, los nombres pequeños se leían bien el 44 % de las veces y ahora el 100 %. El análisis de
+  la pantalla tarda alrededor de 1,6 veces más.
+- **Un solo nombre por persona en cada vídeo.** El análisis de la pantalla leía el mismo nombre de muchas
+  formas («Iosu», «Iker», «Ione»…), y cada una se trataba como una persona distinta. Ahora se agrupan
+  las variantes y se elige una sola forma: se tiene en cuenta lo que se oye en la transcripción y las
+  personas que ya conoces, y nunca se juntan dos nombres que aparecen a la vez en pantalla.
+- **El resumen sabe quién es quién.** Recibe los participantes vistos en pantalla y la identidad probable
+  de cada hablante, y nombra a cada persona siempre de la misma forma. Un apodo o un nombre mal
+  transcrito solo se atribuye a un participante si el contexto lo deja claro; si no, se escribe tal
+  como se oye.
+- **Propuesta de nombre por el contexto.** Si la conversación deja claro quién es un hablante (se
+  presenta, o le llaman por su nombre y responde), se propone ese nombre con el motivo. Solo se acepta un
+  nombre que aparezca en pantalla o se oiga, y nunca se confirma solo. Al confirmarlo, sus apodos se
+  guardan como otros nombres de la persona.
+- Los otros nombres de cada persona se usan en el contexto del resumen y en las palabras que orientan a
+  Whisper.
+- **Propuesta de nombre por pantalla más fiable.** Cada nombre se asigna a un solo hablante, el que más
+  coincide con él. Un nombre resaltado mientras hablan varias voces (por ejemplo, quien presenta) ya no
+  se propone para todas.
+- Al quitar un vídeo, sus propuestas pendientes ya no se quedan huérfanas en «Propuestas».
 - La web podía quedarse bloqueada («Cargando…») al navegar mucho o con varias pestañas abiertas. Las
   conexiones de eventos en tiempo real de páginas ocultas o ya abandonadas ocupaban el máximo de
   conexiones del navegador.

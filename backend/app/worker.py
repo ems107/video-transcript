@@ -17,12 +17,12 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from . import knowledge_store as KS
-from . import services
+from . import removal, services
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
 from .models import Job, Keyframe, Segment, Video
-from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, vision
+from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
 
@@ -36,15 +36,20 @@ STAGES = [
     ("asr", "Transcribiendo", 0.23),
     ("align", "Alineando palabras", 0.06),
     ("diarize", "Separando hablantes", 0.11),
+    ("names", "Unificando nombres", 0.01),
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
     ("analyze", "Resumiendo", 0.20),
     ("learn", "Aprendiendo del vídeo", 0.10),
-    ("publish", "Publicando resultados", 0.03),
+    ("publish", "Publicando resultados", 0.02),
 ]
 GPU_TORCH_STAGES = {"asr", "align", "diarize"}
 # Ficheros de reanudación que se borran al repetir una fase
-PARTIALS = {"analyze": ("analysis.partial.json",), "learn": ("learn.partial.json", "learn_error.json")}
+PARTIALS = {
+    "vision": ("vision.partial.json",),
+    "analyze": ("analysis.partial.json",),
+    "learn": ("learn.partial.json", "learn_error.json"),
+}
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
@@ -201,6 +206,8 @@ class Worker:
             asr.run_align(ctx)
         elif key == "diarize":
             diarize.run(ctx)
+        elif key == "names":
+            names.run(ctx)
         elif key == "identify":
             identify.run(ctx, voice)
             with Session(engine) as s:
@@ -210,6 +217,9 @@ class Worker:
             correct.run(ctx, llm)
         elif key == "analyze":
             analyze.run(ctx, llm)
+            with Session(engine) as s:
+                services.apply_context_identities(s, ctx.video_id, ctx.load("context_identities.json", {}), ctx.people)
+            self._load_names(ctx)
         elif key == "learn":
             self._learn(ctx, llm)
         elif key == "publish":
@@ -238,6 +248,7 @@ class Worker:
     def _load_names(self, ctx: JobContext) -> None:
         with Session(engine) as s:
             ctx.speaker_names = services.speaker_names(s, ctx.video_id)
+            ctx.speaker_status = services.speaker_status(s, ctx.video_id)
             in_video = services.video_person_ids(s, ctx.video_id)
         for p in ctx.people:
             p["in_video"] = p["id"] in in_video
@@ -298,6 +309,7 @@ class Worker:
             s.add(video)
             s.commit()
             s.refresh(video)
+            removal.save_recovery(s, video, ctx.work_dir)
             ctx.report(0.8, "Generando documentos")
             services.export_video(s, video)
             services.index_video(s, video)

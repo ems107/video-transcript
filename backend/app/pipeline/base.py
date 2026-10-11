@@ -30,6 +30,8 @@ class JobContext:
     cancel_event: threading.Event = field(default_factory=threading.Event)
     # Etiqueta de pyannote -> nombre a mostrar (se rellena tras la identificación)
     speaker_names: dict[str, str] = field(default_factory=dict)
+    # Etiqueta -> cómo se sabe quién es («confirmado», «probable, por pantalla; sin confirmar» o «»)
+    speaker_status: dict[str, str] = field(default_factory=dict)
 
     def path(self, name: str) -> Path:
         return self.work_dir / name

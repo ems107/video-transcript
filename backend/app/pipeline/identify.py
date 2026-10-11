@@ -13,7 +13,7 @@ from typing import Any
 
 from .base import JobContext
 from .transcript import speaker_at
-from .voice import dominant_visual_name, greedy_assign, match_name, person_centroids, similarity_matrix
+from .voice import assign_visual_names, greedy_assign, match_name, person_centroids, similarity_matrix
 
 VISUAL_CONFIDENCE = 0.7
 
@@ -45,12 +45,13 @@ def identify(
     sims = similarity_matrix(embeddings, person_centroids(voice_db)) if voice_db else {}
     by_voice = greedy_assign(sims, match_threshold) if sims else {}
     owner_pid = match_name(owner_name, people)
+    visual = assign_visual_names(hints)
 
     out: dict[str, dict[str, Any]] = {}
     for label in labels:
         res: dict[str, Any] = {"person_id": None, "confidence": 0.0, "source": "", "suggested_name": "",
                                "is_owner": label == owner_label, "visual_hints": hints.get(label, {})}
-        vname = dominant_visual_name(hints.get(label, {}))
+        vname = visual.get(label)
         vpid = match_name(vname, people) if vname else None
         voice = by_voice.get(label)
 

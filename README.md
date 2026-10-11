@@ -143,7 +143,7 @@ Las versiones mayores pueden requerirlo.
 | Transcripción | Whisper large-v3 con detección de voz y un contexto inicial con el glosario (manual y aprendido), las personas y los términos vistos en pantalla |
 | Alineamiento | wav2vec2 español: tiempos por palabra |
 | Hablantes | pyannote community-1 y huella de voz de cada hablante |
-| Identificación | Huellas de voz conocidas, nombre resaltado en pantalla y pista de micrófono |
+| Identificación | Huellas de voz conocidas, nombres de pantalla unificados (una forma por persona), pista de micrófono y lo que se deduce de la conversación |
 | Corrección | Glosario: variantes declaradas y mayúsculas directas; los parecidos fonéticos los valida el LLM |
 | Análisis | Resumen por bloques de 30 min y redacción final: título, resumen, tareas, decisiones y pendientes |
 | Aprendizaje | Propuestas verificadas para el perfil y las personas (términos, hechos, datos de cada persona) |
@@ -156,7 +156,7 @@ fase guarda un punto de control en `data/work/`.
 
 ```
 backend/    API FastAPI + pipeline de IA (Python 3.12, uv, SQLite + FTS5)
-  app/pipeline/   una fase por módulo (ingest, frames, vision, asr, diarize, identify, correct, analyze, export)
+  app/pipeline/   una fase por módulo (ingest, frames, vision, asr, diarize, names, identify, correct, analyze, learn, export)
   tests/          pruebas de la lógica sin GPU
 frontend/   Web React + Vite + TypeScript
 scripts/    download_models.py (modelos), release.py (versiones)

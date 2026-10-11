@@ -70,8 +70,9 @@ las fases.
   - si no es un nombre utilizable → se descarta.
 - **Cuándo se muestra lo de un hablante** (`speaker_person`): si está confirmado, o si fue reconocido
   por micrófono o por voz con ≥ `voice_auto_threshold`. Si no, queda «en espera».
-- **Alias.** Los nombres vistos en pantalla como hablante activo (`visual_hints` ≥ 2) que difieren del
-  nombre mostrado generan propuestas `alias`.
+- **Alias.** Si un grupo de `names.json` corresponde a una persona conocida y su forma en pantalla
+  (`screen`, al menos 2 lecturas) no es su nombre ni uno de sus otros nombres, se propone como `alias`
+  de esa persona. Ya no se usa el hablante activo: no es fiable y proponía nombres de otras personas.
 - **Guardado** (`KS.merge_proposals`):
   1. `drop_pending_from` borra las pendientes anteriores de **este** vídeo: una nueva pasada las
      sustituye. Lo aceptado y lo rechazado se conserva.
@@ -85,11 +86,34 @@ las fases.
 ## Visión (`VISION_*`, `pipeline/vision.py`)
 
 Se hace una llamada por fotograma, con un máximo de `Settings.max_frames` (240). Los fotogramas se
-eligen por cambio de escena (hash perceptual), con un mínimo de 4 s y un máximo de 60 s entre ellos.
+eligen por cambio de escena (hash perceptual), con un mínimo de 4 s y un máximo de 60 s entre ellos, y
+se extraen a `Settings.frame_max_width` (2560 px). Medido con una grabación 4K: los nombres pequeños de
+una videollamada se leían bien el 44 % de las veces a 1600 px, el 56 % a 1920 y el 100 % a 2560, con
+1,6 veces más tiempo por fotograma. Forzar más tokens por imagen (`llm_image_*_tokens`) no mejoró nada.
+`hablante_activo` **no es fiable**: el modelo suele señalar al mismo recuadro aunque hable otro, así que
+la identificación nunca se basa en un fotograma suelto (ver abajo).
 Para cada uno se obtienen `tipo_escena`, `aplicacion`, `descripcion`, `texto_relevante`,
 `participantes`, `hablante_activo` y `terminos`. Los `terminos` y `participantes` más frecuentes
 forman `screen_terms.json`, que alimenta el prompt de Whisper. `hablante_activo` alimenta la
 identificación. Si un fotograma falla, se guarda un resultado vacío y el proceso sigue.
+
+## Unificación de nombres (`pipeline/names.py`)
+
+Cada fotograma se lee por separado, y el mismo nombre sale escrito de muchas formas. La fase `names`
+(sin LLM, después de `diarize`) agrupa las lecturas y elige una forma por persona:
+- **Nunca agrupa** dos nombres que aparecen a la vez entre los `participantes` de un fotograma (son
+  recuadros distintos). Sí agrupa variantes de tildes y mayúsculas, el mismo nombre de pila con
+  apellido mal leído, apellidos iguales al oído con distinto nombre de pila, y nombres cortos con alguna
+  letra cambiada («Edge»/«Edgar»). Descarta descripciones («Usuario con gafas»).
+- **Forma elegida, palabra a palabra:** gana la palabra que se oye en la transcripción (salvo
+  partículas como «de») y, si no, la más leída. Una tilde se conserva si aparece en al menos el 25 %
+  de las lecturas, porque al leer texto pequeño es más fácil perderla que inventarla. Si el grupo
+  coincide con una persona conocida, se usa su nombre.
+- Reescribe `participantes`, `hablante_activo`, y las variantes exactas dentro de `descripcion` y
+  `texto_relevante`; también los nombres de pila mal leídos que solo pueden ser de un grupo.
+
+Los tests están en `test_logic.py` con lecturas reales. Si tocas los umbrales (`SIMILAR`,
+`ACCENT_SHARE`), comprueba con los datos de un vídeo real que no se mezclan personas distintas.
 
 ## Contexto inicial de Whisper (`asr.build_whisper_prompt`)
 
@@ -125,9 +149,17 @@ Fuentes, por orden de prioridad:
    voraz uno a uno. Solo se propone si la similitud es ≥ `voice_match_threshold` (0.55). A partir de
    `voice_auto_threshold` (0.75) la confianza es alta. Si la pantalla confirma la misma persona, la
    confianza sube a ≥ 0.9.
-3. **Pantalla:** el `hablante_activo` dominante durante los turnos de un hablante (al menos 2
-   apariciones y un 60 % del total). Se busca en las personas por nombre o alias
-   (`token_set_ratio` ≥ 85). Si no existe, queda como `suggested_name`.
+3. **Pantalla** (`voice.assign_visual_names`): con los nombres ya unificados, cada nombre se asigna a
+   un solo hablante, el que más coincide con él (al menos 2 coincidencias, el nombre más leído de ese
+   hablante sin empate, y ese hablante debe concentrar al menos la mitad de las lecturas del nombre). Un nombre
+   repartido entre varias voces, como el de quien presenta, no se asigna. Se busca en las personas por
+   nombre o alias (`token_set_ratio` ≥ 85). Si no existe, queda como `suggested_name`.
+4. **Contexto** (en `analyze`, ver abajo): para los hablantes que siguen sin nombre, el LLM propone una
+   identidad con su motivo. `source = "contexto"`, confianza 0.5.
+
+Las pistas internas de un hablante (`_motivo`, `_apodos`) se guardan en `Speaker.visual_hints` con
+claves que empiezan por «_»; el resto del código las ignora y la API las expone como `reason` y
+`aliases`. Al confirmar la propuesta como persona nueva, los apodos pasan a sus `aliases`.
 
 **Nada se confirma solo.** El usuario confirma en la web (`PUT /api/speakers/{id}` o
 `confirm-speakers`). Cada confirmación guarda un `VoiceEmbedding`, así que confirmar mal contamina
@@ -142,6 +174,23 @@ bloques de `chunk_minutes` (30 min, con un máximo de 90 000 caracteres). Cada b
 parciales produce `titulo` (máximo 8 palabras), resúmenes, participantes y listas consolidadas. Usa
 `extra_prompt` y `summary_sections` del perfil. Los parciales se guardan en `analysis.partial.json`
 para poder reanudar, y quedan en `analysis["fragmentos"]`.
+
+**Quién es quién.** `who_block` se añade a cada bloque y al final: los participantes unificados con al
+menos 2 lecturas (`analyze.participants`) y el estado de cada hablante (`ctx.speaker_status`:
+confirmado, probable por voz/pantalla/contexto, o sin identificar). Pide usar siempre la forma exacta
+de la lista. Un nombre oído que no está en ella solo se atribuye a un participante si el contexto lo
+deja claro; si no, se escribe tal como se oye. (Una versión anterior pedía atribuirlos «si corresponden»
+y la IA adivinaba: escribió que un apodo de una persona era de otra.) Cada bloque
+devuelve además `identidades` (para «Hablante N») y `apodos`. `collect_identities` los verifica en
+Python: el nombre debe estar en la lista o oírse; el apodo debe oírse, no ser el nombre de pila de
+otro participante y parecerse a una parte del nombre de la persona (`NICKNAME_SIMILAR`: «Selu» en
+«JoSELUis»; en una ejecución real el LLM atribuyó «Selu» a Sandra, y esta regla lo descarta); no se repite un nombre ya asignado, y un empate entre dos nombres no decide nada.
+El resultado se guarda en `context_identities.json`, se aplica a los hablantes libres
+(`services.apply_context_identities`, nunca sobre lo confirmado ni sobre propuestas de voz o pantalla)
+y el informe final ya lo recibe en el bloque.
+
+Las personas aparecen en los prompts con sus otros nombres («también llamado …», `person_line`), y en
+el prompt de Whisper como «Nombre (alias)».
 
 Al renombrar un hablante después de publicar, `services.replace_speaker_name` sustituye el nombre en
 todo el análisis sin llamar al LLM. «Regenerar análisis» repite `correct`, `analyze` y `publish`.

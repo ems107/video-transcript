@@ -64,7 +64,7 @@ def collect_proposals(
     speaker_names: dict[str, str],
     people: list[dict[str, Any]],
     profile: dict[str, Any] | None,
-    hints: dict[str, dict[str, int]],
+    screen_names: list[dict[str, Any]],
     want_sections: bool,
     screen_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
@@ -133,13 +133,16 @@ def collect_proposals(
             out.append({"kind": "dato", "category": x.get("categoria", "otro"), "owner": owner,
                         "data": {"text": text}, "t": t, "lines": lines, "replaces": x.get("reemplaza") or 0})
 
-    # Otros nombres: el nombre visto en pantalla como hablante activo, si se repite
-    for label, h in hints.items():
-        shown = normalize(speaker_names.get(label, ""))
-        for name, count in h.items():
-            if count >= 2 and normalize(name) and normalize(name) != shown and not name.startswith("_"):
-                out.append({"kind": "alias", "category": "", "owner": ("speaker", label), "data": {"name": name},
-                            "t": None, "lines": [], "replaces": 0})
+    # Otros nombres: cómo aparece en pantalla una persona conocida, si no lo tiene ya. Las variantes de
+    # lectura ya están unificadas (fase «names»), y el hablante activo no es fiable para esto
+    by_id = {p["id"]: p for p in people}
+    for g in screen_names:
+        p = by_id.get(g.get("person_id"))
+        screen = g.get("screen") or ""
+        if p and g.get("readings", 0) >= 2 and normalize(screen) not in {
+                normalize(n) for n in [p["name"], *(p.get("aliases") or [])]}:
+            out.append({"kind": "alias", "category": "", "owner": ("person", p["id"]), "data": {"name": screen},
+                        "t": None, "lines": [], "replaces": 0})
 
     if want_sections:
         titles: list[str] = []
@@ -192,9 +195,7 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str]
         results.append(state[str(i)])
         ranges.append((start, end))
 
-    identities = ctx.load("identities.json", {})
-    hints = {label: d.get("visual_hints") or {} for label, d in identities.items()}
-    proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile, hints, want_sections,
-                                  screen_terms)
+    proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile,
+                                  ctx.load("names.json", []), want_sections, screen_terms)
     ctx.save("proposals.json", proposals)
     return proposals

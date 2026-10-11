@@ -28,8 +28,8 @@ def build_whisper_prompt(profile: dict[str, Any] | None, people: list[dict[str, 
 
     for g in effective_glossary(profile):  # manual primero, después lo aprendido
         add(g["term"])
-    names = [p["name"] for p in people]
-    seen.update(normalize(n) for n in names)
+    names = [p["name"] + (f" ({', '.join(p['aliases'][:2])})" if p.get("aliases") else "") for p in people]
+    seen.update(normalize(n) for p in people for n in [p["name"], *(p.get("aliases") or [])])
     for t in screen_terms:
         add(t)
 

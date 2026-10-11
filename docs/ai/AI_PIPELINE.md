@@ -17,11 +17,12 @@ worker crea `<fase>.done`.
 | `asr` | `asr.py:run_asr` | `audio.wav`, `screen_terms.json` | `whisper_prompt.json`, `asr.json` | Whisper |
 | `align` | `asr.py:run_align` | `asr.json`, `audio.wav` | `aligned.json` | wav2vec2 |
 | `diarize` | `diarize.py` | `audio.wav`, `owner.wav`*, `aligned.json` | `diarization.json`, `utterances.json` | pyannote |
+| `names` | `names.py` | `vision.json` (o `vision.raw.json`), `utterances.json` | `names.json`, `vision.json` unificado, `vision.raw.json` (lecturas originales), `screen_terms.json` | — |
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
-| `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `probe.json` | `analysis.json` (`analysis.partial.json`) | llama-server |
+| `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `names.json`, `probe.json` | `analysis.json` (`analysis.partial.json`), `context_identities.json` y propuestas «contexto» en `Speaker` | llama-server |
 | `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla) y filas `KnowledgeItem` | llama-server |
-| `publish` | `worker._publish` | todo lo anterior | carpeta final, `Segment`, `Keyframe`, FTS | — |
+| `publish` | `worker._publish` | todo lo anterior | carpeta final (con `datos/`), `Segment`, `Keyframe`, FTS | — |
 
 \* `owner.wav` solo existe si el usuario indica en qué pista está su micrófono.
 
@@ -29,6 +30,13 @@ Formas clave:
 - `utterances.json` / `corrected.json`: `[{start, end, speaker, text, original_text?, corrections?}]`.
   `speaker` es la etiqueta de pyannote (`SPEAKER_00`), no un nombre.
 - `diarization.json`: `{turns, speaking_time, embeddings: {label: [float]}, owner}`.
+- `names.json`: `[{canonical, person_id, variants: {lectura: n}, readings, frames, heard}]`, un grupo
+  por persona vista en pantalla. `vision.json` ya lleva solo las formas `canonical`; las lecturas
+  originales quedan en `vision.raw.json`, y `names` se puede repetir sin perderlas. Si se repite
+  `vision`, se borra `vision.raw.json`.
+- `context_identities.json`: `{identidades: {label: {nombre, motivo, t, votos}}, apodos: {nombre: [apodo]},
+  evaluados: [label]}`. Una propuesta por contexto anterior solo se retira si su hablante está en
+  `evaluados`: al regenerar, los hablantes con propuesta ya no son «Hablante N» y no se reevalúan.
 - `analysis.json`: sigue `FINAL_SCHEMA` de `prompts.py`. Las claves están en español, y la web y
   `export.py` dependen de ellas.
 
@@ -57,6 +65,13 @@ Formas clave:
 - **Publicación:** el vídeo se mueve o se copia una sola vez (`options.file_mode` o
   `Settings.file_mode`). Si se regenera, se reutiliza la carpeta existente. `_cleanup` borra los wav y
   los fotogramas, pero conserva los JSON para poder regenerar sin repetir ASR ni diarización.
+- **Copia de recuperación:** `_publish` escribe `datos/` en la carpeta publicada
+  (`removal.save_recovery`): `video.json` (metadatos y hablantes con su persona, confirmación, huella y
+  pistas) y los JSON de `removal.WORK_FILES`. «Quitar» sin borrar ficheros la vuelve a escribir. Si
+  añades un JSON intermedio necesario para reconstruir el análisis, añádelo a `WORK_FILES`.
+- **Quitar un vídeo** (`removal.py`): siempre lo saca de la BD y borra sus propuestas pendientes. Las
+  opciones (`Options`) deciden qué se borra del disco; `removal.plan` es la única que decide rutas y
+  solo toca `APP_FILES`/`APP_DIRS`, las carpetas de trabajo y el vídeo marcado.
 
 ## Añadir o cambiar una fase
 

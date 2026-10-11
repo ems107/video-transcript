@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
+import { RemoveDialog } from '../RemoveDialog'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
 
@@ -82,13 +83,15 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
               {sp.confirmed ? (
                 <span className="pill ok">Confirmado</span>
               ) : sp.suggested_person_id || sp.suggested_name ? (
-                <span className="pill warn">
+                <span className="pill warn" title={sp.reason || undefined}>
                   Propuesta por {sp.source} ({Math.round(sp.confidence * 100)}%){sp.suggested_name && !sp.suggested_person_id ? ' · persona nueva' : ''}
                 </span>
               ) : (
                 <span className="pill">Sin identificar</span>
               )}
               {sp.is_owner && <span className="pill" style={{ marginLeft: 4 }}>tu micrófono</span>}
+              {!sp.confirmed && sp.reason && <div>{sp.reason}</div>}
+              {sp.aliases.length > 0 && <div>También le llaman {sp.aliases.map((a) => `«${a}»`).join(', ')}</div>}
             </div>
             {editing === sp.id && (
               <div className="row" style={{ marginTop: '0.5rem' }}>
@@ -181,6 +184,7 @@ function KnowledgePanel({ video, running, onChange }: { video: VD; running: bool
 export default function VideoDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
   const nav = useNavigate()
+  const [removing, setRemoving] = useState(false)
   const [params, setParams] = useSearchParams()
   const [video, setVideo] = useState<VD | null>(null)
   const [people, setPeople] = useState<Person[]>([])
@@ -285,12 +289,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
               Regenerar análisis
             </button>
           )}
-          <button className="danger" disabled={!!running} onClick={async () => {
-            if (confirm('¿Quitar el vídeo de la biblioteca? Los archivos de su carpeta NO se borran.')) {
-              await api.del(`/api/videos/${video.id}`)
-              nav('/')
-            }
-          }}>Quitar</button>
+          <button className="danger" disabled={!!running} onClick={() => setRemoving(true)}>Quitar</button>
+          {removing && <RemoveDialog videoId={video.id} onClose={() => setRemoving(false)} onRemoved={() => nav('/')} />}
         </div>
       </div>
 

@@ -35,7 +35,8 @@ def llm_result():
 
 def test_collect_proposals_verifies_everything():
     props = collect_proposals([llm_result()], [(10.0, 20.0)], UTTS, VISION, NAMES, PEOPLE, PROFILE,
-                              {"SPEAKER_00": {"María L.": 3}}, want_sections=True)
+                              [{"canonical": "María López", "person_id": 1, "screen": "María L.", "readings": 3}],
+                              want_sections=True)
     kinds = [(p["kind"], p["owner"], p["data"].get("term") or p["data"].get("text") or p["data"].get("name")
               or p["data"].get("title")) for p in props]
     assert ("termino", ("profile", None), "Jira") in kinds
@@ -43,7 +44,7 @@ def test_collect_proposals_verifies_everything():
     assert not [k for k in kinds if k[2] in ("Zeus", "pedidos", "Fuera de rango", "Nada")]
     assert ("dato", ("speaker", "SPEAKER_00"), "Lleva el proyecto Atlas") in kinds
     assert ("dato", ("new", "Lucía"), "Es del equipo de QA") in kinds
-    assert ("alias", ("speaker", "SPEAKER_00"), "María L.") in kinds
+    assert ("alias", ("person", 1), "María L.") in kinds
     assert [k[2] for k in kinds if k[0] == "seccion"] == ["Estado del proyecto", "Riesgos"]
     term = next(p for p in props if p["kind"] == "termino")
     assert term["t"] == 16.0 and term["lines"]  # evidencia real

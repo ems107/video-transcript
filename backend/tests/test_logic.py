@@ -1,6 +1,6 @@
 from app.pipeline.glossary import apply_candidates, find_candidates, phonetic
 from app.pipeline.transcript import assign_speakers, build_utterances, flatten_words, fmt_ts, group_turns
-from app.pipeline.voice import dominant_visual_name, greedy_assign, match_name, person_centroids, similarity_matrix
+from app.pipeline.voice import assign_visual_names, greedy_assign, match_name, person_centroids, similarity_matrix
 
 
 def test_fmt_ts():
@@ -80,6 +80,63 @@ def test_names_and_visual_hints():
     assert match_name("maria lopez", people) == 1
     assert match_name("López, María", people) == 1
     assert match_name("Pedro", people) is None
-    assert dominant_visual_name({"Ana": 5, "Luis": 1}) == "Ana"
-    assert dominant_visual_name({"Ana": 1}) is None
-    assert dominant_visual_name({"Ana": 3, "Luis": 3}) is None
+    assert assign_visual_names({"S0": {"Ana": 5, "Luis": 1}}) == {"S0": "Ana"}
+    assert assign_visual_names({"S0": {"Ana": 1}}) == {}
+    assert assign_visual_names({"S0": {"Ana": 3, "Luis": 3}}) == {}  # empate: no se decide
+    # Vídeo real a 2560 px: José Luis 3, Iosu 2 (resaltado de más), Edgar 1 → gana José Luis
+    assert assign_visual_names({"S1": {"Jose": 3, "Iosu": 2, "Edgar": 1}, "S3": {"Iosu": 46}}) == {
+        "S1": "Jose", "S3": "Iosu"}
+    # Cada nombre a un solo hablante: el que más coincide (vídeo real: Iosu 40 frente a 3)
+    hints = {"S3": {"Iosu": 40, "Jose": 1}, "S2": {"Iosu": 3}, "S1": {"Jose": 2}, "S0": {"Iosu": 1, "Jose": 1}}
+    assert assign_visual_names(hints) == {"S3": "Iosu", "S1": "Jose"}
+    # Quien presenta sale resaltado mientras hablan otros: repartido entre voces, no se asigna
+    spread = {"S1": {"Presenta": 10}, "S4": {"Presenta": 11}, "S5": {"Presenta": 9}, "S6": {"Presenta": 6}}
+    assert assign_visual_names(spread) == {}
+
+
+def _frame(parts, active=""):
+    return {"t": 0.0, "participantes": parts, "hablante_activo": active, "descripcion": "", "texto_relevante": ""}
+
+
+def test_names_unify_variants_of_one_person():
+    from app.pipeline import names
+
+    # Lecturas reales del vídeo de prueba: el mismo recuadro leído de muchas formas
+    long_ = ["Iosu Urcelay Fernandez De Arroyabe"] * 3 + ["Iker Urcelay Fernandez De Arroyabe"] * 4 + [
+        "Ione Urcelay Fernández De Arroyabe", "Urcelay Fernandez De Arroyabe, Iosu"]
+    vision = [_frame([n, "Sandra", "Jose Luis Perez Rodriguez"], n) for n in long_]
+    vision += [_frame(["Jose Luis Pérez Rodríguez", "Sandia", "Edge"])] * 3 + [_frame(["Edgar", "Sandra"])]
+    vision += [_frame(["Usuario con gafas (sin nombre visible)"])]
+    r = names.unify(vision, ["Pues a ver, Iosu, esta pregunta", "Gracias, Sandra y Edgar"], [])
+    canon = {g["canonical"] for g in r["groups"]}
+    # «Iker» se lee más, pero «Iosu» es el que se oye («Edge» tampoco se oye y «Edgar» sí);
+    # las tildes se conservan si aparecen en una parte apreciable de las lecturas
+    assert canon == {"Iosu Urcelay Fernandez De Arroyabe", "Sandra", "Jose Luis Pérez Rodríguez", "Edgar"}
+    out = names.apply(vision, r)
+    assert out[3]["hablante_activo"] == "Iosu Urcelay Fernandez De Arroyabe"
+    assert out[-1]["participantes"] == []
+
+
+def test_names_never_merge_people_seen_together():
+    from app.pipeline import names
+
+    vision = [_frame(["Ana Ruiz", "Ana Ruiz Gil"]), _frame(["Ana Ruiz"])]
+    r = names.unify(vision, [], [])
+    assert len(r["groups"]) == 2
+
+
+def test_names_use_known_person():
+    from app.pipeline import names
+
+    people = [{"id": 7, "name": "Iosu Urcelay", "aliases": []}]
+    r = names.unify([_frame(["Iosu Urcelay Fernandez De Arroyabe"])] * 2, [], people)
+    assert r["groups"][0]["canonical"] == "Iosu Urcelay" and r["groups"][0]["person_id"] == 7
+
+
+def test_names_rewrite_descriptions():
+    from app.pipeline import names
+
+    vision = [{**_frame(["Iosu Urcelay"], "Iker Urcelay"), "descripcion": "Habla Iker Urcelay; Iker señala"}]
+    vision += [_frame(["Iosu Urcelay"])] * 3
+    out = names.apply(vision, names.unify(vision, [], []))
+    assert out[0]["descripcion"] == "Habla Iosu Urcelay; Iosu señala"
