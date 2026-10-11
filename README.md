@@ -93,7 +93,12 @@ Después todo funciona sin conexión a internet.
    `transcripcion.md`, `transcripcion.txt`, `resumen.md`, `analisis.json`, `miniatura.jpg` y
    `fotogramas/`.
 5. En el detalle del vídeo, **confirma los hablantes**. La app guarda su huella de voz y los reconocerá
-   en los próximos vídeos. Si cambias nombres o el perfil, «Regenerar análisis» rehace el resumen.
+   en los próximos vídeos.
+   - Si algo del resumen está mal interpretado, escríbelo en **Correcciones** como un hecho («X es quien
+     presenta, no Y»). Se aplica al regenerar y la IA lo respeta.
+   - **«Regenerar análisis»** muestra qué se repite y qué se conserva, con el tiempo estimado. Además del
+     resumen, puede volver a identificar a los hablantes (los confirmados no cambian), volver a analizar
+     la pantalla o repetir el análisis completo desde el audio sin quitar el vídeo.
 6. **Propuestas**: revisa lo que la IA ha aprendido del vídeo (ver abajo).
 7. **Buscar**: busca en todas las transcripciones y resúmenes (sin distinguir tildes; las comillas
    buscan la frase exacta).

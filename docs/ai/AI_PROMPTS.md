@@ -193,4 +193,16 @@ Las personas aparecen en los prompts con sus otros nombres («también llamado �
 el prompt de Whisper como «Nombre (alias)».
 
 Al renombrar un hablante después de publicar, `services.replace_speaker_name` sustituye el nombre en
-todo el análisis sin llamar al LLM. «Regenerar análisis» repite `correct`, `analyze` y `publish`.
+todo el análisis sin llamar al LLM. «Regenerar análisis» tiene niveles (ver `AI_PIPELINE.md`).
+
+**Correcciones del usuario** (`VideoCorrection`, `prompts.corrections_block`). Son hechos escritos por
+el usuario sobre un vídeo («X es quien presenta, no Y»). Se añaden al contexto de cada bloque, del
+informe final y del aprendizaje, con la indicación de que prevalecen sobre la transcripción y la
+pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` guarda
+`correcciones_aplicadas` (`id` y `updated_at`), y `services.corrections_pending` avisa si las actuales
+no coinciden. La IA nunca las escribe ni las modifica.
+
+**Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
+válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se
+reintenta, porque la misma petición se volvería a cortar. Antes de subir un `max_tokens`, mira ahí el
+caso real: puede ser una repetición en bucle y no falta de espacio.
