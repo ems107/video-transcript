@@ -108,20 +108,28 @@ la descripción de lo que se ve en pantalla.
 """ + ANALYSIS_RULES
 
 ITEM_T = {"type": "string"}
+# Marca de tiempo con formato obligatorio (la gramática de llama.cpp lo impone). Sin él, el modelo a veces
+# ponía en «t» el texto de la tarea o una fecha copiada del contexto (medido en vídeos reales).
+TS_T = {"type": "string", "pattern": "^[0-9]{1,2}:[0-9]{2}:[0-9]{2}$"}
 TASK_SCHEMA = {
     "type": "object",
     "properties": {
         "responsable": {"type": "string"},
         "tarea": {"type": "string"},
         "plazo": {"type": "string"},
-        "t": {"type": "string"},
+        "t": TS_T,
     },
     "required": ["responsable", "tarea", "plazo", "t"],
 }
 DECISION_SCHEMA = {
     "type": "object",
-    "properties": {"decision": {"type": "string"}, "t": {"type": "string"}},
+    "properties": {"decision": {"type": "string"}, "t": TS_T},
     "required": ["decision", "t"],
+}
+PENDING_SCHEMA = {
+    "type": "object",
+    "properties": {"pendiente": {"type": "string"}, "t": TS_T},
+    "required": ["pendiente", "t"],
 }
 
 CHUNK_SCHEMA = {
@@ -131,7 +139,7 @@ CHUNK_SCHEMA = {
         "temas": {"type": "array", "items": ITEM_T},
         "tareas": {"type": "array", "items": TASK_SCHEMA},
         "decisiones": {"type": "array", "items": DECISION_SCHEMA},
-        "pendientes": {"type": "array", "items": ITEM_T},
+        "pendientes": {"type": "array", "items": PENDING_SCHEMA},
         "identidades": {
             "type": "array",
             "items": {
@@ -184,7 +192,36 @@ parezca decir la transcripción o la pantalla; tenlas en cuenta en todo lo que e
             + "\n".join(f"- {t}" for t in texts))
 
 
-def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "") -> str:
+FOLLOW_SIGNAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada", "anulada",
+                                              "resuelta"]},
+        "t": TS_T,
+        "cita": {"type": "string"},
+    },
+    "required": ["id", "evento", "t", "cita"],
+}
+# Con seguimientos, cada fragmento señala además qué puntos del estado anterior se tratan: es la parte que lee
+# la transcripción, y la fase del seguimiento solo ve el resumen (ahí se perdían cierres dichos de pasada)
+CHUNK_FOLLOW_SCHEMA = {
+    **CHUNK_SCHEMA,
+    "properties": {**CHUNK_SCHEMA["properties"], "seguimiento": {"type": "array", "items": FOLLOW_SIGNAL_SCHEMA}},
+    "required": [*CHUNK_SCHEMA["required"], "seguimiento"],
+}
+
+CHUNK_FOLLOW_INSTR = """
+- seguimiento: puntos del estado del seguimiento ([T…] tareas, [D…] decisiones, [P…] dudas) de los que se \
+habla en este fragmento. id: el del punto. evento: avanza (se trata pero sigue igual), hecha o descartada \
+(tareas), cambiada o anulada (decisiones), resuelta (dudas) o reabierta. t: la marca de tiempo. cita: la \
+frase de la transcripción que lo dice, copiada literalmente. Solo lo que se dice; si se sobreentiende pero \
+nadie lo dice, no lo pongas. Lista vacía si no se habla de ninguno. No escribas los identificadores [T…] en \
+el resumen ni en las otras listas."""
+
+
+def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "",
+               follow: bool = False) -> str:
     return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{(who + "\n\n") if who else ""}\
 Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
 describen lo que se ve.
@@ -195,15 +232,16 @@ Devuelve:
 - resumen: resumen detallado en Markdown de este fragmento, por temas, con viñetas, citando marcas \
 de tiempo. Incluye argumentos, datos, problemas, lo que se muestra en pantalla y quién dice qué.
 - temas: lista de temas tratados.
-- tareas: acciones acordadas o encargadas (responsable o "" si no consta, plazo o "", marca de tiempo).
-- decisiones: decisiones tomadas (con marca de tiempo).
-- pendientes: dudas abiertas o asuntos sin cerrar.
+- tareas: acciones acordadas o encargadas (responsable o "" si no consta, plazo tal como se dice o "", marca de \
+tiempo hh:mm:ss de este vídeo).
+- decisiones: decisiones tomadas (con su marca de tiempo hh:mm:ss).
+- pendientes: dudas abiertas o asuntos sin cerrar (con la marca de tiempo hh:mm:ss donde se plantean).
 - identidades: solo para hablantes que aparecen como «Hablante N»: su nombre, si este fragmento lo deja \
 claro (por ejemplo, se presenta, o alguien se dirige a él por su nombre y es él quien responde). Indica \
 el motivo y la marca de tiempo. Lista vacía si no está claro.
 - apodos: nombres oídos en la transcripción que son apodos, diminutivos o malas transcripciones del \
 nombre de un participante de la lista (el apodo tal como aparece escrito, el nombre del participante y \
-la primera marca de tiempo). Cada apodo una sola vez. Lista vacía si no hay."""
+la primera marca de tiempo). Cada apodo una sola vez. Lista vacía si no hay.""" + (CHUNK_FOLLOW_INSTR if follow else "")
 
 
 FINAL_SYSTEM = """Eres un analista que redacta el informe final de una grabación (reunión o sesión de \
@@ -228,7 +266,7 @@ FINAL_SCHEMA = {
         "temas": {"type": "array", "items": ITEM_T},
         "tareas": {"type": "array", "items": TASK_SCHEMA},
         "decisiones": {"type": "array", "items": DECISION_SCHEMA},
-        "pendientes": {"type": "array", "items": ITEM_T},
+        "pendientes": {"type": "array", "items": PENDING_SCHEMA},
     },
     "required": ["titulo", "resumen_breve", "resumen_detallado", "participantes", "temas", "tareas",
                  "decisiones", "pendientes"],
@@ -256,7 +294,8 @@ Devuelve:
 - resumen_detallado: informe completo en Markdown, organizado por temas, con todo el detalle relevante \
 y marcas de tiempo. {sec}
 - participantes: quién intervino y su papel en la reunión.
-- temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados.
+- temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados, cada punto con la marca \
+de tiempo hh:mm:ss de este vídeo donde se trata; el plazo, tal como se dice.
 {("\nInstrucciones adicionales del usuario:\n" + extra) if extra else ""}"""
 
 
@@ -398,30 +437,25 @@ FOLLOW_SCHEMA = {
                     "id": {"type": "string"},
                     "evento": {"type": "string", "enum": ["avanza", "hecha", "descartada", "reabierta", "cambiada",
                                                           "anulada", "resuelta"]},
-                    "t": {"type": "string"},
+                    "t": TS_T,
                     "nota": {"type": "string"},
+                    "cita": {"type": "string"},
                 },
-                "required": ["id", "evento", "t", "nota"],
+                "required": ["id", "evento", "t", "nota", "cita"],
             },
         },
-        "nuevos": {
+        "mismos": {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {
-                    "tipo": {"type": "string", "enum": ["tarea", "decision", "duda"]},
-                    "texto": {"type": "string"},
-                    "responsable": {"type": "string"},
-                    "plazo": {"type": "string"},
-                    "t": {"type": "string"},
-                },
-                "required": ["tipo", "texto", "responsable", "plazo", "t"],
+                "properties": {"nuevo": {"type": "string"}, "existente": {"type": "string"}},
+                "required": ["nuevo", "existente"],
             },
         },
         "resumen": {"type": "string"},
         "aporte": {"type": "string"},
     },
-    "required": ["eventos", "nuevos", "resumen", "aporte"],
+    "required": ["eventos", "mismos", "resumen", "aporte"],
 }
 
 
@@ -432,22 +466,23 @@ def follow_user(state: str, video: str, analysis: str) -> str:
 
 Vídeo nuevo: {video}
 
-Análisis del vídeo nuevo (las marcas de tiempo son de este vídeo):
-
 {analysis}
 
 Devuelve:
-- eventos: cambios en los puntos del estado ([T…] tareas, [D…] decisiones, [P…] dudas) que este vídeo \
-dice expresamente. id: el del punto. evento: avanza (hay novedades pero sigue igual), hecha o descartada \
-(tareas), cambiada o anulada (decisiones), resuelta (dudas) o reabierta. t: marca de tiempo de este vídeo \
-donde se dice. nota: qué se dice, en una frase. Si este vídeo no lo menciona, no pongas nada: no deduzcas \
-que algo está hecho porque no se hable de ello.
-- nuevos: tareas, decisiones y dudas de este vídeo que no están ya en el estado (tipo, texto breve, \
-responsable o "", plazo o "", marca de tiempo). Solo lo relevante para el tema. No repitas como nuevo \
-un punto que ya existe: si es el mismo, usa un evento. Una decisión que cambia otra anterior va como \
-nueva y, además, como evento «cambiada» de la anterior.
+- eventos: cambios en los puntos del estado ([T…] tareas, [D…] decisiones, [P…] dudas) que este vídeo dice. \
+Parte de las señales detectadas al leer la transcripción, si las hay: son lo más fiable. id: el del punto. \
+evento: avanza (hay novedades pero sigue igual), hecha o descartada (tareas), cambiada o anulada \
+(decisiones), resuelta (dudas) o reabierta. t: marca de tiempo de este vídeo. cita: la frase de la \
+transcripción que lo dice (cópiala de las señales; si no hay, déjala vacía). nota: qué se dice, en una \
+frase, sin interpretar ni valorar. Un cambio de estado sin una cita que lo diga no vale: si el vídeo no lo \
+dice, no lo deduzcas.
+- mismos: puntos de este vídeo ([N…]) que son el mismo asunto que un punto del estado ([T…], [D…], [P…]), \
+para no duplicarlo (por ejemplo, la misma tarea encargada otra vez). nuevo: el [N…]; existente: el del \
+estado. Los demás puntos de este vídeo se añaden al estado tal cual. Una decisión que cambia otra anterior \
+no es «la misma»: es nueva, y la anterior lleva el evento «cambiada».
 - resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
-ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior.
+ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior y \
+consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo.
 - aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
 
 
@@ -456,7 +491,7 @@ ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte d
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
 LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
-               "eventos": 30, "nuevos": 30}
+               "eventos": 30, "mismos": 30, "seguimiento": 20}
 LIST_DEFAULT = 40
 
 
@@ -470,5 +505,6 @@ def _limit_lists(schema: Any) -> None:
     _limit_lists(schema.get("items"))
 
 
-for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA, FOLLOW_SCHEMA):
+for _schema in (VISION_SCHEMA, CORRECT_SCHEMA, CHUNK_SCHEMA, CHUNK_FOLLOW_SCHEMA, FINAL_SCHEMA, LEARN_SCHEMA,
+                FOLLOW_SCHEMA):
     _limit_lists(_schema)

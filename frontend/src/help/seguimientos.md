@@ -95,22 +95,32 @@ del seguimiento (se grabó antes pero se analiza después): para incluirlo en su
   muestra en el Explorador.
 
 :::tecnico Cómo se actualiza el estado
-Tras el resumen del vídeo, la fase «Actualizando seguimientos» hace una llamada a la IA por seguimiento
-(unos {{v:ritmo_follow}} s por minuto de vídeo). Recibe el estado anterior a la fecha del vídeo, con un
-identificador por punto ([T3] para una tarea, [D2] para una decisión, [P1] para una duda), y el análisis
-del vídeo: el resumen, las tareas, las decisiones y los pendientes con su marca de tiempo, no la
-transcripción. Devuelve solo lo que cambia: hitos de puntos existentes, puntos nuevos, el resumen nuevo y
-lo que aporta el vídeo.
+El trabajo se reparte en dos pasos, para que cada uno haga lo que mejor sabe hacer:
 
-Antes de guardar nada, la app comprueba cada respuesta:
+1. **Al resumir el vídeo**, la IA lee la transcripción con el estado anterior del tema, donde cada punto
+   tiene un identificador ([T3] para una tarea, [D2] para una decisión, [P1] para una duda). Además del
+   resumen, señala de qué puntos se habla y qué pasa con ellos, **copiando la frase que lo dice**. La app
+   comprueba que esa frase se dice de verdad (parecido de {{v:seguimiento_cita_parecido}} sobre 100 con lo
+   dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento) y descarta las demás.
+2. **La fase «Actualizando seguimientos»** (unos {{v:ritmo_follow}} s por minuto de vídeo) recibe esas
+   señales, los puntos del vídeo y su resumen, y decide los hitos y el resumen de la evolución. Un cambio
+   de estado (hecha, resuelta, cambiada…) solo se acepta si trae una cita que se dice en ese momento; sin
+   ella, la IA solo puede anotar un avance.
+
+Los **puntos nuevos** son las tareas, decisiones y pendientes del análisis del vídeo, los mismos que ves en
+su pestaña «Tareas». La IA solo indica cuáles son el mismo asunto que uno anterior, para no duplicarlo.
+Así el estado no cambia de una ejecución a otra, y corregir el análisis de un vídeo también corrige lo que
+aporta al seguimiento.
+
+Además, la app:
 - descarta las referencias a puntos que no existen y los momentos que no están en el vídeo;
 - descarta los cambios que no valen para el tipo de punto (resolver una tarea, por ejemplo);
-- descarta los puntos nuevos que repiten uno existente (parecido de {{v:seguimiento_parecido}} sobre 100
-  o más);
-- y como mucho acepta {{v:seguimiento_max_eventos}} hitos y {{v:seguimiento_max_nuevos}} puntos nuevos
-  por vídeo.
+- no vuelve a crear un punto que repite uno existente o uno que borraste (parecido de
+  {{v:seguimiento_parecido}} sobre 100 o más);
+- acepta como mucho {{v:seguimiento_max_senales}} señales por fragmento y {{v:seguimiento_max_eventos}}
+  hitos por vídeo.
 
-El estado de un punto sale siempre de su último hito. Para el contexto del análisis y de la propia
-actualización se envía el resumen, lo abierto y lo cerrado en los últimos {{v:seguimiento_recientes}}
-vídeos, hasta {{v:seguimiento_contexto}} caracteres; si no cabe, se recorta primero lo cerrado.
+El estado de un punto sale siempre de su último hito. Para el contexto se envía el resumen, lo abierto y lo
+cerrado en los últimos {{v:seguimiento_recientes}} vídeos, hasta {{v:seguimiento_contexto}} caracteres; si
+no cabe, se recorta primero lo cerrado.
 :::

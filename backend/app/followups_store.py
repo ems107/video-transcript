@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 from . import estimates
 from . import followups as F
 from .config import load_settings
-from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Video, now
+from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Segment, Video, now
 from .pipeline.export import safe_name, unique_dir
 from .pipeline.transcript import fmt_ts
 
@@ -76,7 +76,7 @@ def context_for_video(session: Session, video_id: int) -> list[str]:
     for f in for_video(session, video_id):
         dates = [date_of(x) for _, x in links(session, f.id) if x.id != video_id]
         block = F.context_block(f.name, f.description, summary_before(session, f, date_of(v)), items(session, f.id),
-                                dates, date_of(v))
+                                dates, date_of(v), with_ids=True)
         if block:
             out.append(block)
     return out
@@ -164,18 +164,30 @@ def revert_videos(session: Session, f: Followup, video_ids: set[int]) -> None:
     touch(session, f)
 
 
-def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str, Any], ask: Ask) -> dict[str, Any]:
-    """Actualiza el estado con un vídeo. Los vídeos posteriores ya deben estar deshechos."""
+def video_utts(session: Session, video_id: int) -> list[dict[str, Any]]:
+    rows = session.exec(select(Segment).where(Segment.video_id == video_id).order_by(Segment.idx))
+    return [{"start": s.start, "end": s.end, "speaker": s.speaker, "text": s.text} for s in rows]
+
+
+def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str, Any], ask: Ask,
+                utts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Actualiza el estado con un vídeo. Los vídeos posteriores ya deben estar deshechos.
+
+    `utts`: la transcripción, para comprobar las citas (si no se da, la publicada en la base de datos)."""
     when = date_of(video)
+    utts = utts if utts is not None else video_utts(session, video.id)
     all_items = items(session, f.id)
     dates = [date_of(v) for _, v in links(session, f.id)]
     state = F.context_block(f.name, f.description, summary_before(session, f, when), all_items, dates, when,
                             with_ids=True)
     # Antes de publicar, el título del vídeo aún es el nombre del fichero
     desc = f"{when:%Y-%m-%d} «{analysis.get('titulo') or video.title}» (duración {fmt_ts(video.duration)})"
-    r = ask(state, desc, F.analysis_text(analysis))
     visible = F.state_at(all_items, when) + [it for it in all_items if it.get("hidden")]
-    plan = F.apply_update(visible, r, video.id, when, video.duration, now())
+    ids = {F.short_id(it) for it in visible}
+    signals = [x for x in analysis.get("seguimiento") or [] if x.get("id") in ids]
+    points = F.analysis_points(analysis)
+    r = ask(state, desc, F.analysis_text(analysis, points, signals))
+    plan = F.apply_update(visible, r, video.id, when, video.duration, now(), points, utts)
     for iid, ev in plan["events"]:
         it = session.get(FollowupItem, iid)
         it.events = F.sort_events([*(it.events or []), ev])
@@ -199,12 +211,14 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
 
 def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask,
                  current: dict[int, dict[str, Any]] | None = None,
-                 report: Callable[[float, str], None] = lambda *_: None) -> float:
+                 report: Callable[[float, str], None] = lambda *_: None,
+                 current_utts: dict[int, list[dict[str, Any]]] | None = None) -> float:
     """Rehace el estado desde esa fecha: deshace esos vídeos y los vuelve a aplicar en orden.
 
-    `current` da el análisis de los vídeos que aún no lo tienen en la base de datos (el que se está
-    procesando). Devuelve los minutos de vídeo aplicados (para medir lo que tarda)."""
-    current = current or {}
+    `current` y `current_utts` dan el análisis y la transcripción de los vídeos que aún no los tienen en la
+    base de datos (el que se está procesando). Devuelve los minutos de vídeo aplicados (para medir lo que
+    tarda)."""
+    current, current_utts = current or {}, current_utts or {}
     record_version(session, f, "Antes de actualizar con la IA")
     affected = [(fv, v) for fv, v in links(session, f.id) if since is None or date_of(v) >= since]
     linked = {fv.video_id for fv, _ in links(session, f.id)}
@@ -219,7 +233,7 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
         if not analysis:
             continue  # aún sin analizar: se aplicará al terminar su análisis
         report(i / len(affected), f"«{f.name}»: vídeo {i + 1} de {len(affected)}")
-        apply_video(session, f, v, analysis, ask)
+        apply_video(session, f, v, analysis, ask, current_utts.get(v.id))
         minutes += v.duration / 60
     if f.stale_from is not None and (since is None or f.stale_from >= since):
         f.stale_from, f.stale_reason = None, ""
@@ -229,7 +243,8 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
 
 
 def update_for_video(session: Session, video: Video, analysis: dict[str, Any], rebuild: set[int], ask: Ask,
-                     report: Callable[[float, str], None] = lambda *_: None, only_rebuild: bool = False) -> float:
+                     report: Callable[[float, str], None] = lambda *_: None, only_rebuild: bool = False,
+                     utts: list[dict[str, Any]] | None = None) -> float:
     """Fase «follow»: lo que toca hacer en cada seguimiento de un vídeo recién analizado o regenerado.
 
     - Si se ha pedido rehacer (o el vídeo es nuevo y es el último por fecha), se rehace desde su fecha.
@@ -244,7 +259,8 @@ def update_for_video(session: Session, video: Video, analysis: dict[str, Any], r
         fv = session.get(FollowupVideo, (f.id, video.id))
         later = [v for x, v in links(session, f.id) if x.applied and v.id != video.id and date_of(v) > when]
         if f.id in rebuild or (f.status == "abierto" and not fv.applied and not later):
-            minutes += rebuild_from(session, f, when, ask, {video.id: analysis}, report)
+            minutes += rebuild_from(session, f, when, ask, {video.id: analysis}, report,
+                                    {video.id: utts} if utts is not None else None)
         elif fv.applied:
             mark_stale(session, f, when, f"Se ha regenerado el análisis de «{video.title}» sin rehacer el estado")
         elif not later:

@@ -244,16 +244,30 @@ pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` 
 `services.corrections_pending` avisa si las actuales no coinciden. La IA no ve el análisis anterior, así
 que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
 
-**Seguimientos** (`prompts.followup_block`, `FOLLOW_*`, `followups.py`). El análisis recibe el estado de
-cada seguimiento del vídeo según los vídeos **anteriores** a su fecha (`followups.context_block`, sin ids),
-con la instrucción de usarlo solo para entender referencias y relacionar, nunca para añadir lo que no se
-dice en el vídeo. Después, la fase `follow` hace una llamada por seguimiento: recibe el estado con ids
-(`[T3]` tarea, `[D2]` decisión, `[P1]` duda) y el análisis del vídeo (`followups.analysis_text`: resúmenes,
-tareas, decisiones y pendientes con marca de tiempo, no la transcripción), y devuelve `eventos`, `nuevos`,
-`resumen` y `aporte`. `followups.apply_update` lo verifica en Python: ids que existen, marca de tiempo
-dentro del vídeo, evento válido para el tipo, nada que cambie un punto manual (queda como «avanza») y
-ningún punto nuevo parecido a uno existente (`DUPLICATE`). El contexto se limita a `FOLLOW_CONTEXT_CHARS`
-recortando primero lo cerrado. Tests en `test_followups.py`.
+**Marcas de tiempo.** El campo `t` de tareas, decisiones, pendientes, señales y eventos usa `TS_T`, un
+`pattern` hh:mm:ss que la gramática de llama.cpp impone (comprobado en vivo). Sin él, el modelo a veces ponía
+en `t` el texto de la tarea o una fecha copiada del contexto. Los pendientes son objetos `{pendiente, t}`;
+los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «tal
+como se dice»: el modelo convertía «el lunes» en una fecha.
+
+**Seguimientos** (`prompts.followup_block`, `CHUNK_FOLLOW_*`, `FOLLOW_*`, `followups.py`). Dos pasos:
+1. **Al resumir**, cada fragmento recibe el estado de cada seguimiento del vídeo según los vídeos
+   **anteriores** a su fecha (`followups.context_block` con ids `[T3]`, `[D2]`, `[P1]`) y usa
+   `CHUNK_FOLLOW_SCHEMA`, que añade `seguimiento`: qué puntos se tratan, con evento, `t` y la **cita literal**.
+   `followups.verify_signals` solo conserva las citas que se dicen de verdad cerca de su momento (`quoted`:
+   `partial_ratio` ≥ `QUOTE_SIMILAR` en ±`QUOTE_WINDOW` s; mínimo `QUOTE_MIN_CHARS`) y quedan en
+   `analysis["seguimiento"]`. `followups.strip_ids` quita los ids que se escapen a los textos. Es la parte que
+   lee la transcripción: la fase del seguimiento solo ve el resumen, y ahí se perdían cierres dichos de pasada.
+2. **Fase `follow`** (una llamada por seguimiento): recibe el estado con ids, los **puntos del vídeo**
+   (`followups.analysis_points`: tareas, decisiones y pendientes del análisis, con clave `[N…]`), las señales
+   verificadas y el resumen. Devuelve `eventos` (con `cita`), `mismos` (qué `[N…]` es un punto existente),
+   `resumen` y `aporte`. Los puntos nuevos son los del análisis menos los «mismos» y los parecidos a uno
+   existente o borrado (`DUPLICATE`): no los inventa la IA, que variaba en cada ejecución.
+   `followups.apply_update` exige que un cambio de estado traiga una cita que se diga en ese momento (con la
+   transcripción del vídeo; si no, solo puede ser «avanza»), ids que existan, `t` dentro del vídeo, evento
+   válido para el tipo y nada que cambie un punto manual.
+
+El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se

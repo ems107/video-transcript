@@ -8,7 +8,7 @@ from app import followups as F
 from app import followups_store as FS
 from app import main
 from app.config import Settings
-from app.models import Followup, FollowupItem, FollowupVideo, Job, Video
+from app.models import Followup, FollowupItem, FollowupVideo, Job, Segment, Video
 
 # Fechas sin zona horaria, como las de la base de datos
 D1, D2, D3 = datetime(2026, 10, 4, 19), datetime(2026, 10, 5, 17), datetime(2026, 10, 6, 10)  # noqa: DTZ001
@@ -60,30 +60,66 @@ def test_context_block_with_ids_and_limit():
     assert len(block) < 1100 and "más)" in block
 
 
+UTTS = [{"start": 290.0, "end": 300.0, "text": "Por cierto, el informe ya se lo mandé al gestor ayer."},
+        {"start": 355.0, "end": 362.0, "text": "La cita con el banco ya la tengo para el jueves."}]
+
+
 def test_apply_update_validates_the_answer():
     items = [item(1, "tarea", "Enviar el informe al gestor", [ev(1, D1, "creada")]),
-             item(2, "tarea", "Pedir cita", [ev(1, D1, "creada")], manual=True)]
+             item(2, "tarea", "Pedir cita", [ev(1, D1, "creada")], manual=True),
+             item(3, "duda", "¿Hay que firmar ante notario?", [ev(1, D1, "creada")], hidden=True, manual=True)]
+    cita = "el informe ya se lo mandé al gestor"
     update = {
         "eventos": [
-            {"id": "T1", "evento": "hecha", "t": "00:05:00", "nota": "Ya lo envió"},
-            {"id": "T9", "evento": "hecha", "t": "00:05:00", "nota": ""},  # no existe
-            {"id": "T1", "evento": "resuelta", "t": "00:05:00", "nota": ""},  # no vale para una tarea
-            {"id": "[t1]", "evento": "hecha", "t": "02:00:00", "nota": ""},  # fuera del vídeo
-            {"id": "T2", "evento": "hecha", "t": "00:06:00", "nota": "Ya tiene cita"},  # manual
+            {"id": "T1", "evento": "hecha", "t": "00:05:00", "nota": "Ya lo envió", "cita": cita},
+            {"id": "T9", "evento": "hecha", "t": "00:05:00", "nota": "", "cita": cita},  # no existe
+            {"id": "T1", "evento": "resuelta", "t": "00:05:00", "nota": "", "cita": cita},  # no vale para una tarea
+            {"id": "[t1]", "evento": "descartada", "t": "02:00:00", "nota": "", "cita": cita},  # fuera del vídeo
+            {"id": "T1", "evento": "descartada", "t": "00:05:00", "nota": "", "cita": "lo dejamos estar"},  # no se dice
+            {"id": "T2", "evento": "hecha", "t": "00:06:00", "nota": "Ya tiene cita",
+             "cita": "la cita con el banco ya la tengo"},  # manual: queda como avance
         ],
-        "nuevos": [
-            {"tipo": "tarea", "texto": "Enviar el informe al gestor", "responsable": "", "plazo": "", "t": "00:07:00"},
-            {"tipo": "duda", "texto": "¿Hace falta el aval?", "responsable": "", "plazo": "", "t": "00:08:00"},
-            {"tipo": "duda", "texto": "¿Hace falta el aval?", "responsable": "", "plazo": "", "t": "00:09:00"},
-        ],
+        "mismos": [{"nuevo": "N1", "existente": "T1"}, {"nuevo": "N4", "existente": "T9"}],
     }
-    plan = F.apply_update(items, update, 2, D2, 25 * 60, AT)
+    points = [{"key": "N1", "kind": "tarea", "text": "Mandar el informe al gestor", "owner": "", "due": "", "t": "00:05:00"},
+              {"key": "N2", "kind": "duda", "text": "¿Hace falta el aval?", "owner": "", "due": "", "t": "00:08:00"},
+              {"key": "N3", "kind": "duda", "text": "¿Hay que firmar ante notario?", "owner": "", "due": "", "t": "00:09:00"},
+              {"key": "N4", "kind": "tarea", "text": "Llamar al banco", "owner": "Ana", "due": "", "t": "sin hora"}]
+    plan = F.apply_update(items, update, 2, D2, 25 * 60, AT, points, UTTS)
     by_item = {iid: e for iid, e in plan["events"]}
     assert by_item[1]["evento"] == "hecha" and by_item[1]["date"] == D2.isoformat() and by_item[1]["t"] == "00:05:00"
+    assert by_item[1]["cita"] == cita
     # Lo decidió el usuario: el vídeo solo se anota como avance
     assert by_item[2]["evento"] == "avanza" and "hecha" in by_item[2]["nota"]
     assert len(plan["events"]) == 2 and len(plan["discarded"]) == 5
-    assert [n["text"] for n in plan["new"]] == ["¿Hace falta el aval?"]
+    assert any("sin una cita" in d for d in plan["discarded"])
+    # N1 es la misma tarea; N3 la borró el usuario; N4 se relaciona con un punto que no existe: se añade, sin momento
+    assert [(n["text"], n["events"][0]["t"]) for n in plan["new"]] == [("¿Hace falta el aval?", "00:08:00"),
+                                                                        ("Llamar al banco", "")]
+
+
+def test_quotes_and_signals():
+    assert F.quoted("el informe ya se lo mandé al gestor", UTTS, 300)
+    assert not F.quoted("el informe ya se lo mandé al gestor", UTTS, 600)  # dicho, pero no en ese momento
+    assert not F.quoted("sí, vale", UTTS, 300)  # demasiado corta para demostrar nada
+    signals = [{"id": "[t1]", "evento": "hecha", "t": "00:04:55", "cita": "el informe ya se lo mandé al gestor"},
+               {"id": "T1", "evento": "hecha", "t": "00:04:55", "cita": "el informe ya se lo mandé al gestor"},
+               {"id": "T2", "evento": "hecha", "t": "00:06:00", "cita": "esto no lo dice nadie en la reunión"}]
+    assert F.verify_signals(signals, UTTS, 1500) == [
+        {"id": "T1", "evento": "hecha", "t": "00:04:55", "cita": "el informe ya se lo mandé al gestor"}]
+
+
+def test_points_from_the_analysis_and_ids_out_of_texts():
+    a = {"tareas": [{"responsable": "Ana", "tarea": "Enviar el informe", "plazo": "Sin especificar", "t": "00:01:00"},
+                    {"responsable": "", "tarea": " ", "plazo": "", "t": ""}],
+         "decisiones": [{"decision": "Abrir la cuenta", "t": "00:02:00"}],
+         "pendientes": ["Texto de un análisis antiguo", {"pendiente": "¿Quién paga?", "t": "00:03:00"}]}
+    pts = F.analysis_points(a)
+    assert [(p["key"], p["kind"], p["text"], p["due"], p["t"]) for p in pts] == [
+        ("N1", "tarea", "Enviar el informe", "", "00:01:00"), ("N2", "decision", "Abrir la cuenta", "", "00:02:00"),
+        ("N3", "duda", "Texto de un análisis antiguo", "", ""), ("N4", "duda", "¿Quién paga?", "", "00:03:00")]
+    assert F.strip_ids({"resumen": "Se cierra la tarea [T3] y la duda [P12].", "n": 3}) == {
+        "resumen": "Se cierra la tarea y la duda.", "n": 3}
 
 
 def test_events_in_order_and_no_advance_in_the_creating_video():
@@ -93,7 +129,7 @@ def test_events_in_order_and_no_advance_in_the_creating_video():
         ("ia", "00:01:00"), ("ia", "00:01:00"), ("ia", "00:05:00"), ("manual", "00:01:00")]
     items = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada")])]
     plan = F.apply_update(items, {"eventos": [{"id": "T1", "evento": "avanza", "t": "00:02:00", "nota": "Se repite"}]},
-                          1, D1, 600, AT)
+                          1, D1, 600, AT, [])
     assert plan["events"] == [] and "mismo vídeo" in plan["discarded"][0]
 
 
@@ -127,11 +163,13 @@ def tmp_analyzed(tmp_path, monkeypatch):
     return tmp_path / "Analizados"
 
 
-def _video(session, date, title, analysis=None):
+def _video(session, date, title, analysis=None, utts=()):
     v = Video(source_path=f"{title}.mkv", title=title, status="done", recorded_at=date, duration=25 * 60,
-              analysis=analysis or {"resumen_breve": title})
+              analysis=analysis or ANALYSES.get(title) or {"resumen_breve": title})
     session.add(v)
     session.commit()
+    for i, u in enumerate(utts or UTTS_BY_TITLE.get(title, [])):
+        session.add(Segment(video_id=v.id, idx=i, start=u["start"], end=u["end"], text=u["text"]))
     session.add(Job(video_id=v.id, status="done"))
     session.commit()
     return v
@@ -149,14 +187,21 @@ class FakeAsk:
         return self.answers[title]
 
 
+ANALYSES = {
+    "Primera": {"resumen_breve": "Primera", "tareas": [
+        {"responsable": "Iosu", "tarea": "Enviar el informe", "plazo": "Sin especificar", "t": "00:02:00"}],
+        "decisiones": [], "pendientes": [{"pendiente": "¿Quién paga la cuota?", "t": "00:03:00"}]},
+    "Segunda": {"resumen_breve": "Segunda", "tareas": [
+        {"responsable": "Iosu", "tarea": "Enviar el informe al gestor", "plazo": "", "t": "00:01:00"}],
+        "decisiones": [{"decision": "Abrir la cuenta común", "t": "00:04:00"}], "pendientes": []},
+}
+UTTS_BY_TITLE = {"Segunda": [{"start": 55.0, "end": 64.0, "text": "El informe ya lo he enviado esta mañana, está hecho."}]}
 ANSWERS = {
-    "Primera": {"eventos": [], "nuevos": [
-        {"tipo": "tarea", "texto": "Enviar el informe", "responsable": "Iosu", "plazo": "", "t": "00:02:00"},
-        {"tipo": "duda", "texto": "¿Quién paga la cuota?", "responsable": "", "plazo": "", "t": "00:03:00"}],
-        "resumen": "Empieza el tema.", "aporte": "Se plantea."},
-    "Segunda": {"eventos": [{"id": "T1", "evento": "hecha", "t": "00:01:00", "nota": "Enviado"}], "nuevos": [
-        {"tipo": "decision", "texto": "Abrir la cuenta común", "responsable": "", "plazo": "", "t": "00:04:00"}],
-        "resumen": "Informe enviado y cuenta decidida.", "aporte": "Se cierra el informe."},
+    "Primera": {"eventos": [], "mismos": [], "resumen": "Empieza el tema.", "aporte": "Se plantea."},
+    "Segunda": {"eventos": [{"id": "T1", "evento": "hecha", "t": "00:01:00", "nota": "Enviado",
+                             "cita": "el informe ya lo he enviado esta mañana"}],
+                "mismos": [{"nuevo": "N1", "existente": "T1"}],
+                "resumen": "Informe enviado y cuenta decidida.", "aporte": "Se cierra el informe."},
 }
 
 

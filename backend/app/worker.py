@@ -283,8 +283,10 @@ class Worker:
             video = s.get(Video, ctx.video_id)
             if not FS.for_video(s, video.id):
                 return 0.0
-            # Recién analizado (aún sin publicar): el análisis está en la carpeta de trabajo
-            analysis = ctx.load("analysis.json") if not ctx.path("publish.done").exists() else video.analysis
+            # Recién analizado (aún sin publicar): el análisis y la transcripción están en la carpeta de trabajo
+            fresh = not ctx.path("publish.done").exists()
+            analysis = ctx.load("analysis.json") if fresh else video.analysis
+            utts = ctx.load("corrected.json") if fresh else None
 
             def ask(state: str, desc: str, text: str) -> dict:
                 ctx.check_cancel()
@@ -293,7 +295,7 @@ class Worker:
 
             try:
                 minutes = FS.update_for_video(s, video, analysis or {}, rebuild, ask, ctx.report,
-                                              only_rebuild=bool(ctx.options.get("only")))
+                                              only_rebuild=bool(ctx.options.get("only")), utts=utts)
                 ctx.report(1.0, "Seguimientos actualizados")
                 return minutes
             except Cancelled:

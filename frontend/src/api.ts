@@ -36,6 +36,8 @@ export type VideoCard = {
 export type Task = { responsable: string; tarea: string; plazo: string; t: string }
 export type Decision = { decision: string; t: string }
 
+export type Pending = { pendiente: string; t: string }
+
 export type Analysis = {
   titulo?: string
   resumen_breve?: string
@@ -44,7 +46,7 @@ export type Analysis = {
   temas?: string[]
   tareas?: Task[]
   decisiones?: Decision[]
-  pendientes?: string[]
+  pendientes?: (string | Pending)[] // texto solo en vídeos analizados antes de la 1.5.0
 }
 
 export type SpeakerInfo = {
@@ -264,6 +266,7 @@ export type FollowupEvent = {
   t: string
   evento: 'creada' | 'avanza' | 'hecha' | 'descartada' | 'reabierta' | 'cambiada' | 'anulada' | 'resuelta'
   nota: string
+  cita?: string // la frase del vídeo que lo dice (comprobada)
   source: 'ia' | 'manual'
   at: string
 }

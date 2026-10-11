@@ -184,6 +184,7 @@ export function EventChip({ e }: { e: FollowupEvent }) {
   return (
     <span className={`event ${e.evento}`}>
       {where}<b>{label}</b>{e.nota && <span className="muted">{e.nota}</span>}
+      {e.cita && <q className="muted" title="La frase del vídeo que lo dice">{e.cita}</q>}
     </span>
   )
 }

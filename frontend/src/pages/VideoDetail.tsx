@@ -426,7 +426,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
                 <ul>{a.decisiones.map((d, i) => <li key={i}>{d.decision} <TsLink ts={d.t} seek={seek} /></li>)}</ul>
               ) : <p className="muted">No se detectaron decisiones.</p>}
               <h3>Pendientes</h3>
-              {a.pendientes?.length ? <ul>{a.pendientes.map((p, i) => <li key={i}>{p}</li>)}</ul> : <p className="muted">Nada pendiente.</p>}
+              {a.pendientes?.length ? <ul>{a.pendientes.map((p, i) => typeof p === 'string' ? <li key={i}>{p}</li>
+                : <li key={i}>{p.pendiente} <TsLink ts={p.t} seek={seek} /></li>)}</ul> : <p className="muted">Nada pendiente.</p>}
             </div>
           )}
 

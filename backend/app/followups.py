@@ -10,6 +10,7 @@ guarda la fecha de grabación de su vídeo: así el estado se entiende aunque el
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -164,13 +165,92 @@ def _similar(a: str, b: str) -> bool:
     return fuzz.token_sort_ratio(normalize(a), normalize(b)) >= DUPLICATE
 
 
+# --------------------------------------------------------------------------- citas
+
+QUOTE_SIMILAR = 85  # parecido (0-100) de la cita con lo dicho alrededor de su momento
+QUOTE_WINDOW = 60.0  # segundos alrededor de la marca de tiempo en los que se busca la cita
+QUOTE_MIN_CHARS = 12  # una cita más corta («sí», «vale») podría estar en cualquier parte
+
+
+def quoted(cita: str, utts: list[dict[str, Any]], t: float) -> bool:
+    """¿Se dice de verdad esa frase cerca de ese momento? Así un cambio de estado no se puede inventar."""
+    n = normalize(cita)
+    if len(n) < QUOTE_MIN_CHARS:
+        return False
+    near = normalize(" ".join(u["text"] for u in utts if abs(u["start"] - t) <= QUOTE_WINDOW))
+    return bool(near) and fuzz.partial_ratio(n, near) >= QUOTE_SIMILAR
+
+
+def verify_signals(signals: list[dict[str, Any]], utts: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
+    """Señales del análisis («de este punto se habla aquí»): solo las que citan algo dicho en ese momento."""
+    out, seen = [], set()
+    for x in signals:
+        pid = str(x.get("id", "")).strip().strip("[]").upper()
+        t = _valid_t(x.get("t", ""), duration)
+        key = (pid, x.get("evento"), x.get("t"))
+        if not re.fullmatch(r"[TDP]\d+", pid) or t is None or key in seen or not quoted(x.get("cita", ""), utts, t):
+            continue
+        seen.add(key)
+        out.append({"id": pid, "evento": x.get("evento", "avanza"), "t": fmt_ts(t), "cita": x.get("cita", "").strip()})
+    return out
+
+
+_ID_RE = re.compile(r"\s*\[[TDP]\d+\]")
+
+
+def strip_ids(obj: Any) -> Any:
+    """Quita los identificadores de los puntos ([T3]…) que la IA deje escapar a los textos del análisis."""
+    if isinstance(obj, str):
+        return _ID_RE.sub("", obj)
+    if isinstance(obj, list):
+        return [strip_ids(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: strip_ids(v) for k, v in obj.items()}
+    return obj
+
+
+# --------------------------------------------------------------------------- puntos del vídeo
+
+_NO_DUE = {"", "sin especificar", "no especificado", "no consta", "ninguno", "sin plazo", "no se indica"}
+
+
+def pending_parts(x: Any) -> tuple[str, str]:
+    """(texto, momento) de un pendiente del análisis (antes eran solo texto)."""
+    return (x, "") if isinstance(x, str) else (x.get("pendiente", ""), x.get("t", ""))
+
+
+def analysis_points(a: dict[str, Any]) -> list[dict[str, Any]]:
+    """Las tareas, decisiones y pendientes del análisis del vídeo, con una clave [N…] para relacionarlos.
+
+    Son los puntos nuevos del seguimiento: salen del análisis tal cual (lo que el usuario ve en el vídeo),
+    no de una segunda respuesta de la IA, que variaba en cada ejecución."""
+    out = []
+    for x in a.get("tareas") or []:
+        due = (x.get("plazo") or "").strip()
+        if normalize(due) in _NO_DUE or parse_ts(due) is not None:
+            due = ""  # a veces llega la marca de tiempo o «sin especificar»
+        out.append({"kind": "tarea", "text": x.get("tarea", ""), "owner": x.get("responsable", ""), "due": due,
+                    "t": x.get("t", "")})
+    for x in a.get("decisiones") or []:
+        out.append({"kind": "decision", "text": x.get("decision", ""), "owner": "", "due": "", "t": x.get("t", "")})
+    for x in a.get("pendientes") or []:
+        text, t = pending_parts(x)
+        out.append({"kind": "duda", "text": text, "owner": "", "due": "", "t": t})
+    out = [{**x, "text": x["text"].strip(), "owner": (x["owner"] or "").strip()} for x in out if x["text"].strip()]
+    return [{**x, "key": f"N{i + 1}"} for i, x in enumerate(out)]
+
+
 def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: int, video_date: datetime,
-                 duration: float, at: datetime) -> dict[str, Any]:
+                 duration: float, at: datetime, points: list[dict[str, Any]],
+                 utts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Valida la respuesta de la IA para un vídeo y devuelve qué cambiar.
 
-    Devuelve `{"events": [(item_id, evento)], "new": [punto], "discarded": [motivo]}`. Se descartan las
-    referencias a puntos que no existen, los momentos que no están en el vídeo, los cambios de estado no
-    válidos para el tipo de punto y los puntos nuevos que repiten uno existente."""
+    Devuelve `{"events": [(item_id, evento)], "new": [punto], "discarded": [motivo]}`.
+    - Eventos: se descartan las referencias a puntos que no existen, los momentos fuera del vídeo, los cambios
+      no válidos para el tipo de punto y, si hay transcripción (`utts`), los cambios de estado sin una cita
+      que se diga de verdad en ese momento.
+    - Puntos nuevos: todos los `points` del análisis del vídeo, salvo los que la IA relaciona con uno existente
+      («mismos») y los que repiten uno existente, también uno borrado por el usuario."""
     by_id = {short_id(it): it for it in items}
     events, new, discarded = [], [], []
     seen: set[tuple[int, str]] = set()
@@ -178,6 +258,7 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
         it = by_id.get(str(e.get("id", "")).strip().strip("[]").upper())
         t = _valid_t(e.get("t", ""), duration)
         evento = e.get("evento", "")
+        cita = (e.get("cita") or "").strip()
         if not it or it.get("hidden"):
             discarded.append(f"{e.get('id')}: no existe")
             continue
@@ -190,6 +271,9 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
         if evento == "avanza" and it["events"] and it["events"][0].get("video_id") == video_id:
             discarded.append(f"{e.get('id')}: avance en el mismo vídeo en que aparece")
             continue
+        if evento != "avanza" and utts is not None and not quoted(cita, utts, t):
+            discarded.append(f"{e.get('id')}: «{evento}» sin una cita que lo diga en {fmt_ts(t)} ({cita!r})")
+            continue
         nota = (e.get("nota") or "").strip()
         if it.get("manual") and evento != "avanza":
             # Lo decidió el usuario: el vídeo solo se anota como avance
@@ -198,24 +282,22 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
             continue
         seen.add((it["id"], evento))
         events.append((it["id"], {"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t),
-                                  "evento": evento, "nota": nota, "source": "ia", "at": at.isoformat()}))
+                                  "evento": evento, "nota": nota, "cita": cita if quoted(cita, utts or [], t) else "",
+                                  "source": "ia", "at": at.isoformat()}))
+    same = {str(m.get("nuevo", "")).strip().strip("[]").upper() for m in update.get("mismos") or []
+            if str(m.get("existente", "")).strip().strip("[]").upper() in by_id}
     existing = [(it["kind"], it["text"]) for it in items]
-    for n in update.get("nuevos") or []:
-        kind, text = n.get("tipo", ""), (n.get("texto") or "").strip()
-        t = _valid_t(n.get("t", ""), duration)
-        if kind not in KINDS or not text:
+    for pt in points:
+        if pt["key"] in same:
             continue
-        if t is None:
-            discarded.append(f"nuevo «{text}»: momento fuera del vídeo ({n.get('t')})")
+        if any(k == pt["kind"] and _similar(pt["text"], other) for k, other in existing):
+            discarded.append(f"{pt['key']} «{pt['text']}»: ya existe")
             continue
-        if any(k == kind and _similar(text, other) for k, other in existing):
-            discarded.append(f"nuevo «{text}»: ya existe")
-            continue
-        existing.append((kind, text))
-        new.append({"kind": kind, "text": text, "owner": (n.get("responsable") or "").strip(),
-                    "due": (n.get("plazo") or "").strip(), "status": INITIAL[kind], "manual": False,
-                    "hidden": False,
-                    "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t),
+        existing.append((pt["kind"], pt["text"]))
+        t = _valid_t(pt["t"], duration)
+        new.append({"kind": pt["kind"], "text": pt["text"], "owner": pt["owner"], "due": pt["due"],
+                    "status": INITIAL[pt["kind"]], "manual": False, "hidden": False,
+                    "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t) if t is not None else "",
                                 "evento": "creada", "nota": "", "source": "ia", "at": at.isoformat()}]})
     return {"events": events, "new": new, "discarded": discarded}
 
@@ -240,21 +322,25 @@ def revert(items: list[dict[str, Any]], video_ids: set[int]) -> dict[str, Any]:
     return {"delete": delete, "update": update}
 
 
-def analysis_text(a: dict[str, Any], max_chars: int = 12000) -> str:
-    """Lo que la IA necesita del análisis de un vídeo para actualizar el seguimiento."""
+def analysis_text(a: dict[str, Any], points: list[dict[str, Any]], signals: list[dict[str, Any]],
+                  max_chars: int = 12000) -> str:
+    """Lo que la IA necesita del vídeo para actualizar el seguimiento: sus puntos, las señales verificadas y
+    el resumen."""
+    labels = {"tarea": "tarea", "decision": "decisión", "duda": "duda"}
     parts = []
+    if points:
+        parts.append("Puntos de este vídeo (se añadirán al estado salvo que digas que son el mismo que uno anterior):\n"
+                     + "\n".join(f"- [{p['key']}] {labels[p['kind']]}: {p['text']}"
+                                 + (f" (responsable: {p['owner']})" if p["owner"] else "")
+                                 + (f" (plazo: {p['due']})" if p["due"] else "") + (f" [{p['t']}]" if p["t"] else "")
+                                 for p in points))
+    if signals:
+        parts.append("Señales detectadas al leer la transcripción (citas literales, verificadas):\n" + "\n".join(
+            f"- [{x['id']}] {x['evento']} en {x['t']}: «{x['cita']}»" for x in signals))
     if a.get("resumen_breve"):
-        parts.append("Resumen breve:\n" + a["resumen_breve"])
+        parts.append("Resumen breve del vídeo:\n" + a["resumen_breve"])
     if a.get("resumen_detallado"):
-        parts.append("Resumen detallado:\n" + a["resumen_detallado"][:max_chars])
-    if a.get("tareas"):
-        parts.append("Tareas:\n" + "\n".join(
-            f"- [{x.get('t', '')}] {x.get('tarea', '')}" + (f" (responsable: {x['responsable']})" if x.get("responsable") else "")
-            + (f" (plazo: {x['plazo']})" if x.get("plazo") else "") for x in a["tareas"]))
-    if a.get("decisiones"):
-        parts.append("Decisiones:\n" + "\n".join(f"- [{x.get('t', '')}] {x.get('decision', '')}" for x in a["decisiones"]))
-    if a.get("pendientes"):
-        parts.append("Pendientes:\n" + "\n".join(f"- {x}" for x in a["pendientes"]))
+        parts.append("Resumen detallado del vídeo:\n" + a["resumen_detallado"][:max_chars])
     return "\n\n".join(parts)
 
 
@@ -296,6 +382,8 @@ def render_markdown(f: dict[str, Any], items: list[dict[str, Any]], videos: list
                 out.append(f"- **[{status}]** {it['text']}{who}{due}")
                 for e in it["events"]:
                     note = f": {e['nota']}" if e.get("nota") else ""
+                    if e.get("cita"):
+                        note += f" («{e['cita']}»)"
                     w = where(e)
                     out.append(f"  - {EVENT_LABELS.get(e['evento'], e['evento'])}{(' · ' + w) if w else ''}{note}")
         out.append("")

@@ -71,7 +71,8 @@ def summary_md(meta: dict[str, Any], a: dict[str, Any]) -> str:
     if a.get("decisiones"):
         out += ["## Decisiones", ""] + [f"- {x['decision']} ({x.get('t', '')})" for x in a["decisiones"]] + [""]
     if a.get("pendientes"):
-        out += ["## Pendientes", ""] + [f"- {x}" for x in a["pendientes"]] + [""]
+        pend = [x if isinstance(x, str) else f"{x.get('pendiente', '')} ({x.get('t', '')})" for x in a["pendientes"]]
+        out += ["## Pendientes", ""] + [f"- {x}" for x in pend] + [""]
     if a.get("temas"):
         out += ["## Temas", ""] + [f"- {x}" for x in a["temas"]] + [""]
     return "\n".join(out)
