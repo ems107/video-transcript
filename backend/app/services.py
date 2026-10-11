@@ -105,9 +105,10 @@ def apply_context_identities(session: Session, video_id: int, found: dict[str, A
     que el resto del código ignora.
     """
     identities, nicknames = found.get("identidades") or {}, found.get("apodos") or {}
+    evaluated = set(found.get("evaluados") or [])
     names = speaker_names(session, video_id)
     for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
-        hints = {k: v for k, v in (sp.visual_hints or {}).items() if not k.startswith("_")}
+        hints = dict(sp.visual_hints or {})
         d = identities.get(sp.label)
         free = not sp.confirmed and not sp.person_id and (
             sp.source == "contexto" or not (sp.suggested_person_id or sp.suggested_name))
@@ -116,10 +117,14 @@ def apply_context_identities(session: Session, video_id: int, found: dict[str, A
             sp.suggested_person_id, sp.suggested_name = (pid, "") if pid else (None, d["nombre"])
             sp.source, sp.confidence = "contexto", CONTEXT_CONFIDENCE
             hints["_motivo"] = f"{d.get('motivo', '')} ({d['t']})" if d.get("t") else d.get("motivo", "")
-        elif free and sp.source == "contexto":
+        elif free and sp.source == "contexto" and sp.label in evaluated:
+            # Solo se retira si se ha vuelto a evaluar y ya no se sostiene (al regenerar, los hablantes
+            # con propuesta ya no figuran como «Hablante N» y no se evalúan de nuevo)
             sp.suggested_person_id, sp.suggested_name, sp.source, sp.confidence = None, "", "", 0.0
+            hints.pop("_motivo", None)
         shown = d["nombre"] if free and d else names.get(sp.label, "")
         alias = next((a for name, a in nicknames.items() if normalize(name) == normalize(shown)), None)
+        hints.pop("_apodos", None)  # los apodos se recalculan con todo el vídeo en cada pasada
         if alias:
             hints["_apodos"] = alias
         sp.visual_hints = hints

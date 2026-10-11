@@ -34,7 +34,9 @@ Formas clave:
   por persona vista en pantalla. `vision.json` ya lleva solo las formas `canonical`; las lecturas
   originales quedan en `vision.raw.json`, y `names` se puede repetir sin perderlas. Si se repite
   `vision`, se borra `vision.raw.json`.
-- `context_identities.json`: `{identidades: {label: {nombre, motivo, t, votos}}, apodos: {nombre: [apodo]}}`.
+- `context_identities.json`: `{identidades: {label: {nombre, motivo, t, votos}}, apodos: {nombre: [apodo]},
+  evaluados: [label]}`. Una propuesta por contexto anterior solo se retira si su hablante está en
+  `evaluados`: al regenerar, los hablantes con propuesta ya no son «Hablante N» y no se reevalúan.
 - `analysis.json`: sigue `FINAL_SCHEMA` de `prompts.py`. Las claves están en español, y la web y
   `export.py` dependen de ellas.
 

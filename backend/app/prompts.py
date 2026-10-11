@@ -167,9 +167,11 @@ def who_block(participants: list[str], speakers: list[tuple[str, str]], nickname
     if not lines:
         return ""
     return "Quién es quién:\n" + "\n".join(lines) + """
-Nombra a cada persona siempre con la forma exacta de esta lista. La transcripción automática puede \
-escribir mal los nombres oídos, y la gente usa apodos y diminutivos: si por el contexto un nombre oído \
-corresponde a un participante de la lista, usa el nombre del participante."""
+Nombra a cada persona de la lista siempre con la forma exacta que aparece en ella. Un nombre oído que \
+no está en la lista (un apodo, un diminutivo o un nombre mal transcrito) puede ser de un participante o \
+de otra persona: atribúyelo a un participante solo si el contexto lo deja claro, por ejemplo porque se \
+dirigen a él con ese nombre y es él quien responde. Si no está claro, escríbelo tal como se oye y no lo \
+relaciones con nadie."""
 
 
 def chunk_user(context: str, part: int, total: int, start: str, end: str, body: str, who: str = "") -> str:

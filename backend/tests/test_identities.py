@@ -107,3 +107,17 @@ def test_context_identity_never_overrides_other_sources(session):
     services.apply_context_identities(session, v.id, {"identidades": {"S0": {"nombre": "Edgar", "motivo": ""}}}, [])
     session.refresh(sp)
     assert (sp.suggested_name, sp.source) == ("Iosu", "pantalla")
+
+
+def test_regenerating_keeps_context_identities(session):
+    """Al regenerar, un hablante con propuesta por contexto ya no es «Hablante N» y no se reevalúa."""
+    v, sp = _video(session)
+    first = {"identidades": {"S0": {"nombre": "Sandra", "motivo": "Responde", "t": ""}}, "evaluados": ["S0"]}
+    services.apply_context_identities(session, v.id, first, [])
+    services.apply_context_identities(session, v.id, {"identidades": {}, "evaluados": []}, [])
+    session.refresh(sp)
+    assert (sp.suggested_name, sp.source, sp.visual_hints.get("_motivo")) == ("Sandra", "contexto", "Responde")
+    # Si se reevalúa y ya no se sostiene, se retira
+    services.apply_context_identities(session, v.id, {"identidades": {}, "evaluados": ["S0"]}, [])
+    session.refresh(sp)
+    assert (sp.suggested_name, sp.source) == ("", "") and "_motivo" not in sp.visual_hints

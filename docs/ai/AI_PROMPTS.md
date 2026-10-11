@@ -178,7 +178,9 @@ para poder reanudar, y quedan en `analysis["fragmentos"]`.
 **Quién es quién.** `who_block` se añade a cada bloque y al final: los participantes unificados con al
 menos 2 lecturas (`analyze.participants`) y el estado de cada hablante (`ctx.speaker_status`:
 confirmado, probable por voz/pantalla/contexto, o sin identificar). Pide usar siempre la forma exacta
-de la lista y atribuir apodos y nombres mal transcritos al participante correspondiente. Cada bloque
+de la lista. Un nombre oído que no está en ella solo se atribuye a un participante si el contexto lo
+deja claro; si no, se escribe tal como se oye. (Una versión anterior pedía atribuirlos «si corresponden»
+y la IA adivinaba: escribió que un apodo de una persona era de otra.) Cada bloque
 devuelve además `identidades` (para «Hablante N») y `apodos`. `collect_identities` los verifica en
 Python: el nombre debe estar en la lista o oírse; el apodo debe oírse, no ser el nombre de pila de
 otro participante y parecerse a una parte del nombre de la persona (`NICKNAME_SIMILAR`: «Selu» en

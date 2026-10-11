@@ -193,7 +193,8 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
 
     # Identidades y apodos deducidos del contexto (verificados): solo propuestas, nunca se confirman
     identities, nicknames = collect_identities(partials, unnamed, known, named, " ".join(u["text"] for u in utts))
-    ctx.save("context_identities.json", {"identidades": identities, "apodos": nicknames})
+    ctx.save("context_identities.json",
+             {"identidades": identities, "apodos": nicknames, "evaluados": sorted(unnamed.values())})
     speakers_info = [
         (shown[lb], f"probablemente {identities[lb]['nombre']} (por el contexto: {identities[lb]['motivo']})")
         if lb in identities else (shown[lb], ctx.speaker_status.get(lb, "")) for lb in order
