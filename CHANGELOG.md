@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.3.0] - 2026-10-11
+
 Hablantes bien asignados aunque la separación de voces se equivoque.
 
 ### Añadido
@@ -56,7 +58,8 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
 
 ### Notas para actualizar
 
-- Reinicia la app con `.un.ps1 -Rebuild`. La base de datos se actualiza sola al arrancar: se crea la
+- Reinicia la app con `.
+un.ps1 -Rebuild`. La base de datos se actualiza sola al arrancar: se crea la
   tabla de cambios manuales y se añade la marca de voz a la transcripción.
 - La comprobación por la voz se aplica a los vídeos que se analicen a partir de ahora. Para uno ya
   analizado, usa «Regenerar análisis» → «Volver a identificar a los hablantes».
@@ -228,7 +231,8 @@ Primera versión completa: transcripción, hablantes, visión, análisis y bibli
 - `run.ps1` arranca la app con un solo comando.
 - La versión de la app se muestra en la web y en `/api/status`.
 
-[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.2.0...HEAD
+[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/ems107/video-transcript/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ems107/video-transcript/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ems107/video-transcript/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ems107/video-transcript/releases/tag/v1.0.0
