@@ -54,6 +54,13 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
 - La huella de voz de cada hablante se calcula solo con sus intervenciones largas y claras, así que al
   confirmarlo se guarda una voz más limpia.
 
+### Notas para actualizar
+
+- Reinicia la app con `.un.ps1 -Rebuild`. La base de datos se actualiza sola al arrancar: se crea la
+  tabla de cambios manuales y se añade la marca de voz a la transcripción.
+- La comprobación por la voz se aplica a los vídeos que se analicen a partir de ahora. Para uno ya
+  analizado, usa «Regenerar análisis» → «Volver a identificar a los hablantes».
+
 ## [1.2.0] - 2026-10-11
 
 Corregir y mejorar un vídeo ya analizado sin perder lo que ya has revisado.
