@@ -8,6 +8,30 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Hablantes bien asignados aunque la separación de voces se equivoque.
+
+### Añadido
+
+- **Comprobación de cada tramo por la voz.** Después de separar las voces, la app compara cada tramo de
+  1,5 s con la voz de cada hablante:
+  - si es claramente de otro, lo reasigna, aunque sea en mitad de una línea (por ejemplo, un saludo
+    de otra persona);
+  - si no está claro, lo marca como «dudoso» para que lo revises;
+  - avisa si un hablante parece juntar dos voces distintas.
+
+  En un vídeo de 37 min tarda unos 40 s.
+- **Arreglar el hablante a mano**, de una línea, de varias o de parte de una línea. Se guarda por tiempo
+  («de tal momento a tal momento habla esta persona»), se ve al momento en la transcripción y se
+  mantiene en cualquier regeneración, también en la completa.
+- Al regenerar el análisis completo se puede indicar el número mínimo y máximo de hablantes.
+
+### Cambiado
+
+- «Volver a identificar a los hablantes» también vuelve a comprobar las voces. Ahora necesita el archivo
+  de vídeo, para volver a extraer el audio.
+- La huella de voz de cada hablante se calcula solo con sus intervenciones largas y claras, así que al
+  confirmarlo se guarda una voz más limpia.
+
 ## [1.2.0] - 2026-10-11
 
 Corregir y mejorar un vídeo ya analizado sin perder lo que ya has revisado.

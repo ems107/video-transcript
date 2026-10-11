@@ -39,11 +39,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
 """
 
 
+# Columnas añadidas a tablas existentes: create_all no las crea en una base de datos ya hecha
+NEW_COLUMNS = [("segment", "voice", "VARCHAR NOT NULL DEFAULT ''")]
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
         conn.execute(text(FTS_DDL))
+        for table, column, ddl in NEW_COLUMNS:
+            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            if column not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
 
 
 def get_session() -> Iterator[Session]:

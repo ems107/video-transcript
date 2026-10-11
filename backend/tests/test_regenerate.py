@@ -22,10 +22,12 @@ def test_availability(tmp_path):
     assert r["analysis"] and r["full"] == "No se encuentra el archivo de vídeo"
     assert regenerate.availability(None, video) == {**{k: r["analysis"] for k in ("analysis", "speakers", "screen")},
                                                     "full": ""}
-    for name in ("corrected.json", "diarization.json", "utterances.json"):
+    for name in ("corrected.json", "diarization.json", "aligned.json"):
         (work / name).write_text("[]", encoding="utf-8")
     assert regenerate.availability(work, video) == dict.fromkeys(regenerate.LEVELS, "")
-    assert regenerate.availability(work, None)["screen"] == "No se encuentra el archivo de vídeo"
+    # Sin el vídeo no se puede volver a extraer el audio: solo el resumen
+    no_video = regenerate.availability(work, None)
+    assert no_video["analysis"] == "" and no_video["speakers"] == no_video["screen"] == "No se encuentra el archivo de vídeo"
 
 
 def _ident(order, person_id=None, name=""):
@@ -71,6 +73,7 @@ def test_regenerate_endpoint_levels(client, session, tmp_path, monkeypatch):
     info = client.get(f"/api/videos/{v.id}/regenerate").json()
     by = {x["level"]: x for x in info["levels"]}
     assert by["analysis"]["available"] and not by["speakers"]["available"] and not by["full"]["available"]
+    assert info["on_screen"] is None
     assert by["analysis"]["seconds"] > 0 and info["confirmed_speakers"] == 1
     assert client.post(f"/api/videos/{v.id}/regenerate", json={"level": "full"}).status_code == 400
 
@@ -88,8 +91,10 @@ def test_regenerate_endpoint_levels(client, session, tmp_path, monkeypatch):
     vid.source_path = str(video)
     session.add(job), session.add(vid)
     session.commit()
-    assert client.post(f"/api/videos/{v.id}/regenerate", json={"level": "full"}).json()["ok"]
+    assert client.post(f"/api/videos/{v.id}/regenerate",
+                       json={"level": "full", "min_speakers": 4, "max_speakers": 5}).json()["ok"]
     session.expire_all()
+    assert session.get(Job, 1).options["min_speakers"] == 4 and session.get(Job, 1).options["max_speakers"] == 5
     sp = session.exec(Speaker.__table__.select()).first()
     assert not sp.confirmed and sp.person_id is None
     assert session.get(Person, person.id) is not None

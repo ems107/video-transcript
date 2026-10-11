@@ -77,18 +77,19 @@ def run(ctx: JobContext, voice_db: dict[int, list[list[float]]]) -> None:
     for u in utts:
         if u["speaker"] and u["speaker"] not in labels:
             labels.append(u["speaker"])
-    for label in diar["speaking_time"]:
-        if label not in labels:
-            labels.append(label)
-
-    hints = visual_hints(diar["turns"], ctx.load("vision.json", []))
+    # Tiempo y pistas según las intervenciones (ya comprobadas por la voz y con los arreglos manuales)
+    speaking: dict[str, float] = {}
+    for u in utts:
+        speaking[u["speaker"]] = speaking.get(u["speaker"], 0.0) + u["end"] - u["start"]
+    turns = [{"start": u["start"], "end": u["end"], "speaker": u["speaker"]} for u in utts]
+    hints = visual_hints(turns, ctx.load("vision.json", []))
     ids = identify(
         labels, diar["embeddings"], hints, diar.get("owner"), ctx.people, voice_db,
         ctx.settings.owner_name, ctx.settings.voice_match_threshold, ctx.settings.voice_auto_threshold,
     )
     for i, label in enumerate(labels):
         ids[label]["order"] = i + 1
-        ids[label]["speaking_time"] = diar["speaking_time"].get(label, 0.0)
+        ids[label]["speaking_time"] = speaking.get(label, 0.0)
         ids[label]["embedding"] = diar["embeddings"].get(label)
     ctx.save("identities.json", ids)
     known = sum(1 for v in ids.values() if v["person_id"] or v["suggested_name"])
