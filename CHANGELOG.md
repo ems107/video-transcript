@@ -24,6 +24,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Corregido
 
+- Si la IA devuelve una respuesta cortada o no válida, se guarda en `data/llm_failures/` para poder
+  diagnosticarla. Una respuesta cortada por el límite de longitud ya no se pide tres veces seguidas.
 - La hora de inicio de un trabajo se reinicia al regenerar un vídeo. Antes conservaba la del primer
   análisis.
 
