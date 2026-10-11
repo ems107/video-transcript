@@ -17,11 +17,13 @@ from .base import JobContext
 from .glossary import normalize
 from .transcript import fmt_ts
 
-MAX_TERMS = 15
-MAX_CONTEXT = 10
-MAX_PER_PERSON = 8
-MAX_NEW_PEOPLE = 5
-MAX_SECTIONS = 5
+# Solo protegen frente a respuestas anómalas (un bucle de la IA): un vídeo normal no se acerca a ellos.
+# Lo que limita el ruido son las comprobaciones de cada propuesta, no el número.
+MAX_TERMS = 40
+MAX_CONTEXT = 30
+MAX_PER_PERSON = 40
+MAX_NEW_PEOPLE = 15
+MAX_SECTIONS = 8
 
 
 def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:

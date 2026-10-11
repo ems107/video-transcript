@@ -174,3 +174,18 @@ def test_every_list_in_the_schemas_has_a_limit():
         for path, arr in lists(s):
             assert arr.get("maxItems"), path
     assert prompts.CHUNK_SCHEMA["properties"]["apodos"]["maxItems"] == 10
+
+
+def test_old_default_temperature_is_replaced(tmp_path, monkeypatch):
+    import json
+
+    from app import config
+
+    f = tmp_path / "settings.json"
+    monkeypatch.setattr(config, "SETTINGS_FILE", f)
+    f.write_text(json.dumps({"llm_temperature": 0.2, "owner_name": "Edgar"}), encoding="utf-8")
+    s = config.load_settings()
+    assert s.llm_temperature == 0.7 and s.llm_presence_penalty == 1.5 and s.owner_name == "Edgar"
+    # Si el usuario ya tiene los ajustes nuevos, su temperatura se respeta aunque sea 0,2
+    f.write_text(json.dumps({"llm_temperature": 0.2, "llm_presence_penalty": 1.0}), encoding="utf-8")
+    assert config.load_settings().llm_temperature == 0.2

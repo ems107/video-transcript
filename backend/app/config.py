@@ -49,7 +49,13 @@ class Settings(BaseModel):
     llm_port: int = 8091
     llm_ctx: int = 65536
     llm_n_cpu_moe: int = 24  # capas MoE cuyos expertos se ejecutan en CPU/RAM
-    llm_temperature: float = 0.2
+    # Muestreo recomendado por Qwen para Qwen3.6 sin «modo razonamiento». Con temperatura baja y sin
+    # penalización, el modelo puede entrar en bucles repitiendo un elemento (visto con 0,2)
+    llm_temperature: float = 0.7
+    llm_top_p: float = 0.8
+    llm_top_k: int = 20
+    llm_min_p: float = 0.0
+    llm_presence_penalty: float = 1.5
     # Tokens por imagen del modelo de visión (0 = lo que indique el modelo). Más tokens = más detalle
     llm_image_min_tokens: int = 0
     llm_image_max_tokens: int = 0
@@ -68,9 +74,17 @@ class Settings(BaseModel):
     chunk_minutes: float = 30.0
 
 
+# Valores por defecto de versiones anteriores que se guardaron en settings.json sin que el usuario los
+# eligiera: si siguen igual y no existen aún los ajustes que los sustituyen, se usan los nuevos
+OLD_DEFAULTS = [("llm_temperature", 0.2, "llm_presence_penalty")]
+
+
 def load_settings() -> Settings:
     if SETTINGS_FILE.exists():
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        for key, old, marker in OLD_DEFAULTS:
+            if data.get(key) == old and marker not in data:
+                data.pop(key)
         return Settings(**data)
     return Settings()
 

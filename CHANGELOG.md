@@ -34,6 +34,12 @@ Hablantes bien asignados aunque la separación de voces se equivoque.
 
 ### Cambiado
 
+- **La IA se usa con los ajustes que recomienda el fabricante del modelo** (Qwen): más variación y una
+  penalización que evita repetir. Con los anteriores podía entrar en bucles repitiendo lo mismo. En un
+  vídeo real, el aprendizaje pasó de 31 datos repetidos a ninguno. Se aplica también a quien ya tenía
+  guardada la configuración anterior.
+- Se proponen todos los datos que se encuentran de cada persona. Antes se quedaban en 8 por vídeo y se
+  perdían datos buenos. Los demás límites por vídeo también suben.
 - «Volver a identificar a los hablantes» también vuelve a comprobar las voces. Ahora necesita el archivo
   de vídeo, para volver a extraer el audio.
 - Las propuestas de nombre por pantalla tienen en cuenta las reasignaciones por la voz. Un fotograma que

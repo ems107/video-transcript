@@ -61,7 +61,10 @@ las fases.
   - Un hecho o dato necesita una marca de tiempo dentro del bloque y líneas reales alrededor
     (`excerpt_at`). Se descartan las frases con marcas temporales (`is_ephemeral`: «ayer», «el
     lunes», «a las 9»…).
-  - Límites por vídeo: 15 términos, 10 hechos, 8 datos por persona y 5 personas nuevas.
+  - Límites por vídeo (40 términos, 30 hechos, 40 datos por persona, 15 personas nuevas): solo protegen
+    frente a respuestas anómalas. Antes eran 15/10/8/5 y descartaban datos buenos por orden de llegada
+    (en un vídeo real, Edgar perdió datos al llegar a 8). El ruido lo limitan las comprobaciones de
+    cada propuesta, no el número.
   - La evidencia guarda etiquetas de hablante (`label`), no nombres. Los nombres se ponen al mostrarla.
 - **Atribución** (`knowledge.resolve_name`): el `nombre` devuelto por el LLM se resuelve así:
   - si es un hablante del vídeo → `speaker_label`. «Hablante N» solo vale con coincidencia exacta;

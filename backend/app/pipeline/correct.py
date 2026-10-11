@@ -42,8 +42,7 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
             for i, c in enumerate(batch):
                 d = definitions.get(c.suggestion) or ""
                 lines.append(f'{i}. Término: "{c.suggestion}"{f" ({d})" if d else ""}\n   Texto: {c.context}')
-            r = llm.chat_json(CORRECT_SYSTEM, "Propuestas:\n\n" + "\n\n".join(lines), CORRECT_SCHEMA, max_tokens=2000,
-                              temperature=0.0)
+            r = llm.chat_json(CORRECT_SYSTEM, "Propuestas:\n\n" + "\n\n".join(lines), CORRECT_SCHEMA, max_tokens=2000)
             for dec in r.get("decisiones", []):
                 if 0 <= dec.get("id", -1) < len(batch):
                     batch[dec["id"]].accepted = bool(dec.get("aceptar"))
