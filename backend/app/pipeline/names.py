@@ -177,11 +177,12 @@ def unify(vision: list[dict[str, Any]], texts: list[str], people: list[dict[str,
         pid = match_name(name, people) if people else None
         if pid is None and people:
             pid = next((p for m in members if (p := match_name(m, people)) is not None), None)
+        screen = name
         if pid is not None:
             name = next(p["name"] for p in people if p["id"] == pid)
         first = normalize(name).split()[0]
         groups.append({
-            "canonical": name, "person_id": pid,
+            "canonical": name, "person_id": pid, "screen": screen,
             "variants": dict(sorted(((m, counts[m]) for m in members), key=lambda x: -x[1])),
             "readings": sum(counts[m] for m in members),
             "frames": len(set().union(*(frames.get(m, set()) for m in members))),

@@ -70,8 +70,9 @@ las fases.
   - si no es un nombre utilizable → se descarta.
 - **Cuándo se muestra lo de un hablante** (`speaker_person`): si está confirmado, o si fue reconocido
   por micrófono o por voz con ≥ `voice_auto_threshold`. Si no, queda «en espera».
-- **Alias.** Los nombres vistos en pantalla como hablante activo (`visual_hints` ≥ 2) que difieren del
-  nombre mostrado generan propuestas `alias`.
+- **Alias.** Si un grupo de `names.json` corresponde a una persona conocida y su forma en pantalla
+  (`screen`, al menos 2 lecturas) no es su nombre ni uno de sus otros nombres, se propone como `alias`
+  de esa persona. Ya no se usa el hablante activo: no es fiable y proponía nombres de otras personas.
 - **Guardado** (`KS.merge_proposals`):
   1. `drop_pending_from` borra las pendientes anteriores de **este** vídeo: una nueva pasada las
      sustituye. Lo aceptado y lo rechazado se conserva.
@@ -149,8 +150,8 @@ Fuentes, por orden de prioridad:
    `voice_auto_threshold` (0.75) la confianza es alta. Si la pantalla confirma la misma persona, la
    confianza sube a ≥ 0.9.
 3. **Pantalla** (`voice.assign_visual_names`): con los nombres ya unificados, cada nombre se asigna a
-   un solo hablante, el que más coincide con él (al menos 2 coincidencias, más de la mitad de las del
-   hablante, y ese hablante debe concentrar al menos la mitad de las lecturas del nombre). Un nombre
+   un solo hablante, el que más coincide con él (al menos 2 coincidencias, el nombre más leído de ese
+   hablante sin empate, y ese hablante debe concentrar al menos la mitad de las lecturas del nombre). Un nombre
    repartido entre varias voces, como el de quien presenta, no se asigna. Se busca en las personas por
    nombre o alias (`token_set_ratio` ≥ 85). Si no existe, queda como `suggested_name`.
 4. **Contexto** (en `analyze`, ver abajo): para los hablantes que siguen sin nombre, el LLM propone una
@@ -179,8 +180,9 @@ menos 2 lecturas (`analyze.participants`) y el estado de cada hablante (`ctx.spe
 confirmado, probable por voz/pantalla/contexto, o sin identificar). Pide usar siempre la forma exacta
 de la lista y atribuir apodos y nombres mal transcritos al participante correspondiente. Cada bloque
 devuelve además `identidades` (para «Hablante N») y `apodos`. `collect_identities` los verifica en
-Python: el nombre debe estar en la lista o oírse; el apodo debe oírse y no ser el nombre de pila de
-otro participante; no se repite un nombre ya asignado, y un empate entre dos nombres no decide nada.
+Python: el nombre debe estar en la lista o oírse; el apodo debe oírse, no ser el nombre de pila de
+otro participante y parecerse a una parte del nombre de la persona (`NICKNAME_SIMILAR`: «Selu» en
+«JoSELUis»; en una ejecución real el LLM atribuyó «Selu» a Sandra, y esta regla lo descarta); no se repite un nombre ya asignado, y un empate entre dos nombres no decide nada.
 El resultado se guarda en `context_identities.json`, se aplica a los hablantes libres
 (`services.apply_context_identities`, nunca sobre lo confirmado ni sobre propuestas de voz o pantalla)
 y el informe final ya lo recibe en el bloque.

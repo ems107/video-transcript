@@ -64,11 +64,11 @@ def match_name(name: str, people: list[dict[str, Any]], threshold: float = 85.0)
 
 
 def assign_visual_names(
-    hints: dict[str, dict[str, int]], min_count: int = 2, min_share: float = 0.5, min_purity: float = 0.5
+    hints: dict[str, dict[str, int]], min_count: int = 2, min_purity: float = 0.5
 ) -> dict[str, str]:
     """Nombre en pantalla de cada hablante: cada nombre a un solo hablante, por número de coincidencias.
 
-    - `min_share`: el nombre debe superar esa parte de las lecturas del hablante (un empate no vale).
+    - el nombre debe ser el más leído del hablante, sin empate con otro;
     - `min_purity`: y ese hablante debe concentrar esa parte de las lecturas del nombre. Un nombre
       repartido entre varias voces no es fiable (p. ej. quien presenta queda resaltado mientras
       hablan otros).
@@ -83,7 +83,8 @@ def assign_visual_names(
     for c, lab, n in pairs:
         if lab in out or n in used or c < min_count:
             continue
-        if c / sum(clean[lab].values()) > min_share and c / per_name[n] >= min_purity:
+        rivals = [x for m, x in clean[lab].items() if m != n]
+        if c > max(rivals, default=0) and c / per_name[n] >= min_purity:
             out[lab] = n
             used.add(n)
     return out

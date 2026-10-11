@@ -83,6 +83,9 @@ def test_names_and_visual_hints():
     assert assign_visual_names({"S0": {"Ana": 5, "Luis": 1}}) == {"S0": "Ana"}
     assert assign_visual_names({"S0": {"Ana": 1}}) == {}
     assert assign_visual_names({"S0": {"Ana": 3, "Luis": 3}}) == {}  # empate: no se decide
+    # Vídeo real a 2560 px: José Luis 3, Iosu 2 (resaltado de más), Edgar 1 → gana José Luis
+    assert assign_visual_names({"S1": {"Jose": 3, "Iosu": 2, "Edgar": 1}, "S3": {"Iosu": 46}}) == {
+        "S1": "Jose", "S3": "Iosu"}
     # Cada nombre a un solo hablante: el que más coincide (vídeo real: Iosu 40 frente a 3)
     hints = {"S3": {"Iosu": 40, "Jose": 1}, "S2": {"Iosu": 3}, "S1": {"Jose": 2}, "S0": {"Iosu": 1, "Jose": 1}}
     assert assign_visual_names(hints) == {"S3": "Iosu", "S1": "Jose"}

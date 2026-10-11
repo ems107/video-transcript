@@ -49,6 +49,9 @@ def test_nicknames_must_be_heard():
                                   ("Sandra", "Sandra", "")])]
     _, nick = collect_identities(partials, {}, ON_SCREEN, [], HEARD)
     assert nick == {"Jose Luis Pérez Rodríguez": ["Selu"]}  # «Xelu» no se oye en el texto
+    # Ejecución real: el LLM atribuyó «Selu» a Sandra y a Iosu; no se parece a sus nombres
+    wrong = [_chunk(nicknames=[("Selu", "Sandra", ""), ("Selu", "Iosu Urcelay Fernandez De Arroyabe", "")])]
+    assert collect_identities(wrong, {}, ON_SCREEN, [], HEARD)[1] == {}
 
 
 def test_participants_ignore_single_readings():

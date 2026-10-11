@@ -19,10 +19,14 @@ from ..prompts import (
     who_block,
 )
 from .base import JobContext
+from rapidfuzz import fuzz
+
 from .glossary import normalize
 from .names import SIMILAR, similarity
 from .transcript import fmt_ts
 
+# Un apodo debe parecerse a una parte del nombre («Selu» en «JoSELUis»): 100; «Selu»/«Sandra»: 40
+NICKNAME_SIMILAR = 75
 MAX_CHUNK_CHARS = 90_000  # ≈ 25-30k tokens, deja margen en el contexto de 64k
 
 
@@ -133,6 +137,8 @@ def collect_identities(
                 continue
             if any(normalize(k).split()[0] == na for k in names_now):
                 continue  # es el nombre de pila de alguien de la lista
+            if fuzz.partial_ratio(na, normalize(target).replace(" ", "")) < NICKNAME_SIMILAR:
+                continue  # no se parece a su nombre: el LLM lo ha deducido sin base («Selu» → «Sandra»)
             if alias not in nicknames.setdefault(target, []):
                 nicknames[target].append(alias)
     return identities, nicknames
