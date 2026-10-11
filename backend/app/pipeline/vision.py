@@ -12,6 +12,7 @@ from .transcript import fmt_ts
 
 def run(ctx: JobContext, llm: LLMServer) -> None:
     frames = ctx.load("frames.json", [])
+    ctx.path("vision.raw.json").unlink(missing_ok=True)  # la fase «names» la rehace con lo nuevo
     if not frames:
         ctx.save("vision.json", [])
         ctx.save("screen_terms.json", [])

@@ -60,6 +60,13 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
 
 ### Corregido
 
+- **Un solo nombre por persona en cada vídeo.** El análisis de la pantalla leía el mismo nombre de muchas
+  formas («Iosu», «Iker», «Ione»…), y cada una se trataba como una persona distinta. Ahora se agrupan
+  las variantes y se elige una sola forma: se tiene en cuenta lo que se oye en la transcripción y las
+  personas que ya conoces, y nunca se juntan dos nombres que aparecen a la vez en pantalla.
+- **Propuesta de nombre por pantalla más fiable.** Cada nombre se asigna a un solo hablante, el que más
+  coincide con él. Un nombre resaltado mientras hablan varias voces (por ejemplo, quien presenta) ya no
+  se propone para todas.
 - La web podía quedarse bloqueada («Cargando…») al navegar mucho o con varias pestañas abiertas. Las
   conexiones de eventos en tiempo real de páginas ocultas o ya abandonadas ocupaban el máximo de
   conexiones del navegador.

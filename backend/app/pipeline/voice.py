@@ -63,13 +63,27 @@ def match_name(name: str, people: list[dict[str, Any]], threshold: float = 85.0)
     return best if best_s >= threshold else None
 
 
-def dominant_visual_name(hints: dict[str, int], min_count: int = 2, min_share: float = 0.6) -> str | None:
-    """Nombre en pantalla que más veces coincide con un hablante (si es claramente dominante)."""
-    hints = {k: v for k, v in hints.items() if not k.startswith("_")}
-    if not hints:
-        return None
-    total = sum(hints.values())
-    name, count = Counter(hints).most_common(1)[0]
-    if count >= min_count and count / total >= min_share:
-        return name
-    return None
+def assign_visual_names(
+    hints: dict[str, dict[str, int]], min_count: int = 2, min_share: float = 0.5, min_purity: float = 0.5
+) -> dict[str, str]:
+    """Nombre en pantalla de cada hablante: cada nombre a un solo hablante, por número de coincidencias.
+
+    - `min_share`: el nombre debe superar esa parte de las lecturas del hablante (un empate no vale).
+    - `min_purity`: y ese hablante debe concentrar esa parte de las lecturas del nombre. Un nombre
+      repartido entre varias voces no es fiable (p. ej. quien presenta queda resaltado mientras
+      hablan otros).
+    """
+    clean = {lab: {n: c for n, c in h.items() if n and not n.startswith("_")} for lab, h in hints.items()}
+    per_name: Counter = Counter()
+    for h in clean.values():
+        per_name.update(h)
+    pairs = sorted(((c, lab, n) for lab, h in clean.items() for n, c in h.items()), reverse=True)
+    out: dict[str, str] = {}
+    used: set[str] = set()
+    for c, lab, n in pairs:
+        if lab in out or n in used or c < min_count:
+            continue
+        if c / sum(clean[lab].values()) > min_share and c / per_name[n] >= min_purity:
+            out[lab] = n
+            used.add(n)
+    return out

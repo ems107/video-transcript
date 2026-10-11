@@ -22,7 +22,7 @@ from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
 from .models import Job, Keyframe, Segment, Video
-from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, vision
+from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
 
@@ -36,15 +36,20 @@ STAGES = [
     ("asr", "Transcribiendo", 0.23),
     ("align", "Alineando palabras", 0.06),
     ("diarize", "Separando hablantes", 0.11),
+    ("names", "Unificando nombres", 0.01),
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
     ("analyze", "Resumiendo", 0.20),
     ("learn", "Aprendiendo del vídeo", 0.10),
-    ("publish", "Publicando resultados", 0.03),
+    ("publish", "Publicando resultados", 0.02),
 ]
 GPU_TORCH_STAGES = {"asr", "align", "diarize"}
 # Ficheros de reanudación que se borran al repetir una fase
-PARTIALS = {"analyze": ("analysis.partial.json",), "learn": ("learn.partial.json", "learn_error.json")}
+PARTIALS = {
+    "vision": ("vision.partial.json",),
+    "analyze": ("analysis.partial.json",),
+    "learn": ("learn.partial.json", "learn_error.json"),
+}
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
@@ -201,6 +206,8 @@ class Worker:
             asr.run_align(ctx)
         elif key == "diarize":
             diarize.run(ctx)
+        elif key == "names":
+            names.run(ctx)
         elif key == "identify":
             identify.run(ctx, voice)
             with Session(engine) as s:
