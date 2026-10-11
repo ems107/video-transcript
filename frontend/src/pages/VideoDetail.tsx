@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
+import { RemoveDialog } from '../RemoveDialog'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
 
@@ -183,6 +184,7 @@ function KnowledgePanel({ video, running, onChange }: { video: VD; running: bool
 export default function VideoDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
   const nav = useNavigate()
+  const [removing, setRemoving] = useState(false)
   const [params, setParams] = useSearchParams()
   const [video, setVideo] = useState<VD | null>(null)
   const [people, setPeople] = useState<Person[]>([])
@@ -287,12 +289,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
               Regenerar análisis
             </button>
           )}
-          <button className="danger" disabled={!!running} onClick={async () => {
-            if (confirm('¿Quitar el vídeo de la biblioteca? Los archivos de su carpeta NO se borran.')) {
-              await api.del(`/api/videos/${video.id}`)
-              nav('/')
-            }
-          }}>Quitar</button>
+          <button className="danger" disabled={!!running} onClick={() => setRemoving(true)}>Quitar</button>
+          {removing && <RemoveDialog videoId={video.id} onClose={() => setRemoving(false)} onRemoved={() => nav('/')} />}
         </div>
       </div>
 

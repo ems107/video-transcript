@@ -42,6 +42,14 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
   - vídeos en los que aparece, tiempo hablado y última aparición.
 - **Personas duplicadas.** Aviso de posibles duplicados por nombre o voz. Se pueden fusionar (voz,
   vídeos, perfiles, lo aprendido y nombres) o marcar como distintas.
+- **«Quitar» un vídeo con opciones.** Una ventana muestra las rutas afectadas y permite elegir:
+  - borrar los ficheros del análisis (solo los que crea la app; la carpeta se elimina si queda vacía);
+  - borrar el vídeo y, si la app trabajó con una copia, también el original;
+  - olvidar lo aprendido de ese vídeo, incluidas las huellas de voz.
+
+  Sin marcar nada, el vídeo desaparece de la app pero todos sus ficheros se conservan.
+- **Copia de recuperación en cada carpeta publicada** (`datos/`): el estado de los hablantes con sus
+  huellas de voz y los datos intermedios del análisis, para poder recuperarlo en el futuro.
 - La variable de entorno `VT_DATA_DIR` permite usar otra carpeta de datos.
 - Documentación para asistentes de IA: `CLAUDE.md`, guías por tema en `docs/ai/` y reglas por zona
   del código en `.claude/rules/`.
@@ -76,6 +84,7 @@ Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides
 - **Propuesta de nombre por pantalla más fiable.** Cada nombre se asigna a un solo hablante, el que más
   coincide con él. Un nombre resaltado mientras hablan varias voces (por ejemplo, quien presenta) ya no
   se propone para todas.
+- Al quitar un vídeo, sus propuestas pendientes ya no se quedan huérfanas en «Propuestas».
 - La web podía quedarse bloqueada («Cargando…») al navegar mucho o con varias pestañas abiertas. Las
   conexiones de eventos en tiempo real de páginas ocultas o ya abandonadas ocupaban el máximo de
   conexiones del navegador.

@@ -116,6 +116,14 @@ label.field > span { display: block; font-size: 0.85rem; font-weight: 600; margi
 label.field > small { display: block; color: var(--text-2); font-size: 0.8rem; margin-top: 0.2rem; }
 label.check { display: flex; gap: 0.5rem; align-items: center; }
 label.check input { width: auto; }
+/* Ventana modal (<dialog>) */
+dialog.dialog { width: min(560px, calc(100vw - 2rem)); padding: 1.25rem; color: var(--text); }
+dialog.dialog::backdrop { background: rgb(0 0 0 / 45%); }
+dialog.dialog h3 { margin-top: 0; }
+dialog.dialog label.check { align-items: flex-start; }
+dialog.dialog label.check > span { display: flex; flex-direction: column; gap: 0.15rem; }
+dialog.dialog code { word-break: break-all; display: block; }
+.danger-text { color: var(--danger); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
 .pill { display: inline-block; font-size: 0.75rem; padding: 0.05rem 0.55rem; border-radius: 99px; background: var(--surface-2); color: var(--text-2); }

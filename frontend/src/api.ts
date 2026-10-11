@@ -218,6 +218,16 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export type RemovalInfo = {
+  folder: string | null
+  video_path: string | null
+  source_path: string | null // original, solo si la app trabajó con una copia
+  video_in_folder: boolean
+  work_dirs: string[]
+  voices: number
+  pending_proposals: number
+}
+
 export const api = {
   get: <T>(url: string) => req<T>('GET', url),
   post: <T>(url: string, body?: unknown) => req<T>('POST', url, body ?? {}),

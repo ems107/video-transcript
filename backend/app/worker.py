@@ -17,7 +17,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from . import knowledge_store as KS
-from . import services
+from . import removal, services
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
@@ -309,6 +309,7 @@ class Worker:
             s.add(video)
             s.commit()
             s.refresh(video)
+            removal.save_recovery(s, video, ctx.work_dir)
             ctx.report(0.8, "Generando documentos")
             services.export_video(s, video)
             services.index_video(s, video)

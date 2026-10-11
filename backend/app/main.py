@@ -24,6 +24,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
+from . import removal
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -271,19 +272,32 @@ def update_video(video_id: int, body: VideoUpdate, session: Session = SessionDep
     return video_card(session, v)
 
 
-@app.delete("/api/videos/{video_id}")
-def delete_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    """Quita el vídeo de la biblioteca. No borra ningún archivo del disco."""
+@app.get("/api/videos/{video_id}/removal")
+def removal_info(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Rutas y datos a los que afectaría quitar el vídeo."""
+    return removal.info(session, _404(session.get(Video, video_id), "Vídeo"))
+
+
+class RemoveIn(BaseModel):
+    delete_files: bool = False
+    delete_video: bool = False
+    delete_original: bool = False
+    forget: bool = False
+
+
+@app.post("/api/videos/{video_id}/remove")
+def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -> dict[str, Any]:
+    """Quita el vídeo de la app. Sin opciones, los ficheros se conservan para poder recuperarlo."""
     v = _404(session.get(Video, video_id), "Vídeo")
     if v.status == "processing":
         raise HTTPException(400, "El vídeo se está procesando")
-    session.connection().execute(text("DELETE FROM search_fts WHERE video_id = :v"), {"v": v.id})
-    for model in (Segment, Keyframe, Speaker, Job):
-        for row in session.exec(select(model).where(model.video_id == v.id)):
-            session.delete(row)
-    session.delete(v)
-    session.commit()
-    return {"ok": True}
+    return removal.remove(session, v, removal.Options(**body.model_dump()))
+
+
+@app.delete("/api/videos/{video_id}")
+def delete_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Quita el vídeo de la biblioteca sin borrar ningún fichero."""
+    return remove_video(video_id, RemoveIn(), session)
 
 
 @app.get("/api/videos/{video_id}/file")
