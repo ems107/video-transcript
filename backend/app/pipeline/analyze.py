@@ -6,6 +6,8 @@ import re
 from collections import Counter
 from typing import Any
 
+from rapidfuzz import fuzz
+
 from ..knowledge import effective_sections
 from ..llm import LLMServer
 from ..prompts import (
@@ -19,8 +21,6 @@ from ..prompts import (
     who_block,
 )
 from .base import JobContext
-from rapidfuzz import fuzz
-
 from .glossary import normalize
 from .names import SIMILAR, similarity
 from .transcript import fmt_ts
