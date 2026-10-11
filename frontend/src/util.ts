@@ -13,6 +13,7 @@ export function fmtTs(seconds: number): string {
 export function fmtDuration(seconds: number): string {
   if (!seconds) return '—'
   const m = Math.round(seconds / 60)
+  if (m === 0) return '<1 min'
   return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`
 }
 
@@ -28,13 +29,33 @@ export function parseTs(ts: string): number | null {
   return m[3] !== undefined ? +m[1] * 3600 + +m[2] * 60 + +m[3] : +m[1] * 60 + +m[2]
 }
 
-// Estado de los trabajos en tiempo real (SSE)
+// Estado de los trabajos en tiempo real (SSE).
+// La conexión se cierra al ocultar o abandonar la página: el navegador solo admite 6 conexiones por
+// servidor y, si las ocupan pestañas en segundo plano o páginas guardadas en caché, la web se bloquea.
 export function useJobs(): Job[] {
   const [jobs, setJobs] = useState<Job[]>([])
   useEffect(() => {
-    const es = new EventSource('/api/events')
-    es.addEventListener('jobs', (e) => setJobs(JSON.parse((e as MessageEvent).data)))
-    return () => es.close()
+    let es: EventSource | null = null
+    const open = () => {
+      if (es || document.visibilityState !== 'visible') return
+      es = new EventSource('/api/events')
+      es.addEventListener('jobs', (e) => setJobs(JSON.parse((e as MessageEvent).data)))
+    }
+    const close = () => {
+      es?.close()
+      es = null
+    }
+    const onVisibility = () => (document.visibilityState === 'visible' ? open() : close())
+    open()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', close)
+    window.addEventListener('pageshow', open)
+    return () => {
+      close()
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', close)
+      window.removeEventListener('pageshow', open)
+    }
   }, [])
   return jobs
 }
@@ -52,4 +73,14 @@ export const STATUS_LABEL: Record<string, string> = {
 const SPEAKER_COLORS = 8
 export function speakerColor(order: number): string {
   return `var(--spk-${((order - 1) % SPEAKER_COLORS + SPEAKER_COLORS) % SPEAKER_COLORS})`
+}
+
+// Avisa al resto de la web (contador de la barra lateral, otras listas) de que el conocimiento cambió
+export function notifyKnowledge() {
+  window.dispatchEvent(new Event('knowledge-changed'))
+}
+
+// «1 vídeo», «3 vídeos»
+export function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`
 }

@@ -6,13 +6,15 @@ Los valores por defecto se pueden sobrescribir desde la web (se guardan en data/
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT_DIR / "data"
+# VT_DATA_DIR permite usar otra carpeta de datos (pruebas o una segunda instancia)
+DATA_DIR = Path(os.environ.get("VT_DATA_DIR") or ROOT_DIR / "data")
 MODELS_DIR = ROOT_DIR / "models"
 WORK_DIR = DATA_DIR / "work"
 SETTINGS_FILE = DATA_DIR / "settings.json"

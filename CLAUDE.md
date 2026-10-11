@@ -15,6 +15,9 @@ usuario final es una sola persona en su PC con Windows y una RTX 5070 Ti de 16 G
   concretos de videollamada o escritorio. La pantalla puede mostrar cualquier cosa.
 - **Fidelidad.** La transcripción y el análisis nunca inventan contenido. La corrección de términos es
   conservadora (ver `docs/ai/AI_PROMPTS.md`).
+- **La IA propone y el usuario decide.** Lo manual de perfiles y personas nunca lo modifica la IA. Lo
+  aprendido solo se usa tras aceptarlo, cada propuesta lleva su evidencia y todo cambio crea una
+  versión que se puede restaurar.
 - **Tokens y secretos.** El token de Hugging Face nunca se guarda en disco ni en el repositorio, y no
   debe pegarse en la conversación. El usuario ejecuta en su propia terminal las descargas que lo
   necesitan.
@@ -39,7 +42,8 @@ python scripts/release.py patch|minor|major [--push]       # publicar una versi�
   pero el código nuevo no debe añadir más. `Optional[...]` en `models.py` es intencionado, porque
   SQLModel lo requiere.
 - Shell: Windows. En Git Bash, `curl` con argumentos UTF-8 falla; envía el cuerpo con
-  `--data-binary @fichero`.
+  `--data-binary @fichero`. Usa `MSYS_NO_PATHCONV=1` si pasas rutas `/api/...` como argumentos. Los
+  heredocs de bash con `\` al final de línea fallan: escribe los scripts con la herramienta Write.
 
 ## Mapa del código
 
@@ -50,6 +54,8 @@ backend/app/
   pipeline/      una fase por módulo; base.py define JobContext
   prompts.py     todos los prompts y esquemas JSON del LLM
   services.py    helpers de BD compartidos por la API y el worker (exportar, indexar, nombres)
+  knowledge.py   lógica pura del conocimiento aprendido (dedup, verificación, atribución, versiones)
+  knowledge_store.py / proposals.py / people.py   conocimiento en BD, revisión de propuestas, fichas y fusión
   models.py      tablas SQLModel;  db.py: motor SQLite + FTS5
   config.py      Settings (persistidos en data/settings.json) y rutas
   env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA
@@ -66,7 +72,8 @@ models/ data/ samples/   no se versionan (modelos, BD y trabajo, vídeos de prue
 |---|---|
 | Tocar una fase, añadir otra o cambiar la reanudación o la publicación | `docs/ai/AI_PIPELINE.md` |
 | Cambiar modelos, VRAM, llama-server, dependencias de IA o la descarga | `docs/ai/AI_MODELS_GPU.md` |
-| Cambiar prompts, el glosario, la identificación de hablantes o el resumen | `docs/ai/AI_PROMPTS.md` |
+| Cambiar prompts, el glosario, la identificación de hablantes, el resumen o el aprendizaje | `docs/ai/AI_PROMPTS.md` |
+| Tocar el conocimiento aprendido (propuestas, versiones, fichas, fusión) | `docs/ai/AI_BACKEND.md` y `AI_PROMPTS.md` |
 | Cambiar tablas, endpoints, ajustes o la búsqueda | `docs/ai/AI_BACKEND.md` |
 | Cambiar páginas, tipos de la API o estilos | `docs/ai/AI_FRONTEND.md` |
 | Publicar una versión | `docs/VERSIONADO.md` |
@@ -96,7 +103,8 @@ commit. Lo que se pueda deducir leyendo el código no hace falta documentarlo.
 1. `uv run pytest` en verde. Si cambias lógica pura (glosario, voz, troceo, transcripción), añade o
    ajusta un test en `backend/tests/test_logic.py`.
 2. Si cambias el frontend o `api.ts`, `npm run build` sin errores.
-3. Si cambias la pipeline o los prompts, haz una prueba de punta a punta con un vídeo corto a través de
-   la API o la web. Los vídeos de prueba están en `samples/videos-prueba/` (ver `docs/ai/AI_PIPELINE.md`).
-   Para no mover los vídeos de muestra, usa `file_mode: "copy"`.
+3. Si cambias la pipeline o los prompts, haz una prueba de punta a punta con un vídeo corto **en una
+   instancia aislada** (`VT_DATA_DIR`, otro puerto). Así no se tocan los datos del usuario. Los vídeos
+   de prueba están en `samples/videos-prueba/` (ver `docs/ai/AI_PIPELINE.md`). Para no mover los
+   vídeos de muestra, usa `file_mode: "copy"`.
 4. Si la prueba crea datos en `data/` que el usuario no ha pedido, avísale o restáuralos al terminar.

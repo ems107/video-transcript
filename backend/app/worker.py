@@ -16,14 +16,15 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
+from . import knowledge_store as KS
+from . import services
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
 from .models import Job, Keyframe, Segment, Video
-from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, vision
+from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, vision
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
-from . import services
 
 log = logging.getLogger(__name__)
 
@@ -31,16 +32,19 @@ log = logging.getLogger(__name__)
 STAGES = [
     ("ingest", "Preparando audio", 0.02),
     ("frames", "Seleccionando fotogramas", 0.04),
-    ("vision", "Analizando la pantalla", 0.18),
-    ("asr", "Transcribiendo", 0.25),
+    ("vision", "Analizando la pantalla", 0.16),
+    ("asr", "Transcribiendo", 0.23),
     ("align", "Alineando palabras", 0.06),
-    ("diarize", "Separando hablantes", 0.12),
+    ("diarize", "Separando hablantes", 0.11),
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
-    ("analyze", "Resumiendo", 0.25),
+    ("analyze", "Resumiendo", 0.20),
+    ("learn", "Aprendiendo del vídeo", 0.10),
     ("publish", "Publicando resultados", 0.03),
 ]
 GPU_TORCH_STAGES = {"asr", "align", "diarize"}
+# Ficheros de reanudación que se borran al repetir una fase
+PARTIALS = {"analyze": ("analysis.partial.json",), "learn": ("learn.partial.json", "learn_error.json")}
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
@@ -104,7 +108,7 @@ class Worker:
             # Fases a repetir (p. ej. regenerar solo el análisis)
             for stage in options.pop("redo", []):
                 (wd / f"{stage}.done").unlink(missing_ok=True)
-                for f in ("analysis.partial.json",) if stage == "analyze" else ():
+                for f in PARTIALS.get(stage, ()):
                     (wd / f).unlink(missing_ok=True)
             job.options = options
             s.add(job)
@@ -206,13 +210,37 @@ class Worker:
             correct.run(ctx, llm)
         elif key == "analyze":
             analyze.run(ctx, llm)
+        elif key == "learn":
+            self._learn(ctx, llm)
         elif key == "publish":
             llm.stop()
             self._publish(ctx)
 
+    def _learn(self, ctx: JobContext, llm: LLMServer) -> None:
+        """Propuestas de conocimiento. Es de mejor esfuerzo: un fallo no impide publicar el vídeo."""
+        try:
+            in_video = {p["id"] for p in ctx.people if p.get("in_video")}
+            with Session(engine) as s:
+                rejected = KS.rejected_texts(s, (ctx.profile or {}).get("id"), in_video)
+                pending = KS.pending_texts(s, ctx.video_id, (ctx.profile or {}).get("id"), in_video)
+                sections = KS.has_pending_sections(s, (ctx.profile or {}).get("id"), ctx.video_id)
+            proposals = learn.run(ctx, llm, rejected, pending, sections)
+            with Session(engine) as s:
+                stats = KS.merge_proposals(s, ctx.video_id, proposals, ctx.settings.voice_auto_threshold)
+            ctx.report(1.0, f"{stats['nuevas']} propuestas nuevas, {stats['repetidas']} ya conocidas")
+        except Cancelled:
+            raise
+        except Exception as e:
+            log.exception("Fallo al aprender del vídeo %s", ctx.video_id)
+            ctx.save("learn_error.json", {"error": str(e)})
+            ctx.report(1.0, f"No se pudo aprender de este vídeo: {e}")
+
     def _load_names(self, ctx: JobContext) -> None:
         with Session(engine) as s:
             ctx.speaker_names = services.speaker_names(s, ctx.video_id)
+            in_video = services.video_person_ids(s, ctx.video_id)
+        for p in ctx.people:
+            p["in_video"] = p["id"] in in_video
 
     def _publish(self, ctx: JobContext) -> None:
         s_ = ctx.settings
@@ -281,7 +309,9 @@ class Worker:
             if status == "done":
                 job.progress = 1.0
             video = s.get(Video, job.video_id)
-            if status != "done" and video.status == "processing":
+            if status == "done" and video.folder:
+                video.status = "done"  # también al repetir fases sueltas (p. ej. solo «learn»), sin publicar
+            elif status != "done" and video.status == "processing":
                 video.status = "error" if status == "error" else ("done" if video.folder else "pending")
             s.add(job), s.add(video)
             s.commit()

@@ -8,10 +8,72 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Los perfiles y las personas aprenden de cada vídeo. La IA propone y tú decides.
+
 ### Añadido
 
+- **Aprendizaje a partir de los vídeos.** Después de cada análisis, la IA propone:
+  - para el perfil: términos del negocio, hechos duraderos (proyectos, clientes, sistemas, procesos,
+    siglas) y secciones para el resumen;
+  - para las personas: cargo, organización, equipo, responsabilidades, proyectos, conocimientos,
+    relaciones y datos personales. Los aprende de lo que dice cada persona y de lo que otros dicen de
+    ella.
+- **Comprobación de cada propuesta.** Todas indican de qué vídeo y de qué momento salen, con las frases
+  reales. Se descarta lo que no aparece en la transcripción o en la pantalla, las palabras comunes y
+  los detalles puntuales de una reunión.
+- **Página «Propuestas»** con un contador en la barra lateral:
+  - cada propuesta se puede aceptar, editar y aceptar, o rechazar, también todas las de un vídeo a la
+    vez;
+  - lo rechazado no se vuelve a proponer;
+  - lo repetido en varios vídeos se marca como «visto en N vídeos».
+- **Atribución por hablante.** Lo que dice un hablante se atribuye a su persona cuando está confirmado
+  o reconocido por voz con confianza alta. Si no, la propuesta espera a que lo confirmes. Si reasignas
+  el hablante, sus datos pasan a la nueva persona.
+- **Personas nuevas.** Se proponen las personas mencionadas que aún no existen. Al aceptarlas, se
+  crean con sus datos y se añaden al perfil.
+- **Crear un perfil a partir de un vídeo.** La IA propone su contenido. También se puede volver a
+  aprender de un vídeo, de todos los vídeos de un perfil, u olvidar lo aprendido de un vídeo.
+- **Historial de versiones** de perfiles y personas. Cada cambio, manual o aceptado, crea una versión
+  con un resumen de lo cambiado, y cualquier versión se puede restaurar.
+- **Ficha de persona:**
+  - datos manuales;
+  - lo aprendido por categorías;
+  - tareas que se le han asignado en los vídeos;
+  - vídeos en los que aparece, tiempo hablado y última aparición.
+- **Personas duplicadas.** Aviso de posibles duplicados por nombre o voz. Se pueden fusionar (voz,
+  vídeos, perfiles, lo aprendido y nombres) o marcar como distintas.
+- La variable de entorno `VT_DATA_DIR` permite usar otra carpeta de datos.
 - Documentación para asistentes de IA: `CLAUDE.md`, guías por tema en `docs/ai/` y reglas por zona
   del código en `.claude/rules/`.
+
+### Cambiado
+
+- **Lo aprendido y aceptado se usa en los análisis siguientes.** Se añade al contexto del resumen y a
+  las palabras que orientan a Whisper, siempre después de lo manual, que prevalece. Los términos
+  aprendidos nunca corrigen la transcripción sin que el LLM valide cada cambio.
+- Las notas de cada persona ahora se usan en el contexto de la IA.
+- El contexto de la IA incluye solo las personas del perfil y las que hablan en el vídeo, como máximo
+  30.
+- Al confirmar a una persona como hablante de un vídeo con perfil, se añade a las personas del perfil.
+- Al renombrar una persona, se reescriben los documentos de sus vídeos.
+- «Regenerar análisis» también vuelve a proponer lo aprendido del vídeo.
+
+### Corregido
+
+- La web podía quedarse bloqueada («Cargando…») al navegar mucho o con varias pestañas abiertas. Las
+  conexiones de eventos en tiempo real de páginas ocultas o ya abandonadas ocupaban el máximo de
+  conexiones del navegador.
+- Tras actualizar la app, el navegador podía mostrar una página en blanco por usar una versión
+  antigua guardada en caché.
+- Las duraciones de menos de un minuto se muestran como «<1 min», en lugar de «0 min».
+- En pantallas estrechas, la cabecera del vídeo ya no aplasta el título.
+
+### Notas para actualizar
+
+- Solo se añaden tablas nuevas a la base de datos, así que basta con reiniciar la app (`.\run.ps1
+  -Rebuild`).
+- Los vídeos ya analizados no tienen propuestas. Para obtenerlas, usa «Aprender de nuevo» en el vídeo
+  o «Aprender de todos sus vídeos» en el perfil.
 
 ## [1.0.0] - 2026-10-07
 

@@ -9,12 +9,15 @@ de componentes ni de estado: solo `useState`/`useEffect` y CSS propio.
 |---|---|
 | `src/App.tsx` | barra lateral, rutas, aviso de componentes que faltan (`CHECK_LABELS`) y la versión |
 | `src/api.ts` | **tipos de todas las respuestas** y el cliente `api.get/post/put/del` (lanza `Error(detail)`) |
-| `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor` |
+| `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor`, `notifyKnowledge()` |
+| `src/knowledge.tsx` | componentes del conocimiento aprendido: `ProposalList`/`ProposalCard` (con evidencia), `KnowledgeList` (aceptado, editar y retirar) y `VersionHistory` (restaurar) |
 | `src/index.css` | variables de diseño en `:root`, modo oscuro con `prefers-color-scheme` y clases de utilidad |
 | `src/pages/*.tsx` | una página por ruta (ver abajo) |
 
 Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resumen\|transcripcion\|tareas\|pantalla`),
-`/buscar`, `/perfiles`, `/personas`, `/ajustes`. Las rutas de la interfaz están en español.
+`/propuestas` (`?video=id`), `/buscar`, `/perfiles`, `/perfiles/:id` (`?tab=manual\|aprendido\|propuestas\|historial`),
+`/personas`, `/personas/:id` (`?tab=ficha\|propuestas\|historial`), `/ajustes`. Las rutas de la interfaz
+están en español.
 
 ## Reglas
 
@@ -31,6 +34,14 @@ Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resume
   `#t=<s>`, y `seek(t)` mueve el reproductor. Usa `TsLink` para mostrar una marca suelta.
 - El progreso de los trabajos llega solo por SSE (`useJobs`, en `App.tsx`, pasado como prop). No
   hagas polling.
+- **No abras más conexiones largas** (SSE o similares). El navegador solo permite 6 conexiones por
+  servidor (HTTP/1.1). `useJobs` cierra el SSE al ocultar o abandonar la página (`visibilitychange` y
+  `pagehide`); sin eso, las páginas en segundo plano bloqueaban la web.
+- Después de cualquier acción que cambie el conocimiento (decidir, editar, retirar, confirmar
+  hablantes, fusionar o restaurar), llama a `notifyKnowledge()`. Así se recargan el contador de la
+  barra lateral y las listas abiertas, que escuchan el evento `knowledge-changed`.
+- `knowledge.tsx` solo exporta componentes. Las funciones compartidas van en `util.ts`, porque oxlint
+  avisa con `only-export-components`.
 - Formularios: al hacer clic, `setBusy(true)`, y los errores se muestran en `<div className="error-box">`.
   Las confirmaciones destructivas usan `confirm(...)`.
 
@@ -43,3 +54,16 @@ Rutas: `/` Biblioteca, `/nuevo`, `/cola`, `/videos/:id` (`?t=segundos&tab=resume
   `.\run.ps1 -Rebuild`.
 - `npm run lint` (oxlint) avisa de `set-state-in-effect` en `Search.tsx`. Es un aviso conocido, no un
   error.
+
+## Revisión visual (Chrome headless + CDP)
+
+`npm run build` no detecta fallos visuales ni bloqueos. Para cambios de interfaz:
+1. Usa una instancia aislada (`VT_DATA_DIR`, puerto 8771; ver `AI_PIPELINE.md`).
+2. Arranca Chrome así:
+   `chrome.exe --headless=new --remote-debugging-port=9333 --user-data-dir=<scratchpad>\chrome-cdp`.
+3. Desde Python (`websockets`, que ya está en el venv del backend), navega con `Page.navigate`, haz
+   capturas con `Page.captureScreenshot` y revísalas.
+4. Recoge los errores con `Runtime.exceptionThrown` y `Log.entryAdded`.
+5. Prueba también el modo claro y el oscuro (`Emulation.setEmulatedMedia`) y un ancho de unos 420 px.
+6. Navega muchas veces seguidas para detectar bloqueos.
+7. Limpia la caché del navegador (`Network.clearBrowserCache`) después de recompilar.

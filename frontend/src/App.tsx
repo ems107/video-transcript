@@ -10,6 +10,9 @@ import Search from './pages/Search'
 import Profiles from './pages/Profiles'
 import People from './pages/People'
 import SettingsPage from './pages/Settings'
+import Proposals from './pages/Proposals'
+import ProfileDetail from './pages/ProfileDetail'
+import PersonDetail from './pages/PersonDetail'
 
 const CHECK_LABELS: Record<string, string> = {
   ffmpeg: 'ffmpeg',
@@ -26,9 +29,14 @@ export default function App() {
   const active = jobs.filter((j) => j.status === 'queued' || j.status === 'running').length
   const [status, setStatus] = useState<Status | null>(null)
 
+  // El contador de propuestas cambia al terminar trabajos o al decidir propuestas
+  const finished = jobs.filter((j) => j.status === 'done').length
   useEffect(() => {
-    api.get<Status>('/api/status').then(setStatus).catch(() => setStatus(null))
-  }, [])
+    const load = () => { api.get<Status>('/api/status').then(setStatus).catch(() => setStatus(null)) }
+    load()
+    window.addEventListener('knowledge-changed', load)
+    return () => window.removeEventListener('knowledge-changed', load)
+  }, [finished])
 
   const missing = status ? Object.entries(status.checks).filter(([, ok]) => !ok).map(([k]) => CHECK_LABELS[k] ?? k) : []
 
@@ -44,6 +52,9 @@ export default function App() {
           <NavLink to="/nuevo">Nuevo análisis</NavLink>
           <NavLink to="/cola">
             Cola {active > 0 && <span className="badge">{active}</span>}
+          </NavLink>
+          <NavLink to="/propuestas">
+            Propuestas {!!status?.pending_proposals && <span className="badge">{status.pending_proposals}</span>}
           </NavLink>
           <NavLink to="/buscar">Buscar</NavLink>
           <NavLink to="/perfiles">Perfiles</NavLink>
@@ -64,8 +75,11 @@ export default function App() {
           <Route path="/cola" element={<Queue jobs={jobs} />} />
           <Route path="/videos/:id" element={<VideoDetail jobs={jobs} />} />
           <Route path="/buscar" element={<Search />} />
+          <Route path="/propuestas" element={<Proposals />} />
           <Route path="/perfiles" element={<Profiles />} />
+          <Route path="/perfiles/:id" element={<ProfileDetail />} />
           <Route path="/personas" element={<People />} />
+          <Route path="/personas/:id" element={<PersonDetail />} />
           <Route path="/ajustes" element={<SettingsPage />} />
         </Routes>
       </main>

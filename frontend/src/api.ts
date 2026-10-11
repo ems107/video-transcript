@@ -108,6 +108,8 @@ export type Profile = {
   glossary: GlossaryEntry[]
   person_ids: number[]
   video_count: number
+  learned_count: number
+  pending_count: number
 }
 
 export type Person = {
@@ -118,6 +120,51 @@ export type Person = {
   notes: string
   voice_samples: number
   video_count: number
+  learned_count: number
+}
+
+export type PersonDetail = Person & {
+  videos: { id: number; title: string; date: string; confirmed: boolean; speaking_time: number; status: string }[]
+  tasks: (Task & { video_id: number; video_title: string; date: string })[]
+  profiles: { id: number; name: string }[]
+  stats: { videos: number; confirmed_videos: number; speaking_time: number; last_seen: string | null }
+}
+
+export type Duplicate = { a: number; b: number; a_name: string; b_name: string; reasons: ('nombre' | 'voz')[] }
+
+// Conocimiento aprendido (aceptado) o propuesto por la IA
+export type KnowledgeKind = 'termino' | 'contexto' | 'seccion' | 'dato' | 'alias' | 'nueva_persona'
+export type EvidenceLine = { t: number; label: string; name: string; text: string }
+export type Evidence = { video_id: number; video_title: string; t: number | null; lines: EvidenceLine[] }
+export type Knowledge = {
+  id: number
+  kind: KnowledgeKind
+  category: string
+  category_label: string
+  data: {
+    text?: string
+    term?: string
+    definition?: string
+    title?: string
+    name?: string
+    datos?: { category: string; text: string; t: number | null }[]
+  }
+  text: string
+  status: 'propuesto' | 'aceptado' | 'rechazado' | 'retirado'
+  seen_count: number
+  video_id: number | null
+  video_title: string
+  owner: { type: 'profile' | 'person' | 'speaker' | 'new'; id: number | null; name: string }
+  evidence: Evidence[]
+  replaces: { id: number; text: string } | null
+  last_seen_at: string | null
+}
+export type Proposals = { items: Knowledge[]; waiting: Knowledge[] }
+export type Version = {
+  id: number
+  created_at: string
+  reason: string
+  diff: { added: string[]; removed: string[]; changed: string[]; manual: string[] } | null
 }
 
 export type ProbeInfo = {
@@ -142,7 +189,13 @@ export type SearchHit = {
 
 export type Settings = Record<string, string | number>
 
-export type Status = { version: string; checks: Record<string, boolean>; ready: boolean; current_job: number | null }
+export type Status = {
+  version: string
+  checks: Record<string, boolean>
+  ready: boolean
+  current_job: number | null
+  pending_proposals: number
+}
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {

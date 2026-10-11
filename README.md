@@ -31,6 +31,12 @@ Qué aporta cada versión: [CHANGELOG](CHANGELOG.md).
   para comprobar cada punto.
 - **Perfiles** por tipo de vídeo, con contexto de negocio, glosario, personas habituales, instrucciones
   y secciones del resumen.
+- **Conocimiento que se acumula.** Con cada vídeo, la IA propone lo que aprende del negocio (términos,
+  proyectos, clientes, sistemas) y de cada persona (cargo, equipo, responsabilidades, conocimientos…).
+  Tú lo apruebas. Lo manual nunca se toca, cada propuesta indica de dónde sale y todo tiene historial
+  con vuelta atrás.
+- **Fichas de persona** con lo aprendido, sus vídeos, el tiempo que ha hablado y las tareas que se le
+  han asignado. Avisa de posibles personas duplicadas y permite fusionarlas.
 - **Carpeta de resultados por vídeo**: `AAAA-MM-DD - Título/` contiene el vídeo original (movido o
   copiado) y todos los documentos.
 - **Biblioteca web** con miniaturas, reproductor sincronizado con la transcripción, búsqueda en todos
@@ -88,8 +94,33 @@ Después todo funciona sin conexión a internet.
    `fotogramas/`.
 5. En el detalle del vídeo, **confirma los hablantes**. La app guarda su huella de voz y los reconocerá
    en los próximos vídeos. Si cambias nombres o el perfil, «Regenerar análisis» rehace el resumen.
-6. **Buscar**: busca en todas las transcripciones y resúmenes (sin distinguir tildes; las comillas
+6. **Propuestas**: revisa lo que la IA ha aprendido del vídeo (ver abajo).
+7. **Buscar**: busca en todas las transcripciones y resúmenes (sin distinguir tildes; las comillas
    buscan la frase exacta).
+
+### Conocimiento aprendido (perfiles y personas)
+
+- **Cómo se genera.** Tras cada análisis, la IA propone:
+  - para el perfil: términos, hechos duraderos del negocio y secciones del resumen;
+  - para las personas: datos de cada una, a partir de lo que dice y de lo que otros dicen de ella.
+
+  Cada propuesta muestra el vídeo y el momento del que sale. Lo que no aparece en la transcripción o
+  en la pantalla se descarta.
+- **Cómo se revisa.** En **Propuestas** (o en el detalle del vídeo, del perfil o de la persona)
+  aceptas, editas o rechazas cada propuesta. Nada se usa hasta que lo aceptas, y lo rechazado no se
+  vuelve a proponer.
+- **Lo que dice cada hablante.** Se atribuye a su persona cuando está confirmada o reconocida por voz
+  con confianza alta. Si no, la propuesta espera a que confirmes al hablante.
+- **Separación entre lo manual y lo aprendido.** Lo que escribes a mano en un perfil o una persona es
+  tuyo y la IA nunca lo modifica. Lo aprendido va aparte, y si hay contradicción prevalece lo manual.
+  Lo aceptado se usa en los análisis siguientes: contexto del resumen y vocabulario de Whisper. Los
+  términos aprendidos nunca corrigen la transcripción sin que el LLM valide cada cambio.
+- **Deshacer.** Cada cambio crea una versión en el **Historial** del perfil o de la persona, y puedes
+  restaurar cualquiera. También puedes **retirar** un dato concreto, u **olvidar lo aprendido de un
+  vídeo** si ese vídeo era atípico.
+- **Crear un perfil desde un vídeo.** En el detalle de un vídeo sin perfil, pulsa «Crear perfil a
+  partir de este vídeo»: la IA propone su contenido. Para aprovechar vídeos ya analizados, usa
+  «Aprender de todos sus vídeos» en el perfil.
 
 ### Actualizar a una nueva versión
 
@@ -109,12 +140,13 @@ Las versiones mayores pueden requerirlo.
 | Ingesta | ffprobe y extracción del audio a 16 kHz (mezcla de pistas o la elegida; pista de micrófono opcional) |
 | Fotogramas | Muestreo cada 2 s y selección por cambio de escena (hash perceptual) |
 | Visión | Qwen3.6 describe cada fotograma: tipo de escena, texto visible, participantes y hablante resaltado |
-| Transcripción | Whisper large-v3 con detección de voz y un contexto inicial con el glosario, las personas y los términos vistos en pantalla |
+| Transcripción | Whisper large-v3 con detección de voz y un contexto inicial con el glosario (manual y aprendido), las personas y los términos vistos en pantalla |
 | Alineamiento | wav2vec2 español: tiempos por palabra |
 | Hablantes | pyannote community-1 y huella de voz de cada hablante |
 | Identificación | Huellas de voz conocidas, nombre resaltado en pantalla y pista de micrófono |
 | Corrección | Glosario: variantes declaradas y mayúsculas directas; los parecidos fonéticos los valida el LLM |
 | Análisis | Resumen por bloques de 30 min y redacción final: título, resumen, tareas, decisiones y pendientes |
+| Aprendizaje | Propuestas verificadas para el perfil y las personas (términos, hechos, datos de cada persona) |
 | Publicación | Carpeta propia con el vídeo y los documentos, indexada para la búsqueda |
 
 Solo un modelo ocupa la GPU en cada momento: llama-server se arranca y se detiene según la fase. Cada

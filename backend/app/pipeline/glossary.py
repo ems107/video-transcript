@@ -87,6 +87,8 @@ class Candidate:
     score: float
     kind: str  # "variante" | "mayusculas" | "fonetica"
     context: str = ""
+    # False para términos aprendidos por la IA: nunca se aplican sin validación del LLM
+    trusted: bool = True
     accepted: bool | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -104,7 +106,7 @@ def find_candidates(
         if not term:
             continue
         variants = [v.strip() for v in g.get("variants") or [] if v.strip()]
-        entries.append((term, variants))
+        entries.append((term, variants, g.get("trusted", True)))
 
     out: list[Candidate] = []
     for si, text in enumerate(segments):
@@ -121,7 +123,7 @@ def find_candidates(
 
         # 1) Coincidencias exactas (texto normalizado) y variantes declaradas: deterministas.
         #    Las apariciones ya correctas quedan protegidas frente a la búsqueda fonética.
-        for term, variants in entries:
+        for term, variants, trusted in entries:
             n_term = normalize(term)
             n_vars = {normalize(v) for v in variants}
             for n in {len(n_term.split()), *(len(v.split()) for v in n_vars)}:
@@ -130,15 +132,15 @@ def find_candidates(
                         continue
                     if n_frag == n_term:
                         if frag != term:
-                            out.append(Candidate(si, a, b, frag, term, 100.0, "mayusculas", _context(text, a, b)))
+                            out.append(Candidate(si, a, b, frag, term, 100.0, "mayusculas", _context(text, a, b), trusted))
                         taken.append((a, b))
                     elif n_frag in n_vars:
-                        out.append(Candidate(si, a, b, frag, term, 100.0, "variante", _context(text, a, b)))
+                        out.append(Candidate(si, a, b, frag, term, 100.0, "variante", _context(text, a, b), trusted))
                         taken.append((a, b))
 
         # 2) Parecido fonético: se recogen todos los fragmentos y se eligen los mejores sin solaparse.
         fuzzy: list[Candidate] = []
-        for term, variants in entries:
+        for term, variants, trusted in entries:
             n_term = normalize(term)
             if len(n_term.replace(" ", "")) < 4:
                 continue  # términos muy cortos: demasiados falsos positivos
@@ -151,7 +153,7 @@ def find_candidates(
                     ph = phonetic(frag)
                     score = max(fuzz.ratio(ph, k) for k in keys)
                     if score >= threshold:
-                        fuzzy.append(Candidate(si, a, b, frag, term, float(score), "fonetica", _context(text, a, b)))
+                        fuzzy.append(Candidate(si, a, b, frag, term, float(score), "fonetica", _context(text, a, b), trusted))
         for c in sorted(fuzzy, key=lambda c: (-c.score, c.end - c.start)):
             if free(c.start, c.end):
                 out.append(c)

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .knowledge import learned_block, person_line, prompt_people
+
 
 def profile_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:
-    """Contexto del perfil (negocio, glosario, personas) para incluir en los prompts."""
+    """Contexto del perfil (negocio, glosario, lo aprendido, personas) para incluir en los prompts."""
     parts: list[str] = []
     if profile:
         parts.append(f"Tipo de vídeo: {profile['name']}")
@@ -18,9 +20,13 @@ def profile_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) 
         if gl:
             lines = [f"- {g['term']}" + (f": {g['definition']}" if g.get("definition") else "") for g in gl]
             parts.append("Glosario (escritura correcta de los términos):\n" + "\n".join(lines))
+        learned = learned_block(profile)
+        if learned:
+            parts.append("Aprendido de vídeos anteriores (si contradice lo anterior, prevalece lo anterior):\n"
+                         + learned)
+    people = prompt_people(people)
     if people:
-        lines = [f"- {p['name']}" + (f" ({p['role']})" if p.get("role") else "") for p in people]
-        parts.append("Personas habituales:\n" + "\n".join(lines))
+        parts.append("Personas habituales:\n" + "\n".join(person_line(p) for p in people))
     return "\n\n".join(parts)
 
 
@@ -194,3 +200,104 @@ y marcas de tiempo. {sec}
 - participantes: quién intervino y su papel en la reunión.
 - temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados.
 {("\nInstrucciones adicionales del usuario:\n" + extra) if extra else ""}"""
+
+
+# --------------------------------------------------------------------------- aprendizaje
+
+LEARN_SYSTEM = """Extraes conocimiento duradero de la grabación de una reunión o sesión de trabajo para \
+completar dos fichas:
+- la del tipo de vídeo (perfil): proyectos, clientes, sistemas, procesos, siglas y términos del negocio;
+- la de cada persona: cargo, organización, equipo, responsabilidades, proyectos, conocimientos, relaciones \
+y cualquier dato personal que se mencione.
+
+Reglas:
+- Solo lo que se dice o se ve explícitamente. No deduzcas rasgos, intenciones ni opiniones.
+- Conocimiento útil para entender futuras grabaciones. NO incluyas lo puntual de esta reunión: tareas, \
+acuerdos, plazos, fechas de entrega, estado de avance, incidencias concretas, propuestas o lo que se hará \
+próximamente. Pregúntate: ¿seguirá siendo cierto y útil dentro de un mes? Si no, no lo incluyas. Vale \
+quién se encarga de qué de forma habitual, a qué equipo u organización pertenece alguien o qué es cada \
+sistema o proyecto; no vale lo que alguien hizo, revisó o propuso en esta reunión.
+- Cada dato en una frase breve y autocontenida, en español, usando las palabras de la transcripción. En \
+los datos de una persona no repitas su nombre: empieza por el verbo.
+- Lo que alguien dice de sí mismo («yo llevo…») es un dato de quien habla; lo que se dice de otra \
+persona es un dato de esa persona.
+- No repitas lo ya conocido. Si algo nuevo lo actualiza o contradice, pon su número en «reemplaza»; \
+si no, 0.
+- Indica la marca de tiempo [hh:mm:ss] de donde sale cada dato.
+- Ante la duda, no lo incluyas: mejor poco y seguro. En muchas reuniones no hay nada nuevo que aprender: \
+devuelve entonces listas vacías."""
+
+PROFILE_CATEGORY_ENUM = ["proyecto", "cliente", "sistema", "proceso", "sigla", "otro"]
+PERSON_CATEGORY_ENUM = ["cargo", "organizacion", "equipo", "responsabilidad", "proyecto", "conocimiento",
+                        "relacion", "personal", "otro"]
+
+LEARN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "terminos": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"termino": {"type": "string"}, "definicion": {"type": "string"}, "t": {"type": "string"}},
+                "required": ["termino", "definicion", "t"],
+            },
+        },
+        "contexto": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "categoria": {"type": "string", "enum": PROFILE_CATEGORY_ENUM},
+                    "texto": {"type": "string"},
+                    "t": {"type": "string"},
+                    "reemplaza": {"type": "integer"},
+                },
+                "required": ["categoria", "texto", "t", "reemplaza"],
+            },
+        },
+        "personas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": "string"},
+                    "categoria": {"type": "string", "enum": PERSON_CATEGORY_ENUM},
+                    "dato": {"type": "string"},
+                    "t": {"type": "string"},
+                    "reemplaza": {"type": "integer"},
+                },
+                "required": ["nombre", "categoria", "dato", "t", "reemplaza"],
+            },
+        },
+        "secciones": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["terminos", "contexto", "personas", "secciones"],
+}
+
+
+def learn_user(context: str, known: str, rejected: list[str], candidates: list[str], part: int, total: int,
+               start: str, end: str, body: str, with_profile: bool, want_sections: bool,
+               pending: list[str] | None = None) -> str:
+    profile_part = (
+        "- terminos: términos del negocio que aparecen (siglas, productos, sistemas, nombres propios que no sean "
+        "personas), escritos tal como aparecen; no palabras comunes. definicion: qué es, de forma general y "
+        "duradera, solo si se explica o es evidente; si no, cadena vacía.\n"
+        "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
+        if with_profile else "- terminos y contexto: listas vacías.\n"
+    )
+    sections = ("- secciones: hasta 5 títulos de secciones útiles para resumir este tipo de reuniones."
+                if want_sections else "- secciones: lista vacía.")
+    return f"""{("Contexto:\n" + context + "\n\n") if context else ""}{("Ya conocido (no lo repitas):\n" + known + "\n\n") if known else ""}\
+{("Rechazado antes por el usuario (no lo propongas):\n" + "\n".join("- " + r for r in rejected) + "\n\n") if rejected else ""}\
+{("Ya propuesto y pendiente de revisar (no lo repitas, ni con otras palabras):\n" + "\n".join("- " + r for r in pending) + "\n\n") if pending else ""}\
+{("Posibles términos detectados (pueden no serlo):\n" + ", ".join(candidates) + "\n\n") if candidates and with_profile else ""}\
+Fragmento {part} de {total} ({start} – {end}). Líneas con «Nombre:» son habla; líneas con «(pantalla)» \
+describen lo que se ve.
+
+{body}
+
+Devuelve:
+{profile_part}- personas: datos sobre personas. nombre: el nombre tal como aparece antes de «:» si es quien habla, o \
+el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento \
+(materias o sistemas que domina, no hechos concretos que sabe), relacion, personal u otro. dato: la frase.
+{sections}"""
