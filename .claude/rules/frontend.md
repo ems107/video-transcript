@@ -11,3 +11,6 @@ Lee `docs/ai/AI_FRONTEND.md` antes de editar.
   existentes.
 - Los tipos de `src/api.ts` deben reflejar el backend. Verifica con `npm run build`.
 - Los datos de `analysis` pueden faltar en vídeos antiguos: usa `?.` y `?? []`.
+- Cada cambio visible actualiza su página de `src/help/` (la ayuda de la app). Si cambia una pantalla,
+  rehaz sus capturas: `cd backend; uv run python ../scripts/help_screenshots.py`. `uv run pytest`
+  comprueba valores, enlaces y capturas de la ayuda.

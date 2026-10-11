@@ -8,6 +8,23 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+La app explica cómo se usa y cómo funciona por dentro.
+
+### Añadido
+
+- **Ayuda integrada** en la propia app (menú **Ayuda**), como una wiki:
+  - guía de cada pantalla: analizar, hablantes, correcciones, regenerar, perfiles, propuestas, personas…;
+  - **cómo funciona** cada fase del análisis y **las decisiones de diseño**, con su motivo, sus
+    consecuencias y si se pueden cambiar;
+  - **detalles técnicos** aparte, plegados y con otro estilo, para quien quiera profundizar;
+  - los umbrales y ajustes que se citan son los de tu app en ese momento;
+  - buscador, capturas de pantalla, problemas frecuentes, glosario y novedades de cada versión.
+- Enlaces «?» desde cada pantalla a su sección de la ayuda.
+
+### Corregido
+
+- El texto de Ajustes indicaba unos 8 s por fotograma; a 2560 px son unos 15 s.
+
 ## [1.3.0] - 2026-10-11
 
 Hablantes bien asignados aunque la separación de voces se equivoque.

@@ -34,7 +34,9 @@ const components: Components = {
 }
 
 function Md({ text }: { text: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{text}</ReactMarkdown>
+  // El contenido es nuestro: se dejan pasar los esquemas propios «ayuda:» y «captura:», que react-markdown
+  // descartaría por seguridad
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} urlTransform={(url) => url}>{text}</ReactMarkdown>
 }
 
 // Una página de ayuda: Markdown normal y bloques «:::tecnico Título … :::» plegables y diferenciados

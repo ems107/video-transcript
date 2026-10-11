@@ -22,6 +22,7 @@ export default function Help() {
   const [changelog, setChangelog] = useState('')
   const [query, setQuery] = useState('')
   const [showTech, setShowTech] = useState(readTech)
+  const [navOpen, setNavOpen] = useState(false)
   const page = findPage(pagina) ?? PAGES[0]
 
   useEffect(() => {
@@ -66,8 +67,11 @@ export default function Help() {
 
   return (
     <div className="help">
-      <aside className="help-nav">
+      <aside className={`help-nav ${navOpen ? 'open' : ''}`}>
         <input placeholder="Buscar en la ayuda…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <button className="help-nav-toggle" onClick={() => setNavOpen(!navOpen)}>
+          {navOpen ? 'Ocultar el índice' : 'Índice de la ayuda'}
+        </button>
         {q ? (
           <div className="help-results">
             {results.length === 0 && <p className="small muted">Sin resultados.</p>}
@@ -79,7 +83,7 @@ export default function Help() {
             ))}
           </div>
         ) : SECTIONS.map((s) => (
-          <div key={s} className="help-section">
+          <div key={s} className="help-section" onClick={() => setNavOpen(false)}>
             <div className="help-section-title">{s}</div>
             {PAGES.filter((p) => p.section === s).map((p) => (
               <Link key={p.slug} to={`/ayuda/${p.slug}`} className={p.slug === page.slug ? 'active' : ''}>{p.title}</Link>

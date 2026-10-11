@@ -11,6 +11,9 @@ de componentes ni de estado: solo `useState`/`useEffect` y CSS propio.
 | `src/api.ts` | **tipos de todas las respuestas** y el cliente `api.get/post/put/del` (lanza `Error(detail)`) |
 | `src/util.ts` | `fmtTs`, `fmtDuration`, `fmtDate` (es-ES), `parseTs`, `useJobs()` (SSE), `STATUS_LABEL`, `speakerColor`, `notifyKnowledge()` |
 | `src/knowledge.tsx` | componentes del conocimiento aprendido: `ProposalList`/`ProposalCard` (con evidencia), `KnowledgeList` (aceptado, editar y retirar) y `VersionHistory` (restaurar) |
+| `src/help/*.md`, `src/help/index.ts` | páginas de la ayuda (cabecera `titulo/seccion/orden/claves`) y su carga con `import.meta.glob` |
+| `src/HelpMarkdown.tsx` | visor de la ayuda: bloques `:::tecnico Título` … `:::` (plegables, estilo propio), valores `{{v:clave}}`, enlaces `ayuda:pagina#ancla`, imágenes `captura:nombre`; y `HelpLink` (el «?» de cada pantalla) |
+| `src/pages/Help.tsx` | `/ayuda/:pagina`: índice por secciones, buscador, índice de la página, interruptor de detalles técnicos (en `localStorage`), anterior/siguiente; «Novedades» añade el CHANGELOG |
 | `src/RegenerateDialog.tsx` | ventana «Regenerar el análisis»: qué se repite y qué se conserva, una casilla por nivel (encadenadas) y la estimación |
 | `src/SpeakerFix.tsx` | `SpeakerFixDialog` (cambiar quién habla en una línea, en parte de ella eligiendo palabras, o en varias líneas), `SplitDialog` (asignar cada grupo de un hablante con dos voces) y `OverridesList` (cambios manuales con Deshacer) |
 | `src/CorrectionsPanel.tsx` | tarjeta «Correcciones» del vídeo: añadir, editar y borrar; estado «Aplicada/Pendiente» por corrección (`applied`) y aviso de las que faltan por aplicar. El texto de ayuda explica que el análisis se reescribe de cero: cada corrección debe entenderse sola |
@@ -71,3 +74,20 @@ están en español.
 5. Prueba también el modo claro y el oscuro (`Emulation.setEmulatedMedia`) y un ancho de unos 420 px.
 6. Navega muchas veces seguidas para detectar bloqueos.
 7. Limpia la caché del navegador (`Network.clearBrowserCache`) después de recompilar.
+
+## Ayuda de la app
+
+- **Contenido:** una página Markdown por tema en `frontend/src/help/`, escrita para el usuario. Lo
+  técnico va en bloques `:::tecnico Título` … `:::` y nunca es necesario para usar la app.
+- **Valores en vivo:** `{{v:clave}}` se sustituye por el valor de `GET /api/help/values`
+  (`backend/app/help_values.py`, que lee ajustes y constantes de su sitio). Si añades una clave, regístrala
+  allí.
+- **Anclas:** `slugify` del encabezado (sin tildes, minúsculas, guiones), igual en `help/index.ts` y en
+  `tests/test_help.py`.
+- **react-markdown** descarta por seguridad los esquemas desconocidos: `HelpMarkdown` usa
+  `urlTransform={(url) => url}` para dejar pasar `ayuda:` y `captura:` (el contenido es nuestro).
+- **Capturas:** `frontend/public/capturas/*.png`, generadas por `scripts/help_screenshots.py` (instancia
+  aislada, vídeos de muestra, Chrome por CDP; sustituye las rutas reales por `C:\Usuarios\Ana\…` antes de
+  capturar, porque se publican en el repositorio). Necesita la GPU libre y unos 10 minutos.
+- **Tests (`test_help.py`):** cabeceras, `{{v:…}}` existentes, enlaces y anclas, bloques técnicos
+  cerrados y capturas presentes.

@@ -65,7 +65,7 @@ backend/app/
   llm.py         arranca y para llama-server; chat_json con salida JSON validada por esquema
   media.py       ffprobe / ffmpeg
 frontend/src/    App.tsx (rutas), api.ts (tipos + cliente), util.ts, pages/*.tsx, index.css
-scripts/         download_models.py, release.py
+scripts/         download_models.py, release.py, help_screenshots.py (capturas de la ayuda)
 models/ data/ samples/   no se versionan (modelos, BD y trabajo, vídeos de prueba)
 ```
 
@@ -83,6 +83,12 @@ models/ data/ samples/   no se versionan (modelos, BD y trabajo, vídeos de prue
 
 `.claude/rules/*.md` recuerdan las reglas clave de cada zona del código y se cargan solas al tocar
 sus ficheros.
+
+**La ayuda de la app (`frontend/src/help/*.md`) es la documentación del usuario.** Todo cambio visible
+actualiza su página en el mismo commit. Una decisión nueva (un umbral, un límite, un ajuste) se explica en
+«Decisiones, límites y umbrales»: qué, por qué, consecuencia y si se puede cambiar, con los valores como
+`{{v:clave}}` (registrados en `backend/app/help_values.py`) y lo técnico en bloques `:::tecnico`. Si
+cambia una pantalla, rehaz sus capturas con `scripts/help_screenshots.py`. Ver `docs/ai/AI_FRONTEND.md`.
 
 **Mantén esta documentación al día.** Si un cambio deja algo de este fichero, de `docs/ai/` o de
 `.claude/rules/` desactualizado (rutas, fases, claves, comandos, umbrales), actualízalo en el mismo
