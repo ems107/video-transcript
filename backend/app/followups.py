@@ -260,7 +260,8 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
         if evento != "avanza" and evento not in EVENT_STATUS[it["kind"]]:
             discarded.append(f"{x['id']}: «{evento}» no vale para una {it['kind']}")
             continue
-        if evento == "avanza" and (x["id"] in changes or (it["events"] and it["events"][0].get("video_id") == video_id)):
+        created_here = bool(it["events"]) and it["events"][0].get("video_id") == video_id
+        if evento == "avanza" and (x["id"] in changes or created_here):
             continue  # ya cambia de estado en este vídeo, o es el vídeo en que aparece
         nota, possible = "", ""
         if evento != "avanza" and not x["verified"]:
@@ -268,6 +269,8 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
             possible, evento = evento, "avanza"
         elif it.get("manual") and evento != "avanza":
             # Lo decidió el usuario: el vídeo solo se anota como avance
+            if created_here:
+                continue  # el vídeo que creó el punto no es un avance suyo
             nota, evento = f"El vídeo dice: {EVENT_LABELS.get(evento, evento)}.", "avanza"
         if (it["id"], evento, possible) in seen:
             continue

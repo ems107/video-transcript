@@ -139,6 +139,10 @@ def test_events_in_order_and_no_advance_in_the_creating_video():
     items = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada")])]
     plan = F.apply_update(items, {}, 1, D1, 600, AT, [], [sig("T1", "avanza", "00:02:00", "se repite")])
     assert plan["events"] == []
+    # Tampoco cuando el punto es manual y el vídeo que lo creó dice que cambia (al rehacer el estado)
+    manual_items = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada")], manual=True)]
+    plan = F.apply_update(manual_items, {}, 1, D1, 600, AT, [], [sig("T1", "hecha", "00:02:00", "ya está hecho")])
+    assert plan["events"] == []
 
 
 def test_revert_keeps_what_the_user_did():

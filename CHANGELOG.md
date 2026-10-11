@@ -19,6 +19,12 @@ La app sigue un tema a lo largo de varios vídeos.
   - lo que aportó cada vídeo.
 - Al encolar un vídeo se pueden elegir sus seguimientos: el análisis tiene en cuenta lo anterior del tema
   y, al terminar, la IA actualiza el estado. Un vídeo ya analizado se añade desde su página.
+- Cada avance o cierre lleva **la frase del vídeo que lo dice**, comprobada contra la transcripción. Si la IA
+  cree que algo se cerró pero no encuentra la frase, lo muestra como «¿hecha?» con un botón **Confirmar**.
+  Para encontrarlo usa el modo razonamiento del modelo: actualizar un seguimiento tarda unos 2 minutos más
+  por cada 25 minutos de vídeo.
+- Las tareas, decisiones y dudas nuevas del seguimiento son las del análisis del vídeo: no cambian de una
+  ejecución a otra.
 - Puedes cambiar el estado de cualquier punto, editarlo, borrarlo o añadir uno a mano, y editar el resumen:
   la IA ya no lo cambia. Cada cambio guarda una versión que se puede restaurar.
 - Al quitar o regenerar un vídeo de un seguimiento, la app pregunta si rehace su estado. Si no, lo marca
