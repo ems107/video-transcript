@@ -58,10 +58,25 @@ las fases.
   - Un término debe aparecer literalmente (`term_occurrences`). Además debe parecer un término
     (`looks_like_term`: con mayúsculas o cifras, o visto en pantalla). No puede ser ya conocido ni el
     nombre de una persona.
+  - Y debe ser relevante (`term_relevant`): oírse en la conversación o estar en el `texto_relevante`
+    de al menos 3 fotogramas. La lista `terminos` del análisis de imagen recoge todo lo legible, incluida
+    la barra de tareas y las pestañas. Con una grabación real, la mitad de los términos propuestos eran
+    programas del escritorio (Trello, Jira…), que salían en esa lista en casi todos los fotogramas pero en
+    el texto relevante en 0–2. El contenido de la reunión salía en 5–15.
+  - Las formas de un mismo nombre se juntan en una propuesta (`group_forms`: una contiene a la otra sin
+    espacios ni signos, mínimo 6 letras). La más vista es el término y las demás van en `data.forms`, que
+    se muestran en la web, entran en el contexto del LLM («también …») y orientan a Whisper. **No** son
+    `variants` del glosario: esas se sustituyen en la transcripción, y «Gestibarymont» no es un error de
+    «Bárymont».
+  - Las secciones del resumen se piden reutilizables para cualquier vídeo del perfil (estructura, no
+    contenido): sin esa indicación proponía títulos de la reunión concreta.
   - Un hecho o dato necesita una marca de tiempo dentro del bloque y líneas reales alrededor
     (`excerpt_at`). Se descartan las frases con marcas temporales (`is_ephemeral`: «ayer», «el
     lunes», «a las 9»…).
-  - Límites por vídeo: 15 términos, 10 hechos, 8 datos por persona y 5 personas nuevas.
+  - Límites por vídeo (40 términos, 30 hechos, 40 datos por persona, 15 personas nuevas): solo protegen
+    frente a respuestas anómalas. Antes eran 15/10/8/5 y descartaban datos buenos por orden de llegada
+    (en un vídeo real, Edgar perdió datos al llegar a 8). El ruido lo limitan las comprobaciones de
+    cada propuesta, no el número.
   - La evidencia guarda etiquetas de hablante (`label`), no nombres. Los nombres se ponen al mostrarla.
 - **Atribución** (`knowledge.resolve_name`): el `nombre` devuelto por el LLM se resuelve así:
   - si es un hablante del vídeo → `speaker_label`. «Hablante N» solo vale con coincidencia exacta;
@@ -140,6 +155,29 @@ En cada intervención corregida se guardan `original_text` y `corrections`, y la
 **Nunca dejes que el LLM reescriba texto libremente.** Solo decide sí o no sobre sustituciones
 concretas.
 
+## Comprobación por la voz (`pipeline/voices.py`)
+
+pyannote se equivoca en saludos, cambios de turno y frases cortas, y a veces deja una línea con dos
+voces. La fase `voices` lo comprueba:
+- **Voz de cada hablante** (`clean_centroids`): la media de sus intervenciones de 3 s o más, sin las
+  que se parecen más a otro.
+- **Ventanas** de 1,5 s cada 0,5 s dentro de cada intervención de 1,5 s o más. Para cada palabra se
+  promedian las ventanas que la cubren, ponderadas hacia la centrada en ella (las de los lados ya
+  recogen la voz vecina). Se reasigna si el ganador tiene parecido ≥ `MIN_SIM` (0,35) y saca
+  ≥ `MARGIN` (0,2) al segundo. Si apunta a otro con menos margen, la palabra queda `dudosa`. Un tramo
+  reasignado de menos de `MIN_RUN` (0,4 s) se deshace y queda dudoso.
+- **Medido** con el vídeo de 37 min y 9 tramos que el usuario revisó escuchando: todas las
+  reasignaciones fueron correctas, incluidos un saludo de 0,5 s en mitad de una línea y una línea
+  partida justo donde cambia la voz. Los intercambios de varias voces en menos de 2 s («El martes 15.
+  Sí. Vale.») no se pueden resolver por la voz: quedan para el arreglo manual. Si tocas los umbrales,
+  vuelve a medir con tramos revisados.
+- **Dos voces en un hablante** (`detect_splits`): 2-medias sobre sus intervenciones largas ya
+  reasignadas. Se propone si la silueta es ≥ 0,45, cada grupo suma ≥ 15 s y los grupos se parecen
+  ≤ 0,5. Se guarda en `visual_hints["_split"]`, y el usuario asigna cada grupo con arreglos manuales.
+- Las huellas por intervención están en el mismo espacio que las de pyannote (parecido 0,92–0,99), así
+  que los centroides limpios sustituyen a los de pyannote en `diarization.json` y son los que se
+  guardan al confirmar un hablante.
+
 ## Identificación de hablantes (`pipeline/identify.py`, `pipeline/voice.py`)
 
 Fuentes, por orden de prioridad:
@@ -151,7 +189,10 @@ Fuentes, por orden de prioridad:
    confianza sube a ≥ 0.9.
 3. **Pantalla** (`voice.assign_visual_names`): con los nombres ya unificados, cada nombre se asigna a
    un solo hablante, el que más coincide con él (al menos 2 coincidencias, el nombre más leído de ese
-   hablante sin empate, y ese hablante debe concentrar al menos la mitad de las lecturas del nombre). Un nombre
+   hablante sin empate, y esa voz con al menos 1,5 veces las lecturas del nombre que la siguiente).
+   Cada fotograma se asigna con `transcript.speaker_at` sobre las intervenciones ya comprobadas por la
+   voz: el fotograma se toma al cambiar el resaltado, un poco antes de la primera palabra, así que a
+   menos de 0,3 s (`BORDER`) de un límite gana el turno que empieza; en un silencio no cuenta. Un nombre
    repartido entre varias voces, como el de quien presenta, no se asigna. Se busca en las personas por
    nombre o alias (`token_set_ratio` ≥ 85). Si no existe, queda como `suggested_name`.
 4. **Contexto** (en `analyze`, ver abajo): para los hablantes que siguen sin nombre, el LLM propone una

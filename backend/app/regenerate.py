@@ -2,7 +2,8 @@
 
 Niveles, de menos a más profundo (cada uno incluye los anteriores):
 - `analysis`: corrección de términos, resumen, aprendizaje y publicación;
-- `speakers`: además, vuelve a identificar a los hablantes (las confirmaciones se conservan);
+- `speakers`: además, vuelve a comprobar las voces e identificar a los hablantes (las confirmaciones se
+  conservan; necesita el vídeo para volver a extraer el audio);
 - `screen`: además, vuelve a elegir y analizar los fotogramas y a unificar los nombres;
 - `full`: todo desde el audio. Los hablantes se vuelven a separar y hay que volver a confirmarlos.
 """
@@ -16,21 +17,21 @@ from typing import Any
 from sqlmodel import Session, select
 
 from . import estimates
-from .models import Speaker, Video
+from .models import Job, Speaker, Video
 
 LEVELS = ("analysis", "speakers", "screen", "full")
 _STAGES = {
     "analysis": ["correct", "analyze", "learn", "publish"],
-    "speakers": ["identify", "correct", "analyze", "learn", "publish"],
-    "screen": ["frames", "vision", "names", "identify", "correct", "analyze", "learn", "publish"],
-    "full": ["ingest", "frames", "vision", "asr", "align", "diarize", "names", "identify", "correct", "analyze",
-             "learn", "publish"],
+    "speakers": ["ingest", "voices", "names", "identify", "correct", "analyze", "learn", "publish"],
+    "screen": ["ingest", "frames", "vision", "voices", "names", "identify", "correct", "analyze", "learn", "publish"],
+    "full": ["ingest", "frames", "vision", "asr", "align", "diarize", "voices", "names", "identify", "correct",
+             "analyze", "learn", "publish"],
 }
 # Lo que necesita cada nivel en la carpeta de trabajo (además del vídeo en `screen` y `full`)
 _NEEDS = {
     "analysis": ("corrected.json",),
-    "speakers": ("corrected.json", "diarization.json", "utterances.json"),
-    "screen": ("corrected.json", "diarization.json", "utterances.json"),
+    "speakers": ("corrected.json", "diarization.json", "aligned.json"),
+    "screen": ("corrected.json", "diarization.json", "aligned.json"),
     "full": (),
 }
 
@@ -53,7 +54,7 @@ def availability(work: Path | None, video: Path | None) -> dict[str, str]:
     out = {}
     for level in LEVELS:
         missing = [n for n in _NEEDS[level] if not (work and (work / n).exists())]
-        if level in ("screen", "full") and not video:
+        if level != "analysis" and not video:
             out[level] = "No se encuentra el archivo de vídeo"
         elif missing:
             out[level] = "Faltan los datos intermedios de este vídeo; solo se puede analizar desde cero"
@@ -74,7 +75,12 @@ def info(session: Session, v: Video, work: Path | None, max_frames: int) -> dict
         levels.append({"level": level, "available": not reasons[level], "reason": reasons[level],
                        "seconds": round(est["total"])})
     confirmed = len(session.exec(select(Speaker).where(Speaker.video_id == v.id, Speaker.confirmed.is_(True))).all())
-    return {"levels": levels, "video_path": str(video) if video else None, "confirmed_speakers": confirmed}
+    names_file = work / "names.json" if work else None
+    on_screen = sum(1 for g in json.loads(names_file.read_text(encoding="utf-8")) if g.get("readings", 0) >= 2) \
+        if names_file and names_file.exists() else None
+    options = (session.exec(select(Job).where(Job.video_id == v.id).order_by(Job.id.desc())).first() or Job(video_id=0)).options or {}
+    return {"levels": levels, "video_path": str(video) if video else None, "confirmed_speakers": confirmed,
+            "on_screen": on_screen, "min_speakers": options.get("min_speakers"), "max_speakers": options.get("max_speakers")}
 
 
 def unconfirm_speakers(session: Session, video_id: int) -> None:
@@ -83,6 +89,8 @@ def unconfirm_speakers(session: Session, video_id: int) -> None:
     Las huellas de voz ya guardadas de esas personas se conservan, así que se volverán a proponer por voz.
     """
     for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
+        if sp.label.startswith("MANUAL_"):
+            continue  # hablante creado por un arreglo manual: sigue valiendo, se aplica por tiempo
         sp.person_id, sp.confirmed = None, False
         sp.suggested_person_id, sp.suggested_name, sp.source, sp.confidence = None, "", "", 0.0
         sp.visual_hints = {}

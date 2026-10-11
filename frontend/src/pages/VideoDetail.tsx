@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, type Job, type Person, type Proposals, type SpeakerInfo, type VideoDetail as VD } from '../api'
+import { api, type Job, type Person, type Proposals, type SegmentInfo, type SpeakerInfo, type VideoDetail as VD } from '../api'
 import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
 import { JobRow } from './Queue'
 import { CorrectionsPanel } from '../CorrectionsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
+import { OverridesList, SpeakerFixDialog, SplitDialog } from '../SpeakerFix'
 import { RemoveDialog } from '../RemoveDialog'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
@@ -42,7 +43,10 @@ function TsLink({ ts, seek }: { ts: string; seek: (t: number) => void }) {
   return <span className="ts-link" onClick={() => seek(t)}>{ts}</span>
 }
 
-function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]; onChange: () => void }) {
+function SpeakerPanel({ video, people, onChange, seek, onRegenerate }: {
+  video: VD; people: Person[]; onChange: () => void; seek: (t: number) => void; onRegenerate: () => void
+}) {
+  const [splitting, setSplitting] = useState<number | null>(null)
   const [editing, setEditing] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -93,6 +97,11 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
               )}
               {sp.is_owner && <span className="pill" style={{ marginLeft: 4 }}>tu micrófono</span>}
               {!sp.confirmed && sp.reason && <div>{sp.reason}</div>}
+              {sp.split && (
+                <div className="danger-text">
+                  Puede juntar dos voces distintas. <button className="link" onClick={() => setSplitting(sp.id)}>Revisar</button>
+                </div>
+              )}
               {sp.aliases.length > 0 && <div>También le llaman {sp.aliases.map((a) => `«${a}»`).join(', ')}</div>}
             </div>
             {editing === sp.id && (
@@ -119,8 +128,20 @@ function SpeakerPanel({ video, people, onChange }: { video: VD; people: Person[]
         </div>
       ))}
       <p className="small muted" style={{ marginBottom: 0 }}>
-        Al confirmar, se guarda la huella de voz para reconocer a esa persona en próximos vídeos.
+        Al confirmar, se guarda la huella de voz para reconocer a esa persona en próximos vídeos. Si una frase está
+        asignada a quien no es, pulsa su nombre en la transcripción.
       </p>
+      <OverridesList video={video} onChange={onChange} />
+      {video.overrides_pending && (
+        <div className="notice inline small" style={{ marginTop: '0.75rem' }}>
+          <span>Hay cambios de hablantes que el resumen aún no tiene en cuenta.</span>
+          <button className="sm primary" onClick={onRegenerate}>Regenerar</button>
+        </div>
+      )}
+      {splitting !== null && (
+        <SplitDialog video={video} people={people} speakerId={splitting} seek={seek} onClose={() => setSplitting(null)}
+          onSaved={() => { setSplitting(null); onChange() }} />
+      )}
     </div>
   )
 }
@@ -188,6 +209,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
   const nav = useNavigate()
   const [removing, setRemoving] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [fixing, setFixing] = useState<SegmentInfo | null>(null)
+  const [onlyDoubtful, setOnlyDoubtful] = useState(false)
   const [params, setParams] = useSearchParams()
   const [video, setVideo] = useState<VD | null>(null)
   const [people, setPeople] = useState<Person[]>([])
@@ -252,7 +275,9 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
 
   const a = video.analysis ?? {}
   const f = filter.trim().toLowerCase()
-  const segments = f ? video.segments.filter((s) => s.text.toLowerCase().includes(f) || s.name.toLowerCase().includes(f)) : video.segments
+  const doubtful = video.segments.filter((s) => s.voice === 'dudosa').length
+  const segments = video.segments.filter((s) => (!onlyDoubtful || s.voice === 'dudosa')
+    && (!f || s.text.toLowerCase().includes(f) || s.name.toLowerCase().includes(f)))
   const running = job && (job.status === 'running' || job.status === 'queued')
 
   function changeTab(t: Tab) {
@@ -290,6 +315,8 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
             <button onClick={() => setRegenerating(true)} disabled={!!running}>Regenerar análisis</button>
           )}
           <button className="danger" disabled={!!running} onClick={() => setRemoving(true)}>Quitar</button>
+          {fixing && <SpeakerFixDialog video={video} people={people} segment={fixing} onClose={() => setFixing(null)}
+            onSaved={() => { setFixing(null); load() }} />}
           {regenerating && <RegenerateDialog videoId={video.id} onClose={() => setRegenerating(false)}
             onQueued={() => { setRegenerating(false); load() }} />}
           {removing && <RemoveDialog videoId={video.id} onClose={() => setRemoving(false)} onRemoved={() => nav('/')} />}
@@ -306,7 +333,9 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
               onTimeUpdate={(e) => setTime((e.target as HTMLVideoElement).currentTime)} />
           )}
           {video.folder && <div className="small muted" style={{ marginTop: '0.4rem', wordBreak: 'break-all' }}>{video.folder}</div>}
-          {video.speakers.length > 0 && <SpeakerPanel video={video} people={people} onChange={load} />}
+          {video.speakers.length > 0 && (
+            <SpeakerPanel video={video} people={people} onChange={load} seek={seek} onRegenerate={() => setRegenerating(true)} />
+          )}
           <KnowledgePanel video={video} running={!!running} onChange={load} />
           {video.status === 'done' && (
             <CorrectionsPanel video={video} running={!!running} onChange={load} onRegenerate={() => setRegenerating(true)} />
@@ -344,15 +373,25 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
                 <label className="check small" style={{ whiteSpace: 'nowrap' }}>
                   <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Seguir vídeo
                 </label>
+                {doubtful > 0 && (
+                  <label className="check small" style={{ whiteSpace: 'nowrap' }} title="Tramos en los que la voz no deja claro quién habla">
+                    <input type="checkbox" checked={onlyDoubtful} onChange={(e) => setOnlyDoubtful(e.target.checked)} /> Solo dudosas ({doubtful})
+                  </label>
+                )}
               </div>
               <div className="transcript">
                 {segments.map((s) => {
-                  const isCur = !f && video.segments[currentIdx]?.id === s.id
+                  const isCur = !f && !onlyDoubtful && video.segments[currentIdx]?.id === s.id
                   return (
                     <div key={s.id} ref={isCur ? currentRef : undefined} className={`utt ${isCur ? 'current' : ''}`} onClick={() => seek(s.start)}>
                       <span className="ts">{fmtTs(s.start)}</span>
                       <div>
-                        <div className="who" style={{ color: speakerColor(order[s.speaker] ?? 1) }}>{s.name}</div>
+                        <div className="who">
+                          <button className="link who-btn" style={{ color: speakerColor(order[s.speaker] ?? 1) }}
+                            title="Cambiar quién habla aquí" onClick={(e) => { e.stopPropagation(); setFixing(s) }}>{s.name}</button>
+                          {s.voice === 'dudosa' && <span className="pill warn" title="La voz no deja claro quién habla en este tramo">voz dudosa</span>}
+                          {s.voice === 'reasignada' && <span className="pill" title="La voz indicaba que este tramo era de otro hablante y se ha reasignado">reasignada por la voz</span>}
+                        </div>
                         <div className={s.corrections.length ? 'corr' : ''}
                           title={s.corrections.length ? `Corregido según el glosario:\n${s.corrections.map((c) => `«${c.original}» → «${c.suggestion}»`).join('\n')}` : undefined}>
                           {s.text}

@@ -25,13 +25,13 @@ from sse_starlette.sse import EventSourceResponse
 from . import __version__, knowledge_store as KS, proposals as PR, services
 from . import people as people_mod
 from . import regenerate as regen
-from . import removal
+from . import removal, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
     Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person, Profile, ProfilePersonLink, Segment, Speaker, Video,
-    VideoCorrection, VoiceEmbedding,
+    SpeakerOverride, VideoCorrection, VoiceEmbedding,
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
@@ -236,7 +236,7 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
             "suggested_name": sp.suggested_name, "source": sp.source, "confidence": sp.confidence,
             "speaking_time": sp.speaking_time, "has_embedding": bool(sp.embedding),
             "visual_hints": {k: c for k, c in hints.items() if not k.startswith("_")},
-            "reason": hints.get("_motivo", ""), "aliases": hints.get("_apodos", []),
+            "reason": hints.get("_motivo", ""), "aliases": hints.get("_apodos", []), "split": hints.get("_split"),
         })
     segs = session.exec(select(Segment).where(Segment.video_id == v.id).order_by(Segment.idx)).all()
     frames = session.exec(select(Keyframe).where(Keyframe.video_id == v.id).order_by(Keyframe.t)).all()
@@ -247,9 +247,10 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
         "analysis": v.analysis, "speakers": speakers,
         "video_corrections": services.with_applied(v.analysis, vc := services.video_corrections(session, v.id)),
         "corrections_pending": bool(v.analysis) and services.corrections_pending(v.analysis, vc),
+        "overrides_pending": bool(v.analysis) and speaker_fix.pending(v.analysis, speaker_fix.overrides(session, v.id)),
         "segments": [{"id": s.id, "start": s.start, "end": s.end, "speaker": s.speaker,
                       "name": names.get(s.speaker, s.speaker), "text": s.text,
-                      "original_text": s.original_text, "corrections": s.corrections} for s in segs],
+                      "original_text": s.original_text, "corrections": s.corrections, "voice": s.voice} for s in segs],
         "keyframes": [{"id": k.id, "t": k.t, "scene_type": k.scene_type, "description": k.description,
                        "visible_text": k.visible_text, "participants": k.participants,
                        "active_speaker": k.active_speaker} for k in frames],
@@ -315,6 +316,78 @@ def delete_correction(correction_id: int, session: Session = SessionDep) -> dict
     session.delete(_404(session.get(VideoCorrection, correction_id), "Corrección"))
     session.commit()
     return {"ok": True}
+
+
+class OverrideIn(BaseModel):
+    ranges: list[tuple[float, float]]
+    person_id: int | None = None
+    new_person_name: str | None = None
+
+
+def _after_speaker_change(session: Session, v: Video, removed: list[tuple[float, float]] = ()) -> None:
+    speaker_fix.refresh_segments(session, v, removed)
+    services.export_video(session, v)
+    services.index_video(session, v)
+
+
+@app.get("/api/videos/{video_id}/speaker-overrides")
+def list_overrides(video_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    _404(session.get(Video, video_id), "Vídeo")
+    out = []
+    for o in speaker_fix.overrides(session, video_id):
+        p = session.get(Person, o["person_id"])
+        out.append({**o, "person_name": p.name if p else ""})
+    return out
+
+
+@app.post("/api/videos/{video_id}/speaker-overrides")
+def add_overrides(video_id: int, body: OverrideIn, session: Session = SessionDep) -> dict[str, Any]:
+    """«De tal momento a tal momento habla esta persona». Se aplica al momento a la transcripción."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    ranges = [(min(a, b), max(a, b)) for a, b in body.ranges if abs(b - a) > 0.01]
+    if not ranges:
+        raise HTTPException(400, "Indica el tramo")
+    pid = body.person_id
+    if body.new_person_name and body.new_person_name.strip():
+        person = Person(name=body.new_person_name.strip())
+        session.add(person)
+        session.commit()
+        pid = person.id
+        if v.profile_id:
+            session.add(ProfilePersonLink(profile_id=v.profile_id, person_id=pid))
+    _404(session.get(Person, pid) if pid else None, "Persona")
+    for a, b in ranges:
+        session.add(SpeakerOverride(video_id=v.id, start=a, end=b, person_id=pid))
+    session.commit()
+    _after_speaker_change(session, v)
+    return {"ok": True, "person_id": pid}
+
+
+@app.delete("/api/speaker-overrides/{override_id}")
+def delete_override(override_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    o = _404(session.get(SpeakerOverride, override_id), "Arreglo")
+    v = session.get(Video, o.video_id)
+    removed, pid = (o.start, o.end), o.person_id
+    session.delete(o)
+    session.commit()
+    if not session.exec(select(SpeakerOverride).where(SpeakerOverride.video_id == v.id,
+                                                      SpeakerOverride.person_id == pid)).first():
+        manual = session.exec(select(Speaker).where(Speaker.video_id == v.id,
+                                                    Speaker.label == f"{speaker_fix.MANUAL_PREFIX}{pid}")).first()
+        if manual:
+            session.delete(manual)
+            session.commit()
+    _after_speaker_change(session, v, [removed])
+    return {"ok": True}
+
+
+@app.get("/api/videos/{video_id}/words")
+def video_words(video_id: int, start: float, end: float, session: Session = SessionDep) -> list[dict[str, Any]]:
+    """Palabras con su momento en un tramo, para elegir dónde empieza o acaba una voz."""
+    _404(session.get(Video, video_id), "Vídeo")
+    ws = speaker_fix.words(session, video_id) or []
+    return [{"word": w["word"].strip(), "start": w["start"], "end": w["end"]}
+            for w in ws if start - 0.05 <= (w["start"] + w["end"]) / 2 <= end + 0.05 and w["word"].strip()]
 
 
 @app.get("/api/videos/{video_id}/removal")
@@ -395,6 +468,8 @@ def regenerate_info(video_id: int, session: Session = SessionDep) -> dict[str, A
 
 class RegenerateIn(BaseModel):
     level: str = "analysis"
+    min_speakers: int | None = None  # solo en «full»: ayudan a la separación de voces
+    max_speakers: int | None = None
 
 
 @app.post("/api/videos/{video_id}/regenerate")
@@ -411,6 +486,13 @@ def regenerate(video_id: int, body: RegenerateIn | None = None, session: Session
     if level == "full":
         regen.unconfirm_speakers(session, v.id)
     job = _requeue(session, v, regen.stages(level), "Regenerando análisis", check_work=False)
+    if level == "full":
+        opts = {k: val for k, val in (job.options or {}).items() if k not in ("min_speakers", "max_speakers", "num_speakers")}
+        b = body or RegenerateIn()
+        opts.update({k: val for k, val in (("min_speakers", b.min_speakers), ("max_speakers", b.max_speakers)) if val})
+        job.options = opts
+        session.add(job)
+        session.commit()
     return {"ok": True, "job_id": job.id}
 
 

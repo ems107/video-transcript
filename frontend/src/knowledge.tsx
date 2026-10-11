@@ -91,7 +91,12 @@ function EditFields({ k, edit, setEdit }: { k: Knowledge; edit: Edit; setEdit: (
 }
 
 function Body({ k }: { k: Knowledge }) {
-  if (k.kind === 'termino') return <div><b>{k.data.term}</b>{k.data.definition && <span className="muted"> — {k.data.definition}</span>}</div>
+  if (k.kind === 'termino') return (
+    <div>
+      <b>{k.data.term}</b>{k.data.definition && <span className="muted"> — {k.data.definition}</span>}
+      {k.data.forms?.length ? <div className="small muted">También aparece como: {k.data.forms.join(', ')}</div> : null}
+    </div>
+  )
   if (k.kind === 'nueva_persona') {
     return (
       <div>

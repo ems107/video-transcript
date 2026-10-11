@@ -58,6 +58,7 @@ backend/app/
   knowledge_store.py / proposals.py / people.py   conocimiento en BD, revisión de propuestas, fichas y fusión
   removal.py     quitar un vídeo (qué se borra) y copia de recuperación `datos/` en la carpeta publicada
   regenerate.py / estimates.py   niveles de regeneración y estimación de tiempos (tabla StageRun)
+  speaker_fix.py arreglos manuales de hablantes (SpeakerOverride); la comprobación por la voz está en pipeline/voices.py
   models.py      tablas SQLModel;  db.py: motor SQLite + FTS5
   config.py      Settings (persistidos en data/settings.json) y rutas
   env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA

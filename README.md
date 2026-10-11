@@ -94,6 +94,9 @@ Después todo funciona sin conexión a internet.
    `fotogramas/`.
 5. En el detalle del vídeo, **confirma los hablantes**. La app guarda su huella de voz y los reconocerá
    en los próximos vídeos.
+   - Si una frase está asignada a quien no es, pulsa el nombre del hablante en la **transcripción**:
+     puedes cambiarlo en esa línea, en parte de ella o en varias. La app ya comprueba cada tramo por la
+     voz, reasigna lo que está claro y marca como «voz dudosa» lo que no.
    - Si algo del resumen está mal interpretado, escríbelo en **Correcciones** como un hecho («X es quien
      presenta, no Y»). Se aplica al regenerar y la IA lo respeta.
    - **«Regenerar análisis»** muestra qué se repite y qué se conserva, con el tiempo estimado. Además del

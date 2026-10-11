@@ -17,13 +17,13 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from . import knowledge_store as KS
-from . import estimates, removal, services
+from . import estimates, removal, services, speaker_fix
 from . import regenerate as regen
 from .config import WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
 from .models import Job, Keyframe, Segment, Video
-from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision
+from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision, voices
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
 
@@ -36,7 +36,8 @@ STAGES = [
     ("vision", "Analizando la pantalla", 0.16),
     ("asr", "Transcribiendo", 0.23),
     ("align", "Alineando palabras", 0.06),
-    ("diarize", "Separando hablantes", 0.11),
+    ("diarize", "Separando hablantes", 0.10),
+    ("voices", "Comprobando las voces", 0.02),
     ("names", "Unificando nombres", 0.01),
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
@@ -44,7 +45,7 @@ STAGES = [
     ("learn", "Aprendiendo del vídeo", 0.10),
     ("publish", "Publicando resultados", 0.02),
 ]
-GPU_TORCH_STAGES = {"asr", "align", "diarize"}
+GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices"}
 # Ficheros de reanudación que se borran al repetir una fase
 PARTIALS = {
     "vision": ("vision.partial.json",),
@@ -192,6 +193,15 @@ class Worker:
             self._cancel.pop(job_id, None)
 
     @staticmethod
+    def _apply_overrides(ctx: JobContext) -> None:
+        """Reconstruye las intervenciones con los arreglos manuales de hablantes, que mandan sobre todo."""
+        with Session(engine) as s:
+            overrides = speaker_fix.overrides(s, ctx.video_id)
+            labels = speaker_fix.labels_for(s, ctx.video_id, overrides)
+        ctx.overrides = overrides
+        voices.rebuild(ctx, overrides, labels)
+
+    @staticmethod
     def _record_time(ctx: JobContext, stage: str, seconds: float) -> None:
         """Guarda cuánto ha tardado la fase, para estimar las siguientes. Nunca interrumpe el trabajo."""
         try:
@@ -224,18 +234,27 @@ class Worker:
             diarize.run(ctx)
         elif key == "names":
             names.run(ctx)
+        elif key == "voices":
+            voices.run(ctx)
         elif key == "identify":
+            self._apply_overrides(ctx)
             identify.run(ctx, voice)
             with Session(engine) as s:
                 services.persist_speakers(s, ctx.video_id, ctx.load("identities.json"))
+                speaker_fix.apply_splits(s, ctx.video_id, ctx.load("voices.json", {}).get("splits", {}))
             self._load_names(ctx)
         elif key == "correct":
+            self._apply_overrides(ctx)
             correct.run(ctx, llm)
         elif key == "analyze":
             analyze.run(ctx, llm)
+            before = dict(ctx.speaker_names)
             with Session(engine) as s:
                 services.apply_context_identities(s, ctx.video_id, ctx.load("context_identities.json", {}), ctx.people)
             self._load_names(ctx)
+            # El resumen se escribió antes de saber quién era cada «Hablante N»: se usa el nombre propuesto,
+            # igual que en la transcripción (al confirmar o cambiar el hablante se vuelve a sustituir)
+            ctx.save("analysis.json", services.rename_speakers(ctx.load("analysis.json"), before, ctx.speaker_names))
         elif key == "learn":
             self._learn(ctx, llm)
         elif key == "publish":
@@ -320,6 +339,7 @@ class Worker:
                 s.delete(old)
             for i, u in enumerate(utts):
                 s.add(Segment(video_id=video.id, idx=i, start=u["start"], end=u["end"], speaker=u["speaker"],
+                              voice=u.get("voice", ""),
                               text=u["text"], original_text=u.get("original_text", ""), corrections=u.get("corrections", [])))
             for v in vision_res:
                 s.add(Keyframe(video_id=video.id, t=v["t"], path=str(fdir / v["file"]), scene_type=v.get("tipo_escena", ""),

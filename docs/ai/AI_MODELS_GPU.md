@@ -46,6 +46,15 @@ librería de IA: es la primera línea de `main.py`. Si un script nuevo usa estos
 
 ## llama-server (`backend/app/llm.py`)
 
+**Muestreo** (`Settings.llm_*`): el que recomienda Qwen para Qwen3.6 sin «modo razonamiento»:
+temperatura 0,7, top_p 0,8, top_k 20, min_p 0 y presence_penalty 1,5. Antes se usaba temperatura 0,2 sin
+penalización, y el modelo entraba en bucles repitiendo un elemento de una lista hasta agotar los tokens
+(el resumen o el aprendizaje fallaban o se llenaban de copias). Medido con el vídeo de 37 min y dos
+regeneraciones: el aprendizaje pasó de 31 datos repetidos a ninguno, sin respuestas no válidas ni
+mezcla de idiomas (la ficha avisa de que una penalización alta puede provocarla). No bajes la
+temperatura ni quites la penalización sin volver a medir. `config.OLD_DEFAULTS` sustituye el 0,2 que
+quedó guardado en el `settings.json` de versiones anteriores.
+
 - Opciones: `-ngl 999 --n-cpu-moe N -c 65536 -np 1 -fa on --jinja --cache-type-k/v q8_0 --mmproj ...`,
   escuchando en `127.0.0.1:<llm_port>` (8091). El log se guarda en `data/llama-server.log`.
 - `chat_json(system, user, schema)` usa `response_format: json_schema`, por lo que la salida siempre se
@@ -66,6 +75,9 @@ librería de IA: es la primera línea de `main.py`. Si un script nuevo usa estos
   Se usa `exclusive_speaker_diarization` para los turnos (sin solapes) y `speaker_embeddings` en el
   orden de `speaker_diarization.labels()`. El audio se pasa ya decodificado
   (`{"waveform", "sample_rate"}`), así que torchcodec no se usa y su aviso se silencia en `env.py`.
+- **Huellas por tramo** (fase `voices`): `Model.from_pretrained(<carpeta>/embedding)` e
+  `Inference(window="whole")` con `crop`. Usa poca VRAM y se libera al terminar. En un vídeo de 37 min
+  calcula unas 3300 ventanas en unos 40 s.
 - **Primer uso de CUDA:** la primera transcripción tras instalar tarda unos 90 s más por la compilación
   JIT de los kernels. Solo pasa una vez y no indica ningún error.
 - **SQLModel 0.0.47:** los campos de fecha deben anotarse como `NaiveDatetime`. Con `datetime` a

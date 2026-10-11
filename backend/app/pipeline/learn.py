@@ -17,11 +17,13 @@ from .base import JobContext
 from .glossary import normalize
 from .transcript import fmt_ts
 
-MAX_TERMS = 15
-MAX_CONTEXT = 10
-MAX_PER_PERSON = 8
-MAX_NEW_PEOPLE = 5
-MAX_SECTIONS = 5
+# Solo protegen frente a respuestas anómalas (un bucle de la IA): un vídeo normal no se acerca a ellos.
+# Lo que limita el ruido son las comprobaciones de cada propuesta, no el número.
+MAX_TERMS = 40
+MAX_CONTEXT = 30
+MAX_PER_PERSON = 40
+MAX_NEW_PEOPLE = 15
+MAX_SECTIONS = 8
 
 
 def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:
@@ -88,11 +90,22 @@ def collect_proposals(
             if not k or k in known_terms or k in person_names or k in terms or not looks_like_term(term, screen):
                 continue
             occ = K.term_occurrences(term, utts, vision, limit=50)
-            if occ:
+            if occ and K.term_relevant(term, utts, vision):
                 terms[k] = {"kind": "termino", "category": "", "owner": ("profile", None), "n": len(occ),
                             "data": {"term": term, "definition": x.get("definicion", "").strip()},
                             "t": occ[0], "lines": evidence_lines(occ[0], utts, vision, term), "replaces": 0}
-    out += sorted(terms.values(), key=lambda p: -p["n"])[:MAX_TERMS]
+    # Formas de un mismo nombre: una sola propuesta con la más vista y las demás como otras formas
+    merged = []
+    for group in K.group_forms([p["data"]["term"] for p in terms.values()]):
+        items = sorted((terms[normalize(t)] for t in group), key=lambda p: -p["n"])
+        main = items[0]
+        if len(items) > 1:
+            main["data"]["forms"] = [p["data"]["term"] for p in items[1:]]
+            main["data"]["definition"] = main["data"]["definition"] or next(
+                (p["data"]["definition"] for p in items[1:] if p["data"]["definition"]), "")
+            main["n"] = sum(p["n"] for p in items)
+        merged.append(main)
+    out += sorted(merged, key=lambda p: -p["n"])[:MAX_TERMS]
 
     n_ctx = 0
     per_owner: dict[Any, int] = {}

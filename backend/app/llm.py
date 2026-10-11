@@ -109,9 +109,13 @@ class LLMServer:
         body = {
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "temperature": self.s.llm_temperature if temperature is None else temperature,
+            "top_p": self.s.llm_top_p,
+            "top_k": self.s.llm_top_k,
+            "min_p": self.s.llm_min_p,
+            "presence_penalty": self.s.llm_presence_penalty,
             "max_tokens": max_tokens,
             "response_format": {"type": "json_schema", "json_schema": {"name": "respuesta", "schema": schema}},
-            # Sin modo "pensamiento": salida directa y determinista
+            # Sin «modo razonamiento»: salida directa
             "chat_template_kwargs": {"enable_thinking": False},
         }
         last: Exception | None = None

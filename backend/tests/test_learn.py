@@ -152,3 +152,20 @@ def test_requeued_video_returns_to_done(engine, monkeypatch):
     W.Worker()._finish(jid, "done", "Completado")
     with Session(engine) as s:
         assert s.get(Video, vid).status == "done"
+
+
+def test_screen_terms_need_to_be_content_and_forms_are_grouped():
+    utts = [{"start": 10.0, "end": 15.0, "speaker": "SPEAKER_00", "text": "Entra en la plataforma y crea el lead."}]
+    # Bárymont es el contenido de la pantalla; Trello solo está en la barra de tareas (lista de visibles)
+    vision = [{"t": 10.0 + i, "texto_relevante": "Grupo Bárymont · Gestibarymont · Bárymont · Lead",
+               "terminos": ["Bárymont", "Gestibarymont", "Grupo Bárymont", "Trello"], "descripcion": ""}
+              for i in range(4)]
+    result = {"terminos": [{"termino": t, "definicion": d, "t": "00:00:11"} for t, d in
+                           (("Bárymont", "CRM de la empresa"), ("Gestibarymont", ""), ("Grupo Bárymont", ""),
+                            ("Trello", "gestor de tareas"))],
+              "contexto": [], "personas": [], "secciones": []}
+    props = collect_proposals([result], [(0.0, 60.0)], utts, vision, NAMES, PEOPLE, PROFILE, [], False)
+    terms = [p["data"] for p in props if p["kind"] == "termino"]
+    assert len(terms) == 1 and terms[0]["term"] == "Bárymont"
+    assert sorted(terms[0]["forms"]) == ["Gestibarymont", "Grupo Bárymont"]
+    assert terms[0]["definition"] == "CRM de la empresa"

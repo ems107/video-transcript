@@ -219,5 +219,6 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     final["titulo"] = final["titulo"].strip().strip('"«»').rstrip(".")
     final["fragmentos"] = partials
     final["correcciones_aplicadas"] = [{"id": c["id"], "updated_at": c["updated_at"]} for c in ctx.corrections]
+    final["hablantes_aplicados"] = sorted(o["id"] for o in ctx.overrides)
     ctx.save("analysis.json", final)
     ctx.report(1.0, f"Título: {final['titulo']}")

@@ -17,6 +17,7 @@ worker crea `<fase>.done`.
 | `asr` | `asr.py:run_asr` | `audio.wav`, `screen_terms.json` | `whisper_prompt.json`, `asr.json` | Whisper |
 | `align` | `asr.py:run_align` | `asr.json`, `audio.wav` | `aligned.json` | wav2vec2 |
 | `diarize` | `diarize.py` | `audio.wav`, `owner.wav`*, `aligned.json` | `diarization.json`, `utterances.json` | pyannote |
+| `voices` | `voices.py` | `audio.wav`, `aligned.json`, `diarization.json` | `words.json`, `utterances.json` (con `voice`), `voices.json`; reescribe `embeddings` y `speaking_time` de `diarization.json` | modelo de huellas de pyannote |
 | `names` | `names.py` | `vision.json` (o `vision.raw.json`), `utterances.json` | `names.json`, `vision.json` unificado, `vision.raw.json` (lecturas originales), `screen_terms.json` | — |
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
@@ -64,6 +65,14 @@ Formas clave:
   distorsiona la estimación de uno largo) y, sin historial, usa `DEFAULT_RATES`, medidos con
   grabaciones reales. Al reencolar, el
   trabajo reinicia `started_at`. Si cambias mucho lo que tarda una fase, ajusta `DEFAULT_RATES`.
+- **Arreglos manuales de hablantes** (`SpeakerOverride`, `speaker_fix.py`): «de `start` a `end` habla
+  esta persona». Antes de `identify` y de `correct`, `worker._apply_overrides` reconstruye
+  `utterances.json` con `voices.rebuild`: palabras de `words.json` (o, en trabajos anteriores a la fase
+  `voices`, de `aligned.json` + turnos) → `apply_overrides` → intervenciones. Mandan sobre lo
+  automático. Una persona sin hablante en el vídeo recibe la etiqueta `MANUAL_<id>`, ya confirmada,
+  que `unconfirm_speakers` no toca. Al crearlos o borrarlos, `speaker_fix.refresh_segments` actualiza
+  las filas `Segment` al momento, partiendo líneas por palabras si hace falta. `analysis.json` guarda
+  `hablantes_aplicados` para avisar de los que faltan en el resumen.
 - **Correcciones del usuario:** el worker carga las del vídeo en `ctx.corrections` al empezar el
   trabajo. `analyze` y `learn` las incluyen en su contexto (ver `AI_PROMPTS.md`).
 - **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual

@@ -14,7 +14,8 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `Video` | un vídeo | `status`: pending, processing, done o error. `analysis` guarda el JSON completo; `folder` y `video_path` se rellenan al publicar |
 | `Job` | un trabajo de la cola | `status`: queued, running, done, error o cancelled. `options` (ver abajo). `error` incluye el traceback |
 | `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz, pantalla o contexto. En `visual_hints`, las claves con «_» son internas (`_motivo`, `_apodos`) |
-| `Segment` | intervención de la transcripción | `speaker` es la etiqueta, no el nombre. `original_text` y `corrections` vienen del glosario |
+| `Segment` | intervención de la transcripción | `speaker` es la etiqueta, no el nombre. `original_text` y `corrections` vienen del glosario. `voice`: «» , «reasignada» o «dudosa» (columna añadida con `db.NEW_COLUMNS`) |
+| `SpeakerOverride` | arreglo manual: de `start` a `end` habla `person_id` | ver `speaker_fix.py` |
 | `Keyframe` | fotograma analizado | la ruta apunta a `<carpeta>/fotogramas/` |
 | `KnowledgeItem` | conocimiento aprendido o propuesto | ver «Conocimiento aprendido» |
 | `KnowledgeVersion` | foto de un perfil o persona tras cada cambio | `snapshot` = `{manual, items, person_ids?}` |
@@ -22,6 +23,8 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `StageRun` | lo que tardó una fase ejecutada | `seconds` y `units`; ver `estimates.py` |
 | `VideoCorrection` | corrección escrita por el usuario sobre un vídeo | `text`, `updated_at`; la IA nunca la modifica |
 
+- **Columnas nuevas en tablas existentes:** se declaran en `db.NEW_COLUMNS`. `init_db` las añade con
+  `ALTER TABLE` si faltan (idempotente).
 - **No hay migraciones.** Añadir **tablas** nuevas es seguro. `init_db()` solo ejecuta `create_all`, que crea tablas nuevas pero **no
   añade columnas a tablas que ya existen**. Si añades un campo a una tabla existente, añade también en
   `init_db()` un `ALTER TABLE … ADD COLUMN` idempotente: comprueba antes con `PRAGMA table_info`.
@@ -85,7 +88,7 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 |---|---|
 | Sistema | `GET status` (versión, comprobación de componentes y `pending_proposals`), `GET/PUT settings`, `GET probe?path=` |
 | Trabajos | `POST jobs {path, profile_id, options}`, `GET jobs`, `POST jobs/{id}/cancel`, `POST jobs/{id}/retry`, `GET events` (SSE, evento `jobs` cada segundo si hay cambios) |
-| Vídeos | `GET videos?profile_id&person_id`, `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `GET videos/{id}/regenerate` (niveles, disponibilidad y estimación), `POST videos/{id}/regenerate {level}` (sin cuerpo = `analysis`), `GET/POST videos/{id}/corrections`, `PUT/DELETE corrections/{id}`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
+| Vídeos | `GET videos?profile_id&person_id`, `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `GET videos/{id}/regenerate` (niveles, disponibilidad y estimación), `POST videos/{id}/regenerate {level}` (sin cuerpo = `analysis`), `GET/POST videos/{id}/corrections`, `PUT/DELETE corrections/{id}`, `GET/POST videos/{id}/speaker-overrides {ranges, person_id | new_person_name}`, `DELETE speaker-overrides/{id}`, `GET videos/{id}/words?start&end`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
 | Hablantes | `PUT speakers/{id} {person_id \| new_person_name, confirm}` |
 | Perfiles | CRUD de `profiles` (`person_ids[]` en el cuerpo; la respuesta incluye `learned_count` y `pending_count`), `GET profiles/{id}/knowledge`, `GET profiles/{id}/versions`, `POST profiles/{id}/versions/{vid}/restore`, `POST profiles/from-video {video_id, name}`, `POST profiles/{id}/learn-all` |
 | Personas | CRUD de `people` (`GET people/{id}` devuelve la ficha completa), `DELETE people/{id}/voices`, `GET people/{id}/knowledge`, `GET/POST people/{id}/versions[/{vid}/restore]`, `GET people/duplicates`, `POST people/duplicates/dismiss {a, b}`, `POST people/{id}/merge {into_id}` |

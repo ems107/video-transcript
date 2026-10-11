@@ -6,7 +6,7 @@ const OPTIONAL: { level: RegenerateLevel; title: string; text: string }[] = [
   {
     level: 'speakers',
     title: 'Volver a identificar a los hablantes',
-    text: 'Recalcula las propuestas de nombre con las voces y las personas que conoces ahora. Los hablantes que ya confirmaste no cambian.',
+    text: 'Vuelve a comprobar por la voz quién dice cada tramo y recalcula las propuestas de nombre con las voces y las personas que conoces ahora. Los hablantes que ya confirmaste y tus cambios manuales se mantienen.',
   },
   {
     level: 'screen',
@@ -27,12 +27,14 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
   const [info, setInfo] = useState<RegenerateInfo | null>(null)
   const [level, setLevel] = useState<RegenerateLevel>('analysis')
   const [busy, setBusy] = useState(false)
+  const [spk, setSpk] = useState<{ min: string; max: string }>({ min: '', max: '' })
   const [error, setError] = useState('')
 
   useEffect(() => {
     ref.current?.showModal()
     api.get<RegenerateInfo>(`/api/videos/${videoId}/regenerate`).then((r) => {
       setInfo(r)
+      setSpk({ min: r.min_speakers ? String(r.min_speakers) : '', max: r.max_speakers ? String(r.max_speakers) : '' })
       setLevel(r.levels.find((l) => l.available)?.level ?? 'analysis')  // sin datos intermedios: solo el completo
     }).catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [videoId])
@@ -46,7 +48,8 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
   const run = async () => {
     setBusy(true)
     try {
-      await api.post(`/api/videos/${videoId}/regenerate`, { level })
+      const extra = level === 'full' ? { min_speakers: Number(spk.min) || null, max_speakers: Number(spk.max) || null } : {}
+      await api.post(`/api/videos/${videoId}/regenerate`, { level, ...extra })
       onQueued()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -85,6 +88,16 @@ export function RegenerateDialog({ videoId, onClose, onQueued }: { videoId: numb
               </label>
             )
           })}
+          {level === 'full' && (
+            <div className="small">
+              <b>Número de hablantes</b> (opcional, ayuda a separar las voces)
+              {info.on_screen ? <span className="muted"> · en pantalla se ven {info.on_screen} participantes</span> : null}
+              <div className="row" style={{ flexWrap: 'nowrap', marginTop: '0.35rem' }}>
+                <input type="number" min={1} placeholder="Mínimo" value={spk.min} onChange={(e) => setSpk({ ...spk, min: e.target.value })} />
+                <input type="number" min={1} placeholder="Máximo" value={spk.max} onChange={(e) => setSpk({ ...spk, max: e.target.value })} />
+              </div>
+            </div>
+          )}
           {level === 'full' && info.confirmed_speakers > 0 && (
             <p className="small danger-text">
               Se quitará la confirmación de {plural(info.confirmed_speakers, 'hablante', 'hablantes')} de este vídeo. Sus personas y sus voces se conservan.

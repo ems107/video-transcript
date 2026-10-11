@@ -140,3 +140,52 @@ def test_names_rewrite_descriptions():
     vision += [_frame(["Iosu Urcelay"])] * 3
     out = names.apply(vision, names.unify(vision, [], []))
     assert out[0]["descripcion"] == "Habla Iosu Urcelay; Iosu señala"
+
+
+def test_speaker_at_borders_and_gaps():
+    from app.pipeline.transcript import speaker_at
+
+    turns = [{"start": 0.2, "end": 5.8, "speaker": "A"}, {"start": 24.0, "end": 32.0, "speaker": "B"},
+             {"start": 32.0, "end": 40.4, "speaker": "A"}]
+    assert speaker_at(turns, 0.0) == "A"  # justo antes de empezar: cuenta como su borde
+    assert speaker_at(turns, 32.0) == "A"  # en el borde: el que empieza
+    assert speaker_at([{"start": 24.0, "end": 32.03, "speaker": "B"}, {"start": 32.0, "end": 40.0, "speaker": "A"}],
+                      32.0) == "A"  # solapes mínimos: sigue siendo el borde
+    assert speaker_at([{"start": 24.0, "end": 31.99, "speaker": "B"}, {"start": 32.03, "end": 40.0, "speaker": "A"}],
+                      32.0) == "A"  # o un hueco mínimo
+    assert speaker_at(turns, 0.0, tolerance=0.0) is None
+    assert speaker_at(turns, 28.0) == "B"
+    assert speaker_at(turns, 15.0) is None  # lejos de todo
+
+
+def test_every_list_in_the_schemas_has_a_limit():
+    from app import prompts
+
+    def lists(schema, path=""):
+        if isinstance(schema, dict):
+            if schema.get("type") == "array":
+                yield path, schema
+            for k, v in (schema.get("properties") or {}).items():
+                yield from lists(v, f"{path}.{k}")
+            yield from lists(schema.get("items"), path + "[]")
+
+    for s in (prompts.VISION_SCHEMA, prompts.CORRECT_SCHEMA, prompts.CHUNK_SCHEMA, prompts.FINAL_SCHEMA,
+              prompts.LEARN_SCHEMA):
+        for path, arr in lists(s):
+            assert arr.get("maxItems"), path
+    assert prompts.CHUNK_SCHEMA["properties"]["apodos"]["maxItems"] == 10
+
+
+def test_old_default_temperature_is_replaced(tmp_path, monkeypatch):
+    import json
+
+    from app import config
+
+    f = tmp_path / "settings.json"
+    monkeypatch.setattr(config, "SETTINGS_FILE", f)
+    f.write_text(json.dumps({"llm_temperature": 0.2, "owner_name": "Edgar"}), encoding="utf-8")
+    s = config.load_settings()
+    assert s.llm_temperature == 0.7 and s.llm_presence_penalty == 1.5 and s.owner_name == "Edgar"
+    # Si el usuario ya tiene los ajustes nuevos, su temperatura se respeta aunque sea 0,2
+    f.write_text(json.dumps({"llm_temperature": 0.2, "llm_presence_penalty": 1.0}), encoding="utf-8")
+    assert config.load_settings().llm_temperature == 0.2

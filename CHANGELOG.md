@@ -8,6 +8,52 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Hablantes bien asignados aunque la separación de voces se equivoque.
+
+### Añadido
+
+- **Comprobación de cada tramo por la voz.** Después de separar las voces, la app compara cada tramo de
+  1,5 s con la voz de cada hablante:
+  - si es claramente de otro, lo reasigna, aunque sea en mitad de una línea (por ejemplo, un saludo
+    de otra persona);
+  - si no está claro, lo marca como «dudoso» para que lo revises;
+  - avisa si un hablante parece juntar dos voces distintas.
+
+  En un vídeo de 37 min tarda unos 40 s.
+- **Arreglar el hablante a mano**, de una línea, de varias o de parte de una línea. Se guarda por tiempo
+  («de tal momento a tal momento habla esta persona»), se ve al momento en la transcripción y se
+  mantiene en cualquier regeneración, también en la completa.
+- Al regenerar el análisis completo se puede indicar el número mínimo y máximo de hablantes.
+
+### Corregido
+
+- **Términos del perfil sin ruido del escritorio.** Se proponían programas que solo se veían en la barra
+  de tareas o en otras pestañas (Trello, Jira…). Ahora un término tiene que oírse en la conversación o
+  formar parte del contenido de la pantalla.
+- Las distintas formas de un mismo nombre («Bárymont», «Gestibarymont», «Grupo Bárymont») se proponen
+  como un solo término con sus otras formas.
+- Las secciones del resumen que se proponen para un perfil sirven para cualquier vídeo de ese tipo, no
+  solo para el vídeo del que salen.
+- Cuando un hablante recibe un nombre por el contexto, el resumen ya no lo sigue llamando «Hablante N».
+- La IA podía entrar en un bucle repitiendo un elemento (por ejemplo, el mismo apodo decenas de veces)
+  hasta cortarse la respuesta, y el resumen o el aprendizaje fallaban. Ahora todas sus listas tienen un
+  máximo de elementos.
+
+### Cambiado
+
+- **La IA se usa con los ajustes que recomienda el fabricante del modelo** (Qwen): más variación y una
+  penalización que evita repetir. Con los anteriores podía entrar en bucles repitiendo lo mismo. En un
+  vídeo real, el aprendizaje pasó de 31 datos repetidos a ninguno. Se aplica también a quien ya tenía
+  guardada la configuración anterior.
+- Se proponen todos los datos que se encuentran de cada persona. Antes se quedaban en 8 por vídeo y se
+  perdían datos buenos. Los demás límites por vídeo también suben.
+- «Volver a identificar a los hablantes» también vuelve a comprobar las voces. Ahora necesita el archivo
+  de vídeo, para volver a extraer el audio.
+- Las propuestas de nombre por pantalla tienen en cuenta las reasignaciones por la voz. Un fotograma que
+  cae justo en un cambio de turno se asigna a quien empieza a hablar.
+- La huella de voz de cada hablante se calcula solo con sus intervenciones largas y claras, así que al
+  confirmarlo se guarda una voz más limpia.
+
 ## [1.2.0] - 2026-10-11
 
 Corregir y mejorar un vídeo ya analizado sin perder lo que ya has revisado.

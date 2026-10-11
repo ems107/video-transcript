@@ -94,6 +94,46 @@ def term_occurrences(term: str, utts: list[dict[str, Any]], vision: list[dict[st
     return sorted(out)[:limit]
 
 
+SCREEN_MIN_FRAMES = 3
+
+
+def term_relevant(term: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]]) -> bool:
+    """Un término vale para el perfil si se oye en la conversación o es parte del contenido de la pantalla.
+
+    La lista de términos visibles del análisis de imagen recoge todo lo legible (barra de tareas,
+    pestañas, otras ventanas); el «texto relevante» es el contenido principal. Medido con una grabación
+    real: el contenido de la reunión salía en el texto relevante de 5 a 15 fotogramas, y los programas del
+    escritorio (Trello, Jira…), en 0–2, aunque estuvieran en la lista de casi todos.
+    """
+    n = normalize(term)
+    if any(_contains(normalize(u["text"]), n) for u in utts):
+        return True
+    shown = sum(1 for v in vision if _contains(normalize(v.get("texto_relevante", "")), n))
+    return shown >= SCREEN_MIN_FRAMES
+
+
+def group_forms(terms: list[str], min_len: int = 6) -> list[list[str]]:
+    """Agrupa las formas de un mismo nombre: una contiene a la otra sin espacios ni signos
+    («Bárymont», «Gestibarymont», «Grupo Bárymont», «BÄRYMONT ADVANCE, S.L.»). Conserva el orden."""
+    compact = [normalize(t).replace(" ", "") for t in terms]
+    parent = list(range(len(terms)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            i = parent[i]
+        return i
+
+    for i in range(len(terms)):
+        for j in range(i + 1, len(terms)):
+            a, b = sorted((compact[i], compact[j]), key=len)
+            if len(a) >= min_len and a in b:
+                parent[root(j)] = root(i)
+    groups: dict[int, list[str]] = {}
+    for i, t in enumerate(terms):
+        groups.setdefault(root(i), []).append(t)
+    return list(groups.values())
+
+
 def term_candidates(utts: list[dict[str, Any]], screen_terms: list[str], exclude: set[str],
                     min_count: int = 2, limit: int = 80) -> list[str]:
     """Posibles términos del negocio: lo visto en pantalla y, en la transcripción, siglas,
@@ -321,6 +361,11 @@ def effective_glossary(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
         if term and normalize(term) not in seen:
             seen.add(normalize(term))
             out.append({"term": term, "variants": [], "definition": it["data"].get("definition", ""), "trusted": False})
+            # Otras formas del mismo nombre vistas en el vídeo: también orientan a Whisper
+            for form in it["data"].get("forms") or []:
+                if normalize(form) not in seen:
+                    seen.add(normalize(form))
+                    out.append({"term": form, "variants": [], "definition": "", "trusted": False})
     return out
 
 
@@ -347,7 +392,9 @@ def learned_block(profile: dict[str, Any] | None, max_chars: int = 6000) -> str:
             line = f"- {f'[{cat}] ' if cat else ''}{it['data'].get('text', '')}"
         elif it["kind"] == "termino" and normalize(it["data"].get("term", "")) not in manual_terms:
             d = it["data"].get("definition", "")
-            line = f"- Término «{it['data'].get('term', '')}»" + (f": {d}" if d else "")
+            forms = it["data"].get("forms") or []
+            line = (f"- Término «{it['data'].get('term', '')}»" + (f" (también {', '.join(forms)})" if forms else "")
+                    + (f": {d}" if d else ""))
         else:
             continue
         if size + len(line) > max_chars:

@@ -117,6 +117,8 @@ class Segment(SQLModel, table=True):
     # Texto antes de la corrección de glosario (vacío si no hubo cambios)
     original_text: str = ""
     corrections: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
+    # Comprobación por la voz: "" | "reasignada" (la voz era de otro hablante) | "dudosa" (no está claro)
+    voice: str = ""
 
 
 class Keyframe(SQLModel, table=True):
@@ -197,3 +199,15 @@ class VideoCorrection(SQLModel, table=True):
     text: str
     created_at: NaiveDatetime = Field(default_factory=now)
     updated_at: NaiveDatetime = Field(default_factory=now)
+
+
+class SpeakerOverride(SQLModel, table=True):
+    """Arreglo manual: «de `start` a `end` habla esta persona». Se guarda por tiempo y persona, no por
+    línea ni etiqueta, para que sobreviva a cualquier regeneración (ver `pipeline/voices.apply_overrides`)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    video_id: int = Field(foreign_key="video.id", index=True, ondelete="CASCADE")
+    start: float
+    end: float
+    person_id: int = Field(foreign_key="person.id", ondelete="CASCADE")
+    created_at: NaiveDatetime = Field(default_factory=now)

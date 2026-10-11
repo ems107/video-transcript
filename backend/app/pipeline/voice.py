@@ -64,19 +64,20 @@ def match_name(name: str, people: list[dict[str, Any]], threshold: float = 85.0)
 
 
 def assign_visual_names(
-    hints: dict[str, dict[str, int]], min_count: int = 2, min_purity: float = 0.5
+    hints: dict[str, dict[str, int]], min_count: int = 2, dominance: float = 1.5
 ) -> dict[str, str]:
     """Nombre en pantalla de cada hablante: cada nombre a un solo hablante, por número de coincidencias.
 
     - el nombre debe ser el más leído del hablante, sin empate con otro;
-    - `min_purity`: y ese hablante debe concentrar esa parte de las lecturas del nombre. Un nombre
-      repartido entre varias voces no es fiable (p. ej. quien presenta queda resaltado mientras
-      hablan otros).
+    - `dominance`: la voz con más lecturas de ese nombre debe tener al menos esas veces las de la
+      siguiente. Un nombre repartido por igual entre varias voces no es fiable (p. ej. quien presenta
+      queda resaltado mientras hablan otros: 11, 10, 9 y 6 lecturas en cuatro voces).
     """
     clean = {lab: {n: c for n, c in h.items() if n and not n.startswith("_")} for lab, h in hints.items()}
-    per_name: Counter = Counter()
+    by_name: dict[str, list[int]] = {}
     for h in clean.values():
-        per_name.update(h)
+        for n, c in h.items():
+            by_name.setdefault(n, []).append(c)
     pairs = sorted(((c, lab, n) for lab, h in clean.items() for n, c in h.items()), reverse=True)
     out: dict[str, str] = {}
     used: set[str] = set()
@@ -84,7 +85,8 @@ def assign_visual_names(
         if lab in out or n in used or c < min_count:
             continue
         rivals = [x for m, x in clean[lab].items() if m != n]
-        if c > max(rivals, default=0) and c / per_name[n] >= min_purity:
+        others = sorted(by_name[n], reverse=True)[1:]
+        if c > max(rivals, default=0) and c >= dominance * max(others, default=0):
             out[lab] = n
             used.add(n)
     return out

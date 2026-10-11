@@ -73,6 +73,7 @@ def assign_speakers(words: list[Word], turns: list[Turn], max_distance: float = 
 
 
 SENTENCE_END = (".", "?", "!", "…")
+BORDER = 0.3  # segundos: un instante tan cerca del límite de un turno se considera en el borde
 
 
 def build_utterances(words: list[Word], max_gap: float = 1.5, max_duration: float = 30.0) -> list[dict[str, Any]]:
@@ -109,11 +110,22 @@ def speaking_time(turns: list[Turn]) -> dict[str, float]:
     return total
 
 
-def speaker_at(turns: list[Turn], t: float) -> str | None:
-    for turn in turns:
-        if turn["start"] <= t <= turn["end"]:
-            return turn["speaker"]
-    return None
+def speaker_at(turns: list[Turn], t: float, tolerance: float = BORDER) -> str | None:
+    """Hablante en el instante `t`.
+
+    Cuentan los turnos que lo contienen o que están a menos de `tolerance` segundos. Gana el que lo tiene
+    más dentro; si está a menos de BORDER de un límite es el borde, y en el borde gana el que empieza
+    (quien empieza a hablar es quien aparece resaltado).
+    """
+    cands = [x for x in turns if x["start"] - tolerance <= t <= x["end"] + tolerance]
+    if not cands:
+        return None
+
+    def depth(x: Turn) -> tuple[float, float]:
+        margin = min(t - x["start"], x["end"] - t)
+        return (margin if margin >= BORDER else 0.0, x["start"])
+
+    return max(cands, key=depth)["speaker"]
 
 
 def group_turns(utterances: list[dict[str, Any]]) -> list[dict[str, Any]]:

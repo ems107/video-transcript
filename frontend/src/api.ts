@@ -64,6 +64,7 @@ export type SpeakerInfo = {
   visual_hints: Record<string, number>
   reason: string // por qué se propone (identidad deducida del contexto)
   aliases: string[] // apodos con que se le llama en el vídeo
+  split: SpeakerSplit | null // parece juntar dos voces
   has_embedding: boolean
 }
 
@@ -76,6 +77,14 @@ export type SegmentInfo = {
   text: string
   original_text: string
   corrections: { original: string; suggestion: string; kind: string; score: number }[]
+  voice: '' | 'reasignada' | 'dudosa' // comprobación por la voz
+}
+
+export type Word = { word: string; start: number; end: number }
+export type SpeakerOverride = { id: number; start: number; end: number; person_id: number; person_name: string }
+export type SpeakerSplit = {
+  silhouette: number
+  groups: { seconds: number; ranges: [number, number][]; samples: { start: number; end: number; text: string }[] }[]
 }
 
 export type KeyframeInfo = {
@@ -98,6 +107,7 @@ export type VideoDetail = VideoCard & {
   job: Job | null
   video_corrections: { id: number; text: string; updated_at: string; applied: boolean }[] // applied: el análisis actual ya la tiene en cuenta
   corrections_pending: boolean // hay correcciones que el análisis actual aún no tiene en cuenta
+  overrides_pending: boolean // hay cambios manuales de hablantes que el resumen aún no tiene en cuenta
 }
 
 export type GlossaryEntry = { term: string; variants: string[]; definition: string }
@@ -149,6 +159,7 @@ export type Knowledge = {
     text?: string
     term?: string
     definition?: string
+    forms?: string[] // otras formas del mismo nombre (términos)
     title?: string
     name?: string
     datos?: { category: string; text: string; t: number | null }[]
@@ -225,6 +236,9 @@ export type RegenerateInfo = {
   levels: { level: RegenerateLevel; available: boolean; reason: string; seconds: number }[]
   video_path: string | null
   confirmed_speakers: number
+  on_screen: number | null // participantes distintos vistos en pantalla
+  min_speakers: number | null
+  max_speakers: number | null
 }
 
 export type RemovalInfo = {

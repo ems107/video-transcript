@@ -34,6 +34,8 @@ class JobContext:
     speaker_status: dict[str, str] = field(default_factory=dict)
     # Correcciones del usuario sobre este vídeo: [{id, text, updated_at}]
     corrections: list[dict[str, Any]] = field(default_factory=list)
+    # Arreglos manuales de hablantes aplicados en este trabajo: [{id, start, end, person_id}]
+    overrides: list[dict[str, Any]] = field(default_factory=list)
 
     def path(self, name: str) -> Path:
         return self.work_dir / name
