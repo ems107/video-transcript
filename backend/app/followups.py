@@ -88,7 +88,9 @@ def state_at(items: list[dict[str, Any]], before: datetime | None) -> list[dict[
                or ((d := event_date(e)) is not None and d < before)]
         if not evs or (not it.get("manual") and evs[0]["evento"] != "creada"):
             continue
-        out.append({**it, "events": evs, "status": derive_status(it["kind"], evs)})
+        # El vídeo que lo creó se conserva aunque sea este mismo (sus hitos quedan fuera del estado anterior)
+        out.append({**it, "events": evs, "status": derive_status(it["kind"], evs),
+                    "created_video": it["events"][0].get("video_id") if it["events"] else None})
     return out
 
 
@@ -260,7 +262,8 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
         if evento != "avanza" and evento not in EVENT_STATUS[it["kind"]]:
             discarded.append(f"{x['id']}: «{evento}» no vale para una {it['kind']}")
             continue
-        created_here = bool(it["events"]) and it["events"][0].get("video_id") == video_id
+        created = it.get("created_video", it["events"][0].get("video_id") if it["events"] else None)
+        created_here = created is not None and created == video_id
         if evento == "avanza" and (x["id"] in changes or created_here):
             continue  # ya cambia de estado en este vídeo, o es el vídeo en que aparece
         nota, possible = "", ""

@@ -143,6 +143,13 @@ def test_events_in_order_and_no_advance_in_the_creating_video():
     manual_items = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada")], manual=True)]
     plan = F.apply_update(manual_items, {}, 1, D1, 600, AT, [], [sig("T1", "hecha", "00:02:00", "ya está hecho")])
     assert plan["events"] == []
+    # Como al rehacer: el estado anterior a la fecha del vídeo ya no tiene su hito de creación
+    edited = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada"), ev(None, None, "hecha", source="manual")],
+                   manual=True)]
+    before = F.state_at(edited, D1)
+    assert [e["source"] for e in before[0]["events"]] == ["manual"] and before[0]["created_video"] == 1
+    plan = F.apply_update(before, {}, 1, D1, 600, AT, [], [sig("T1", "avanza", "00:02:00", "se habla de ello")])
+    assert plan["events"] == []
 
 
 def test_revert_keeps_what_the_user_did():
