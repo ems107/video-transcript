@@ -10,10 +10,11 @@ def test_defaults_without_history(session):
     assert e["total"] == sum(e["stages"].values())
 
 
-def test_median_of_recent_runs(session):
-    for seconds in (100, 200, 1000):  # 10 fotogramas cada vez: 10, 20 y 100 s/fotograma
-        estimates.record(session, None, None, "vision", seconds, duration=60, frames=10)
-    assert estimates.rates(session, ["vision"])["vision"] == 20
+def test_rate_weighs_runs_by_size(session):
+    # Vídeo corto: cargar el modelo pesa mucho (60 s para 1 min). Vídeo largo: 300 s para 50 min
+    estimates.record(session, None, None, "analyze", 60, duration=60, frames=0)
+    estimates.record(session, None, None, "analyze", 300, duration=3000, frames=0)
+    assert estimates.rates(session, ["analyze"])["analyze"] == 360 / 51  # ≈ 7 s/min, no la media de 60 y 6
 
 
 def test_frames_guessed_from_duration(session):

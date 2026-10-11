@@ -59,8 +59,10 @@ Formas clave:
 - **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía
   `fotogramas/` antes de copiar los nuevos.
 - **Tiempos:** el worker guarda un `StageRun` por cada fase ejecutada: segundos y unidades (fotogramas
-  en `vision`, minutos de audio en el resto). `estimates.estimate` usa la mediana de las últimas 10
-  ejecuciones y, sin historial, `DEFAULT_RATES`, medidos con grabaciones reales. Al reencolar, el
+  en `vision`, minutos de audio en el resto). `estimates.estimate` divide el total de segundos entre el
+  total de unidades de las últimas 10 ejecuciones (un vídeo corto, donde pesa cargar el modelo, no
+  distorsiona la estimación de uno largo) y, sin historial, usa `DEFAULT_RATES`, medidos con
+  grabaciones reales. Al reencolar, el
   trabajo reinicia `started_at`. Si cambias mucho lo que tarda una fase, ajusta `DEFAULT_RATES`.
 - **Correcciones del usuario:** el worker carga las del vídeo en `ctx.corrections` al empezar el
   trabajo. `analyze` y `learn` las incluyen en su contexto (ver `AI_PROMPTS.md`).

@@ -1,13 +1,13 @@
 """Estimación del tiempo de cada fase a partir de lo que han tardado en este equipo.
 
 Cada fase ejecutada guarda un `StageRun` con sus segundos y sus «unidades»: los fotogramas en `vision`
-y los minutos de audio en el resto. La estimación es la mediana de segundos por unidad de las últimas
-ejecuciones; sin historial se usan valores medidos en una RTX 5070 Ti con grabaciones reales.
+y los minutos de audio en el resto. La estimación divide el total de segundos entre el total de unidades
+de las últimas ejecuciones: así un vídeo corto, donde pesa más cargar el modelo, no distorsiona la de
+uno largo. Sin historial se usan valores medidos en una RTX 5070 Ti con grabaciones reales.
 """
 
 from __future__ import annotations
 
-from statistics import median
 from typing import Any
 
 from sqlmodel import Session, select
@@ -33,8 +33,8 @@ def rates(session: Session, stages: list[str]) -> dict[str, float]:
     for stage in stages:
         rows = session.exec(select(StageRun).where(StageRun.stage == stage)
                             .order_by(StageRun.id.desc()).limit(HISTORY)).all()
-        values = [r.seconds / r.units for r in rows if r.units > 0]
-        out[stage] = median(values) if values else DEFAULT_RATES.get(stage, 1.0)
+        units_sum = sum(r.units for r in rows)
+        out[stage] = sum(r.seconds for r in rows) / units_sum if units_sum > 0 else DEFAULT_RATES.get(stage, 1.0)
     return out
 
 
