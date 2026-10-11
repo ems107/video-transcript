@@ -31,6 +31,9 @@ def _meta_lines(meta: dict[str, Any]) -> list[str]:
     lines = [f"- **Fecha:** {meta['date']}", f"- **Duración:** {meta['duration']}"]
     if meta.get("profile"):
         lines.append(f"- **Perfil:** {meta['profile']}")
+    if meta.get("followups"):
+        links = [f"[{name}]({link})" if link else name for name, link in meta["followups"]]
+        lines.append(f"- **Seguimientos:** {', '.join(links)}")
     if meta.get("participants"):
         lines.append(f"- **Participantes:** {', '.join(meta['participants'])}")
     if meta.get("source"):

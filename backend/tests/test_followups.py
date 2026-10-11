@@ -86,6 +86,17 @@ def test_apply_update_validates_the_answer():
     assert [n["text"] for n in plan["new"]] == ["¿Hace falta el aval?"]
 
 
+def test_events_in_order_and_no_advance_in_the_creating_video():
+    manual = ev(None, None, "hecha", source="manual")
+    events = [ev(1, D1, "creada"), manual, ev(2, D2, "avanza", t="00:05:00"), ev(2, D2, "avanza", t="00:01:00")]
+    assert [(e["source"], e["t"]) for e in F.sort_events(events)] == [
+        ("ia", "00:01:00"), ("ia", "00:01:00"), ("ia", "00:05:00"), ("manual", "00:01:00")]
+    items = [item(1, "tarea", "Enviar el informe", [ev(1, D1, "creada")])]
+    plan = F.apply_update(items, {"eventos": [{"id": "T1", "evento": "avanza", "t": "00:02:00", "nota": "Se repite"}]},
+                          1, D1, 600, AT)
+    assert plan["events"] == [] and "mismo vídeo" in plan["discarded"][0]
+
+
 def test_revert_keeps_what_the_user_did():
     items = [item(1, "tarea", "A", [ev(1, D1, "creada"), ev(2, D2, "hecha")]),
              item(2, "tarea", "B", [ev(2, D2, "creada")]),
@@ -181,7 +192,8 @@ def test_apply_in_order_and_rebuild_respects_manual(session, tmp_analyzed):
     FS.rebuild_from(session, f, D2, ask)
     its = {it["text"]: it for it in FS.items(session, f.id)}
     assert its["Enviar el informe"]["status"] == "abierta"  # el «hecha» del vídeo queda como avance
-    assert its["Enviar el informe"]["events"][-1]["evento"] == "avanza"
+    # El hito del vídeo va en su fecha; el cambio manual, más reciente, queda el último y manda
+    assert [e["evento"] for e in its["Enviar el informe"]["events"]] == ["creada", "avanza", "reabierta"]
     assert f.summary == "Mi resumen" and f.summary_ai == "Informe enviado y cuenta decidida."
     assert len([it for it in its.values() if it["text"] == "Abrir la cuenta común"]) == 1
 
@@ -286,3 +298,12 @@ def test_regenerate_passes_follow_rebuild_once(client, session, tmp_path, monkey
     client.post(f"/api/videos/{v.id}/learn")
     session.refresh(job)
     assert "follow_rebuild" not in job.options  # no se arrastra al siguiente encolado
+
+
+def test_video_documents_link_their_followups():
+    from app.pipeline.export import summary_md
+
+    meta = {"title": "T", "date": "2026-10-05", "duration": "0:25:00",
+            "followups": [("Tutoría", "../Seguimiento%20-%20Tutoría/seguimiento.md"), ("Sin carpeta", "")]}
+    md = summary_md(meta, {})
+    assert "- **Seguimientos:** [Tutoría](../Seguimiento%20-%20Tutoría/seguimiento.md), Sin carpeta" in md

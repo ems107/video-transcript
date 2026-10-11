@@ -178,9 +178,8 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     plan = F.apply_update(visible, r, video.id, when, video.duration, now())
     for iid, ev in plan["events"]:
         it = session.get(FollowupItem, iid)
-        it.events = [*(it.events or []), ev]
-        if not it.manual:
-            it.status = F.derive_status(it.kind, it.events)
+        it.events = F.sort_events([*(it.events or []), ev])
+        it.status = F.derive_status(it.kind, it.events)
         session.add(it)
     for n in plan["new"]:
         session.add(FollowupItem(followup_id=f.id, **n))

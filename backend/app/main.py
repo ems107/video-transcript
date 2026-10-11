@@ -1195,7 +1195,7 @@ def update_followup_item(followup_id: int, item_id: int, body: FollowupItemIn,
         ev = FL.status_for_event(it.kind, body.status)
         if not ev or body.status not in FL.STATUSES[it.kind]:
             raise HTTPException(400, "Estado no válido para ese tipo")
-        it.events = [*(it.events or []), _manual_event(ev)]
+        it.events = FL.sort_events([*(it.events or []), _manual_event(ev)])
         it.status = FL.derive_status(it.kind, it.events)
     it.manual = True
     session.add(it)

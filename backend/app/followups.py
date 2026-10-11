@@ -65,6 +65,16 @@ def event_date(e: dict[str, Any]) -> datetime | None:
     return datetime.fromisoformat(e["date"]) if e.get("date") else None
 
 
+def sort_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Recorrido en orden: los hitos de un vídeo por su fecha de grabación y momento; los cambios manuales,
+    por cuándo los hiciste. Así el último es siempre el más reciente y manda en el estado."""
+    def key(e: dict[str, Any]) -> tuple[datetime, str]:
+        d = event_date(e) or datetime.fromisoformat(e["at"])
+        return d, e.get("t") or ""
+    creation = [e for e in events[:1] if e["evento"] == "creada"]
+    return creation + sorted(events[len(creation):], key=key)
+
+
 def state_at(items: list[dict[str, Any]], before: datetime | None) -> list[dict[str, Any]]:
     """Los puntos tal como estaban antes de esa fecha: solo cuenta lo que dijeron los vídeos anteriores.
 
@@ -176,6 +186,9 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
             continue
         if evento != "avanza" and evento not in EVENT_STATUS[it["kind"]]:
             discarded.append(f"{e.get('id')}: «{evento}» no vale para una {it['kind']}")
+            continue
+        if evento == "avanza" and it["events"] and it["events"][0].get("video_id") == video_id:
+            discarded.append(f"{e.get('id')}: avance en el mismo vídeo en que aparece")
             continue
         nota = (e.get("nota") or "").strip()
         if it.get("manual") and evento != "avanza":
