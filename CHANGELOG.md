@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.2.0] - 2026-10-11
+
 Corregir y mejorar un vídeo ya analizado sin perder lo que ya has revisado.
 
 ### Añadido
@@ -173,6 +175,7 @@ Primera versión completa: transcripción, hablantes, visión, análisis y bibli
 - `run.ps1` arranca la app con un solo comando.
 - La versión de la app se muestra en la web y en `/api/status`.
 
-[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.1.0...HEAD
+[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ems107/video-transcript/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ems107/video-transcript/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ems107/video-transcript/releases/tag/v1.0.0
