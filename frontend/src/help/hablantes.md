@@ -85,7 +85,8 @@ transcripción**. Puedes cambiarlo para:
 ![Cambiar quién habla en parte de una línea](captura:cambiar-hablante)
 
 Se guarda como «de tal momento a tal momento habla esta persona»: se ve al momento en la transcripción y
-**se mantiene aunque regeneres el análisis**, también el completo. El panel de hablantes lista estos
+**se mantiene aunque regeneres el análisis**, también el completo. Si tras el cambio quedan líneas seguidas
+de la misma persona (con menos de 1,5 s entre ellas), se unen en una sola. El panel de hablantes lista estos
 cambios manuales y permite **Deshacer** cada uno. El resumen los tendrá en cuenta al
 [regenerar](ayuda:regenerar); mientras tanto, la app avisa de que hay cambios sin aplicar.
 

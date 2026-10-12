@@ -61,6 +61,25 @@ def test_fix_part_of_a_line_and_undo(client, session, tmp_path, monkeypatch):
     assert not client.get(f"/api/videos/{vid}").json()["overrides_pending"]
 
 
+def test_fix_joins_the_lines_of_the_same_person(client, session, tmp_path, monkeypatch):
+    """Una frase que la voz repartió entre dos personas queda en una sola línea al arreglarla."""
+    v, edgar, _ = _setup(session, tmp_path, monkeypatch)
+    vid = v.id
+    for s in session.exec(select(Segment).where(Segment.video_id == vid)):
+        session.delete(s)
+    pieces = [(40.0, 40.8, "S_I", "esté bien y"), (40.9, 41.3, "S_E", "que nos"), (41.4, 41.9, "S_I", "ponga de"),
+              (42.0, 42.4, "S_E", "verdad."), (50.0, 52.0, "S_E", "Otra cosa.")]
+    for i, (a, b, sp, text) in enumerate(pieces):
+        session.add(Segment(video_id=vid, idx=i, start=a, end=b, speaker=sp, text=text))
+    session.commit()
+    words = [{"word": w, "start": a + k * 0.1, "end": a + k * 0.1 + 0.1, "speaker": sp}
+             for a, _, sp, text in pieces for k, w in enumerate(text.split())]
+    (tmp_path / "job_1" / "words.json").write_text(json.dumps(words), encoding="utf-8")
+    client.post(f"/api/videos/{vid}/speaker-overrides", json={"ranges": [[40.0, 42.4]], "person_id": edgar.id})
+    session.expire_all()
+    assert _lines(session, vid) == [("S_E", "esté bien y que nos ponga de verdad."), ("S_E", "Otra cosa.")]
+
+
 def test_new_person_gets_a_manual_speaker(client, session, tmp_path, monkeypatch):
     v, _, _ = _setup(session, tmp_path, monkeypatch)
     vid = v.id

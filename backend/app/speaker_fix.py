@@ -132,7 +132,35 @@ def refresh_segments(session: Session, video: Video, removed: list[tuple[float, 
         for a, b, text, speaker in pieces:
             new.append(Segment(video_id=video.id, idx=0, start=a, end=b, speaker=speaker, text=text,
                                voice="" if manual else seg.voice))
-    for i, seg in enumerate(sorted(new, key=lambda s: s.start)):
+    new = _merge_touched(session, sorted(new, key=lambda s: s.start), ranges)
+    for i, seg in enumerate(new):
         seg.idx = i
         session.add(seg)
     session.commit()
+
+
+MERGE_GAP = 1.5  # pausa máxima entre dos líneas de la misma persona para unirlas (la de `build_utterances`)
+
+
+def _merge_touched(session: Session, segs: list[Segment], ranges: list[tuple[float, float]]) -> list[Segment]:
+    """Une las líneas seguidas de una misma persona que ha tocado un arreglo.
+
+    Un arreglo cambia el hablante de cada línea por separado: sin esto, una frase que la voz había repartido
+    entre dos personas quedaba en varias líneas seguidas de la misma («esté bien y» / «que nos» / …)."""
+    touched = lambda s: any(a < s.end and b > s.start for a, b in ranges)
+    out: list[Segment] = []
+    for seg in segs:
+        prev = out[-1] if out else None
+        if (prev and prev.speaker == seg.speaker and seg.start - prev.end <= MERGE_GAP
+                and (touched(prev) or touched(seg))):
+            prev.end = max(prev.end, seg.end)
+            if prev.original_text or seg.original_text:
+                prev.original_text = f"{prev.original_text or prev.text} {seg.original_text or seg.text}".strip()
+            prev.text = f"{prev.text} {seg.text}".strip()
+            prev.corrections = [*(prev.corrections or []), *(seg.corrections or [])]
+            prev.voice = prev.voice if prev.voice == seg.voice else ""
+            if seg.id is not None:
+                session.delete(seg)
+            continue
+        out.append(seg)
+    return out

@@ -23,6 +23,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - Una propuesta de conocimiento (o una nueva confirmación de algo ya sabido) solo vale si sus cifras se
   dicen de verdad cerca de su momento: «Tiene 27 años» ya no se confirma con un momento en que solo se
   habla de «años».
+- Al cambiar quién habla, las líneas seguidas de la misma persona se unen en una sola, en vez de quedar
+  partidas en trozos («esté bien y» / «que nos» / …).
 
 ## [1.5.0] - 2026-10-12
 
