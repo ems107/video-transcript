@@ -229,6 +229,7 @@ def video_card(session: Session, v: Video) -> dict[str, Any]:
         "people": [names[s.label] for s in sps],
         "pending_speakers": sum(1 for s in sps if not s.confirmed),
         "review": v.review,
+        "to_decide": review.pending(session, v) if v.review == review.PROPOSALS else None,
         "has_thumbnail": bool(v.folder and (Path(v.folder) / "miniatura.jpg").exists()),
     }
 

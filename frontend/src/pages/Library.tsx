@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type Person, type Profile, type VideoCard } from '../api'
-import { fmtDate, fmtDuration, STATUS_LABEL } from '../util'
+import { fmtDate, fmtDuration, plural, STATUS_LABEL } from '../util'
 import { HelpLink } from '../HelpMarkdown'
 
 export default function Library() {
@@ -68,7 +68,11 @@ export default function Library() {
               <div className="row small" style={{ gap: '0.35rem' }}>
                 {v.status !== 'done' && <span className={`pill ${v.status === 'error' ? 'err' : 'run'}`}>{STATUS_LABEL[v.status] ?? v.status}</span>}
                 {v.status === 'done' && v.review === 'pendiente' && <span className="pill warn">Por revisar</span>}
-                {v.status === 'done' && v.review === 'propuestas' && <span className="pill warn">Queda por decidir</span>}
+                {v.status === 'done' && v.review === 'propuestas' && v.to_decide && <>
+                  {v.to_decide.propuestas > 0 && <span className="pill warn">{plural(v.to_decide.propuestas, 'propuesta', 'propuestas')}</span>}
+                  {v.to_decide.seguimiento > 0 && <span className="pill warn">{plural(v.to_decide.seguimiento, 'duda del seguimiento', 'dudas del seguimiento')}</span>}
+                  {v.to_decide.voces > 0 && <span className="pill warn">{plural(v.to_decide.voces, 'voz dudosa', 'voces dudosas')}</span>}
+                </>}
                 {v.pending_speakers > 0 && v.status === 'done' && <span className="pill warn">{v.pending_speakers} hablante(s) por confirmar</span>}
                 {v.people.slice(0, 5).map((p) => <span key={p} className="pill">{p}</span>)}
               </div>

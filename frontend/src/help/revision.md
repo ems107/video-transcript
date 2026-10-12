@@ -47,7 +47,9 @@ Al terminar, la pantalla muestra lo que la IA no ha podido decidir sola:
 
 ![La pantalla Revisar este vídeo, con lo que queda por decidir](captura:revision)
 
-Cuando no queda nada por decidir, el vídeo queda **revisado**.
+Cuando no queda nada por decidir, el vídeo queda **revisado**. Mientras tanto, la tarjeta del vídeo en la
+biblioteca dice qué falta, con una etiqueta por cada cosa: **3 propuestas**, **1 duda del seguimiento** o
+**1 voz dudosa**. Un vídeo sin aplicar dice **Por revisar**.
 
 ## Los vídeos siguientes esperan
 

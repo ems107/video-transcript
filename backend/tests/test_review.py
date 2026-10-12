@@ -134,6 +134,16 @@ def test_done_when_nothing_left_to_decide(session):
     assert review.check_done(session, v) and v.review == review.DONE
 
 
+def test_library_card_says_what_is_left(client, session):
+    a = _video(session, "Uno", state=review.PROPOSALS)
+    _video(session, "Dos", state=review.PENDING)
+    session.add(KnowledgeItem(kind="termino", data={"term": "Naturgy"}, video_id=a.id))
+    session.commit()
+    cards = {c["title"]: c for c in client.get("/api/videos").json()}
+    assert cards["Uno"]["to_decide"] == {"propuestas": 1, "seguimiento": 0, "voces": 0}
+    assert cards["Dos"]["to_decide"] is None
+
+
 def test_api_apply_and_changes_reopen_the_review(client, session, monkeypatch):
     v = _video(session, "Uno", state=review.DONE)
     v.voices_applied = {}
