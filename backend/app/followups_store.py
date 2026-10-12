@@ -20,7 +20,7 @@ from . import estimates
 from . import followups as F
 from .config import load_settings
 from .llm import LLMTruncated
-from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Segment, Video, now
+from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Person, Segment, Video, now
 from .pipeline.export import safe_name, unique_dir
 from .pipeline.transcript import fmt_ts
 from .prompts import (
@@ -235,7 +235,9 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     hidden = [it for it in all_items if it.get("hidden")]
     about = f"«{analysis.get('titulo') or video.title}». {analysis.get('resumen_breve') or ''}".strip()
     signals = mentions(session, video, visible, utts, ask, when, about)
-    points = F.analysis_points(analysis)
+    # Responsables con el nombre de las personas conocidas: así se unen bien al juntar tareas
+    people = [{"id": p.id, "name": p.name, "aliases": p.aliases or []} for p in session.exec(select(Person))]
+    points = [{**p, "owner": F.normalize_owner(p["owner"], people)} for p in F.analysis_points(analysis)]
     # El resumen de la serie se escribe con lo que aportó cada vídeo anterior, no solo con el último resumen
     ordered = links(session, f.id)
     before = ordered[:next((i for i, (_, v) in enumerate(ordered) if v.id == video.id), len(ordered))]

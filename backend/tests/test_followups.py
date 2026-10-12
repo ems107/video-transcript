@@ -151,6 +151,22 @@ def test_points_from_the_analysis():
         ("N3", "duda", "Texto de un análisis antiguo", "", ""), ("N4", "duda", "¿Quién paga?", "", "00:03:00")]
 
 
+def test_owner_with_the_names_of_known_people():
+    people = [{"id": 1, "name": "Iosu Urcelay", "aliases": []},
+              {"id": 2, "name": "José Luis Pérez", "aliases": ["Selu"]},
+              {"id": 3, "name": "Ana García", "aliases": []}]
+    assert F.normalize_owner("Grupo Barymont (Iosu/Selu)", people) == "Iosu Urcelay, José Luis Pérez"
+    assert F.normalize_owner("Iosu y Selu", people) == "Iosu Urcelay, José Luis Pérez"
+    assert F.normalize_owner("ana garcia", people) == "Ana García"
+    assert F.normalize_owner("Ana y el proveedor", people) == "Ana García, el proveedor"
+    assert F.normalize_owner("Selu, José Luis", people) == "José Luis Pérez"
+    # Si no hay ninguna persona conocida, se queda tal cual
+    assert F.normalize_owner("Gestoría (externa)", people) == "Gestoría (externa)"
+    assert F.normalize_owner("El equipo", people) == "El equipo"
+    assert F.normalize_owner("", people) == ""
+    assert F.normalize_owner("Iosu", []) == "Iosu"
+
+
 def test_events_in_order_and_no_advance_in_the_creating_video():
     manual = ev(None, None, "hecha", source="manual")
     events = [ev(1, D1, "creada"), manual, ev(2, D2, "avanza", t="00:05:00"), ev(2, D2, "avanza", t="00:01:00")]

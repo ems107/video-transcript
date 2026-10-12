@@ -60,6 +60,15 @@ def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) ->
     return "\n".join(lines)
 
 
+def known_items(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> dict[int, str]:
+    """Lo mismo que `known_block`, por número: para saber qué repite una propuesta en la pasada de juicio."""
+    out = {it["id"]: K.item_text(it["kind"], it["data"]) for it in (profile or {}).get("learned") or []
+           if it["kind"] in ("termino", "contexto")}
+    for p in K.prompt_people(people):
+        out.update({f["id"]: f"{p['name']}: {f['text']}" for f in p.get("facts") or []})
+    return out
+
+
 def evidence_lines(t: float, utts: list[dict[str, Any]], vision: list[dict[str, Any]],
                    term: str = "", claim: str = "") -> list[dict[str, Any]]:
     """Transcripción alrededor de `t` (o de la frase que más se parece a `claim`, si se da); la pantalla solo
@@ -370,10 +379,11 @@ def notes_corrections(ctx: JobContext, llm: LLMServer, notes: list[str]) -> list
     return [x for x in r.get("pares") or [] if (x.get("oido") or "").strip() and (x.get("correcto") or "").strip()]
 
 
-def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any]) -> list[dict[str, Any]]:
+def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any],
+                            known: dict[int, str] | None = None) -> list[dict[str, Any]]:
     """Aplica la pasada de juicio: lo descartado se guarda como `descartado_ia` (se puede recuperar), lo que
-    repite otra propuesta también y lo dudoso se marca. Lo que la IA no valora queda como estaba. Las alias y
-    las secciones no se juzgan aquí."""
+    repite otra propuesta o algo ya guardado (`known`: {número: texto}) también, y lo dudoso se marca. Lo que
+    la IA no valora queda como estaba. Las alias y las secciones no se juzgan aquí."""
     verdicts = {x.get("id"): x for x in answer.get("propuestas") or []}
     out = []
     for i, p in enumerate(proposals):
@@ -389,6 +399,8 @@ def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, A
                 and (verdicts.get(same) or {}).get("valor") != "descartar":
             other = K.item_text(proposals[same]["kind"], proposals[same]["data"])
             valor, motivo = "descartar", f"Repite otra propuesta: «{other}»."
+        elif (v.get("ya_guardado") or 0) in (known or {}):
+            valor, motivo = "descartar", f"Ya está guardado: «{known[v['ya_guardado']]}»."
         if valor == "descartar":
             data["juicio"] = {"valor": "descartar", "motivo": motivo}
             out.append({**p, "data": data, "status": "descartado_ia"})
@@ -435,6 +447,10 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
                             if it["kind"] == "seccion"}
         sections = "\n".join([*(f"- {t}" for t in (profile or {}).get("summary_sections") or []),
                               *(f"- [#{i}] {t}" for i, t in learned_sections.items())])
+        # Solo lo del perfil (términos y contexto), sin las fichas: con los datos de las personas a la vista,
+        # descartaba datos personales nuevos que el usuario sí guarda (salario, cuentas…), probado con 2 vídeos
+        known = known_items(profile, [])
+        known_text = known_block(profile, [])
         kind_name = (profile or {}).get("name", "") + (f": {profile['description']}" if (profile or {}).get("description") else "")
         answer = {"propuestas": [], "secciones": {"encajan": True, "motivo": "", "propuestas": []}}
         indexed = list(enumerate(proposals))
@@ -446,7 +462,8 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
             try:
                 return llm.chat_json(JUDGE_SYSTEM, judge_user(about or "(sin resumen)", kind_name,
                                                               sections if with_sections else "",
-                                                              judge_lines(batch, names, ctx.people) or "(ninguna)"),
+                                                              judge_lines(batch, names, ctx.people) or "(ninguna)",
+                                                              known_text),
                                      JUDGE_SCHEMA, max_tokens=16000, thinking=True)
             except LLMTruncated:
                 if len(batch) < 2:
@@ -468,8 +485,10 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
             ctx.save("judgment_error.json", {"error": str(e)})
             return proposals
         answer["learned_sections"] = learned_sections
+        answer["known"] = known
         ctx.save("judgment.raw.json", answer)
-    out = apply_proposal_judgment(proposals, answer)
+    # Lo ya guardado tal como estaba al juzgar (en JSON, las claves son texto)
+    out = apply_proposal_judgment(proposals, answer, {int(k): v for k, v in (answer.get("known") or {}).items()})
     learned = {int(k): v for k, v in (answer.get("learned_sections") or {}).items()}
     # Solo si el perfil ya tiene secciones: sin ninguna, las propone la extracción (`want_sections`)
     has_sections = bool(K.effective_sections(profile)) if profile else False

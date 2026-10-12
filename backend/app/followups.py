@@ -269,6 +269,46 @@ def analysis_points(a: dict[str, Any]) -> list[dict[str, Any]]:
     return [{**x, "key": f"N{i + 1}"} for i, x in enumerate(out)]
 
 
+_OWNER_SEP = re.compile(r"\s*(?:[,/;]|\by\b|\be\b)\s*", re.IGNORECASE)
+_OWNER_GROUP = re.compile(r"^(.*?)\((.*)\)\s*$")
+
+
+def normalize_owner(owner: str, people: list[dict[str, Any]]) -> str:
+    """El responsable con el nombre de las personas conocidas («Iosu/Selu» → «Iosu Urcelay, José Luis Pérez»).
+
+    `people`: [{id, name, aliases}]. Lo que no es una persona conocida se queda como está («el proveedor»).
+    En «Grupo X (A/B)», si dentro del paréntesis hay personas, el texto de fuera es solo el nombre del grupo."""
+    from .pipeline.voice import match_name
+
+    owner = (owner or "").strip()
+    if not owner or not people:
+        return owner
+    by_id = {p["id"]: p["name"] for p in people}
+
+    def resolve(text: str) -> list[tuple[str, bool]]:
+        parts = [x.strip(" .") for x in _OWNER_SEP.split(text) if x and x.strip(" .")]
+        out = []
+        for x in parts:
+            pid = match_name(x, people)
+            out.append((by_id[pid], True) if pid is not None else (x, False))
+        return out
+
+    m = _OWNER_GROUP.match(owner)
+    if m:
+        inner = resolve(m.group(2))
+        names = inner if inner and any(ok for _, ok in inner) else [*resolve(m.group(1)), *inner]
+    else:
+        names = resolve(owner)
+    if not any(ok for _, ok in names):
+        return owner
+    seen, out = set(), []
+    for name, _ in names:
+        if normalize(name) not in seen:
+            seen.add(normalize(name))
+            out.append(name)
+    return ", ".join(out)
+
+
 def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: int, video_date: datetime,
                  duration: float, at: datetime, points: list[dict[str, Any]],
                  signals: list[dict[str, Any]]) -> dict[str, Any]:

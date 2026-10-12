@@ -4,7 +4,7 @@ import { api, type ApplyInfo, type Job, type ReviewItem, type VideoDetail } from
 import { EVENT_LABELS, KIND_ONE, STATUS_AFTER } from '../followup'
 import { ProposalList } from '../knowledge'
 import { HelpLink } from '../HelpMarkdown'
-import { fmtDuration, notifyKnowledge } from '../util'
+import { fmtDuration, notifyKnowledge, plural } from '../util'
 import { JobRow } from './Queue'
 
 // Botón «Aplicar y continuar»: aplica los cambios, guarda las voces, actualiza los seguimientos y propone conocimiento
@@ -35,9 +35,6 @@ export function ApplyButton({ video, onDone }: { video: VideoDetail; onDone: () 
   )
 }
 
-function plural(n: number, one: string, many: string) {
-  return `${n} ${n === 1 ? one : many}`
-}
 
 // Aviso fijo de la página del vídeo mientras no está revisado
 export function ReviewBanner({ video, onChange }: { video: VideoDetail; onChange: () => void }) {

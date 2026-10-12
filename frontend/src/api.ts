@@ -32,15 +32,17 @@ export type VideoCard = {
   pending_speakers: number
   has_thumbnail: boolean
   review: ReviewState
+  to_decide: ReviewPending | null // qué queda por decidir, si review es «propuestas»
 }
 
 // Revisión del vídeo: pendiente → aplicando → propuestas (queda algo por decidir) → revisado
 export type ReviewState = 'pendiente' | 'aplicando' | 'propuestas' | 'revisado'
 export type ReviewChange = { kind: 'correcciones' | 'tramos' | 'hablantes'; n: number; label: string }
+export type ReviewPending = { propuestas: number; seguimiento: number; voces: number }
 export type ReviewInfo = {
   state: ReviewState
   changes: ReviewChange[] // cambios del usuario que aún no se han aplicado
-  pending: { propuestas: number; seguimiento: number; voces: number } // lo que queda por decidir tras aplicar
+  pending: ReviewPending // lo que queda por decidir tras aplicar
   waiting: { id: number; title: string }[] // vídeos que esperan a que se revise este
   // Voces que no se parecen a las de esa persona en otros vídeos: se guardan o se descartan
   doubtful_voices: { id: number; person_id: number; person_name: string; similarity: number | null; seconds: number; sample_id: number | null }[]
