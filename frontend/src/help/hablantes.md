@@ -118,5 +118,5 @@ grupos están bien separados (silueta de {{v:voz_division_silueta}} o más), cad
 La voz de cada grupo (el centro de sus huellas) se compara con las huellas guardadas de otros vídeos, igual
 que al identificar a un hablante: se propone a la persona más parecida desde {{v:voice_match_threshold}}, y
 nunca la misma para los dos grupos. En los vídeos analizados antes de la versión 1.7.0 no hay propuesta
-hasta que se rehace el análisis desde las voces.
+hasta que se regeneran con **Volver a identificar a los hablantes** ([Regenerar](ayuda:regenerar)).
 :::
