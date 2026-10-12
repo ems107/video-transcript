@@ -23,8 +23,9 @@ donde aparecen (para escucharlas). Al aceptarla, esas formas se corrigen solas e
 el término orienta a Whisper. Es lo mismo que añadir una variante en el [glosario del perfil](ayuda:perfiles#glosario).
 
 Cada corrección dice en qué se apoya, de más a menos fiable:
-- **según tus correcciones**: lo escribiste tú en las [correcciones](ayuda:correcciones) del vídeo;
-- **se lee así en pantalla**: el nombre bien escrito se ve en pantalla y suena como lo transcrito;
+- **según tus correcciones**: lo escribiste tú en las [correcciones](ayuda:correcciones) del vídeo
+  (por ejemplo, «"ALTED" es un error: es El Altet»);
+- **se lee así en pantalla**: la IA lo propone y el nombre bien escrito se ve en pantalla;
 - **ya lo corrigió el glosario**: la corrección de términos ya lo cambió en este vídeo; aceptarla lo hace
   automático;
 - **lo deduce la IA**: sin otra prueba. Va marcada como **dudosa**: escucha el momento antes de aceptarla.
@@ -88,10 +89,10 @@ La IA no se cree: cada propuesta se verifica en Python antes de mostrarse.
   el ruido son las comprobaciones. Antes eran 15, 10, 8, 5 y 5, y se perdían datos buenos por llegar
   tarde en la lista.
 - Una corrección de transcripción necesita que la forma mal oída aparezca tal cual en la transcripción (en el
-  texto de Whisper, antes del glosario). Las de la pantalla salen de la misma búsqueda por sonido que la
-  [corrección con el glosario](ayuda:perfiles#glosario), con un parecido mínimo de
-  {{v:aprender_parecido_pantalla}} sobre 100 (más bajo, porque aquí solo se propone): «Auradirect» frente a
-  «Ahorro Directo» da 76. Como mucho {{v:aprender_max_correcciones}} por vídeo.
+  texto de Whisper, antes del glosario), y no puede ser el nombre de una persona (para eso están sus otros
+  nombres). Como mucho {{v:aprender_max_correcciones}} por vídeo. Buscar por sonido los nombres de la
+  pantalla en la transcripción se probó y se descartó: con un vídeo real salían parejas sin sentido
+  («Meta» por «está», «Chat» por «casa»).
 - La revisión conjunta va en tandas de {{v:aprender_juicio_tanda}} propuestas. Si falla, las propuestas se
   quedan como estaban.
 :::

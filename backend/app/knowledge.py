@@ -195,7 +195,7 @@ habitualmente principal principales equipo grupo area departamento
 """.split())
 
 
-def _content_words(text: str) -> list[str]:
+def content_words(text: str) -> list[str]:
     words = []
     for raw in text.split():
         w = normalize(raw)
@@ -244,12 +244,26 @@ def numbers_backed(text: str, near: str) -> bool:
     return True
 
 
+def best_moment(text: str, utts: list[dict[str, Any]], t: float, window: float = 60.0) -> float:
+    """Inicio de la intervención que más palabras comparte con la frase, cerca de `t` (o `t` si ninguna).
+
+    La marca de tiempo de la IA es aproximada: la evidencia se centra en la frase que de verdad lo dice."""
+    words = {w[:5] for w in content_words(text)}
+    best, best_n = t, 0
+    for u in utts:
+        if u["end"] >= t - window and u["start"] <= t + window:
+            n = len(words & {w[:5] for w in normalize(u["text"]).split()})
+            if n > best_n:
+                best, best_n = float(u["start"]), n
+    return best
+
+
 def supported(text: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]], t: float,
               window: float = 60.0) -> bool:
     """Si la transcripción (o la pantalla) alrededor de `t` respalda la frase: comparten la mayoría de sus
     palabras con contenido y todas sus cifras. Evita que se cuelen datos inventados o copiados de otro
     sitio."""
-    words = _content_words(text)
+    words = content_words(text)
     if not words:
         return False
     near = [u["text"] for u in utts if u["end"] >= t - window and u["start"] <= t + window]
@@ -487,30 +501,6 @@ def corrections_from_correct_stage(utts: list[dict[str, Any]]) -> dict[str, set[
         for c in u.get("corrections") or []:
             if c.get("kind") == "fonetica" and normalize(c["original"]) != normalize(c["suggestion"]):
                 out.setdefault(c["suggestion"], set()).add(c["original"].strip(" .,;:¿?¡!"))
-    return out
-
-
-# Parecido fonético mínimo (0-100) entre un nombre de la pantalla y lo transcrito. Más bajo que el de la
-# corrección con el glosario (86), porque aquí solo se propone: «Auradirect» por «Ahorro Directo» da 76
-SCREEN_SOUND = 75.0
-
-
-def corrections_from_screen(utts: list[dict[str, Any]], screen_terms: list[str],
-                            exclude: set[str]) -> dict[str, set[str]]:
-    """Nombres que se leen en pantalla y suenan como algo escrito distinto en la transcripción.
-
-    Es la misma búsqueda fonética que la corrección con el glosario, con los términos de la pantalla."""
-    from .pipeline.glossary import find_candidates
-
-    terms = [t for t in screen_terms if normalize(t) not in exclude and len(normalize(t).replace(" ", "")) >= 4
-             and any(c.isupper() for c in t)]
-    if not terms:
-        return {}
-    texts = [u.get("original_text") or u["text"] for u in utts]
-    out: dict[str, set[str]] = {}
-    for c in find_candidates(texts, [{"term": t, "variants": [], "trusted": False} for t in terms], SCREEN_SOUND):
-        if c.kind == "fonetica" and normalize(c.original) != normalize(c.suggestion):
-            out.setdefault(c.suggestion, set()).add(c.original.strip(" .,;:¿?¡!"))
     return out
 
 

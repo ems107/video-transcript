@@ -203,7 +203,7 @@ def test_participants_seen_on_screen_are_not_terms():
     assert [p["data"]["term"] for p in props if p["kind"] == "termino"] == ["Plan Light"]
 
 
-def test_corrections_from_the_ai_the_screen_and_the_glossary():
+def test_corrections_from_the_ai_your_notes_and_the_glossary():
     """Formas mal transcritas: se oyen tal cual, se agrupan por término y se marca de dónde sale la forma correcta."""
     from app.pipeline.learn import collect_corrections
 
@@ -224,14 +224,17 @@ def test_corrections_from_the_ai_the_screen_and_the_glossary():
     ]}]
     results[0]["correcciones"].append({"oido": "Juan, puedes", "correcto": "Juan Pérez", "motivo": "nombre", "t": "00:00:10"})
     utts.append({"start": 50.0, "end": 52.0, "speaker": "A", "text": "Juan, puedes documentarlo."})
-    out = collect_corrections(results, utts, vision, ["Ahorro Directo"], profile, ["Natur es Naturgy"], {"Juan Pérez"})
+    notes = [{"oido": "Auradirect", "correcto": "Ahorro Directo"}, {"oido": "no se oye", "correcto": "Algo"}]
+    out = collect_corrections(results, utts, vision, ["Ahorro Directo"], profile, ["Natur es Naturgy"], {"Juan Pérez"},
+                              notes)
     by_term = {p["data"]["term"]: p["data"] for p in out}
     assert set(by_term) == {"Naturgy", "Endesa", "Mapfre", "Ahorro Directo"}  # Iberdrola no se oye así
     assert by_term["Naturgy"]["fuente"] == "usuario" and "juicio" not in by_term["Naturgy"]
     assert by_term["Endesa"]["fuente"] == "ia" and by_term["Endesa"]["juicio"]["valor"] == "dudosa"
     assert by_term["Mapfre"] == {"term": "Mapfre", "variants": ["MAFRE"], "fuente": "glosario",
                                  "motivo": "La corrección de términos ya cambió «MAFRE» por «Mapfre» en este vídeo."}
-    assert by_term["Ahorro Directo"]["fuente"] == "pantalla" and by_term["Ahorro Directo"]["variants"] == ["Auradirect"]
+    assert by_term["Ahorro Directo"] == {"term": "Ahorro Directo", "variants": ["Auradirect"], "fuente": "usuario",
+                                         "motivo": "Según tus correcciones del vídeo."}
     # Las más fiables primero; la evidencia muestra lo que se oyó, no lo ya corregido
     assert out[0]["data"]["fuente"] == "usuario"
     mapfre = next(p for p in out if p["data"]["term"] == "Mapfre")

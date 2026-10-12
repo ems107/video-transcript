@@ -294,17 +294,19 @@ El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. T
 **Correcciones de transcripción** (`kind = correccion`, `learn.collect_corrections`). Una propuesta por
 término con las formas en que se oye mal (`data = {term, variants, fuente, motivo}`; clave
 `término|formas`, así una forma nueva es otra propuesta). Fuentes: la lista `correcciones` de
-`LEARN_SCHEMA` (la IA, que ve tus notas y la pantalla), `knowledge.corrections_from_screen` (los
-términos de la pantalla con `glossary.find_candidates` a `SCREEN_SOUND` = 75, más bajo que el 86 de la
-corrección porque solo se propone) y `knowledge.corrections_from_correct_stage` (lo que `correct` ya
-validó). Cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`).
+`LEARN_SCHEMA` (la IA, que ve tus notas y la pantalla), `learn.notes_corrections` (una llamada que saca
+de las correcciones del usuario los pares «oído → correcto»: la extracción por fragmentos no los recogía)
+y `knowledge.corrections_from_correct_stage` (lo que `correct` ya validó). Se probó también buscar por
+sonido los términos de la pantalla en la transcripción (`find_candidates` a 75): con un vídeo real de 37
+min salían 15 parejas sin sentido («Meta» por «está»), y la pasada de juicio las daba por buenas. Cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`).
 `knowledge.correction_source` dice en qué se apoya: `usuario` > `pantalla` > `glosario` > `ia` (solo la
 IA: `juicio` dudosa). Aceptadas, `effective_glossary` las añade como variantes **fiables** de su término
 (o lo crea). Antes, el aprendizaje solo proponía términos escritos tal cual en la transcripción, así que
 nunca proponía uno mal transcrito, que es justo lo que más falta hace.
 
 **Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`). Después de recoger y comprobar las
-propuestas, la IA las revisa todas juntas, en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
+propuestas, la IA las revisa todas juntas (cada término con cuántas veces aparece y si se oye: con solo su
+frase de ejemplo, «Un segundito», descartaba términos clave), en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
 `util`, `dudosa` o `descartar` con motivo e `igual_que` (duplicado). Se probó también pasar al perfil los
 datos de persona que fueran del negocio, pero el texto perdía su sujeto («Documenta la configuración…») y
 el modelo lo marcaba con datos que sí eran de la persona: se quitó. `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =

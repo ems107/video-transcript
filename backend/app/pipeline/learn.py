@@ -11,10 +11,12 @@ import re
 from typing import Any
 
 from .. import knowledge as K
-from ..llm import LLMServer
+from ..llm import LLMServer, LLMTruncated
 from ..prompts import (
     JUDGE_SCHEMA,
     JUDGE_SYSTEM,
+    NOTES_SCHEMA,
+    NOTES_SYSTEM,
     LEARN_SCHEMA,
     LEARN_SYSTEM,
     SCREEN_SCHEMA,
@@ -22,6 +24,7 @@ from ..prompts import (
     corrections_block,
     judge_user,
     learn_user,
+    notes_user,
     profile_block,
     screen_user,
 )
@@ -39,7 +42,7 @@ MAX_NEW_PEOPLE = 15
 MAX_SECTIONS = 8
 MAX_CORRECTIONS = 15
 SCREEN_BATCH = 12  # términos por consulta al valorar los vistos solo en pantalla
-JUDGE_BATCH = 25  # propuestas por consulta en la pasada de juicio
+JUDGE_BATCH = 20  # propuestas por consulta en la pasada de juicio (con razonamiento)
 
 
 def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) -> str:
@@ -58,9 +61,17 @@ def known_block(profile: dict[str, Any] | None, people: list[dict[str, Any]]) ->
 
 
 def evidence_lines(t: float, utts: list[dict[str, Any]], vision: list[dict[str, Any]],
-                   term: str = "") -> list[dict[str, Any]]:
-    """Transcripción alrededor de `t`; la pantalla solo si muestra el término (o si no hay habla)."""
+                   term: str = "", claim: str = "") -> list[dict[str, Any]]:
+    """Transcripción alrededor de `t` (o de la frase que más se parece a `claim`, si se da); la pantalla solo
+    si muestra el término (o si no hay habla)."""
+    hit = None
+    if claim:
+        t = K.best_moment(claim, utts, t)
+        hit = next((u for u in utts if float(u["start"]) == t), None)
     lines = K.excerpt_at(utts, t, max_lines=3)
+    if hit and not any(ln["t"] == t for ln in lines):
+        # Una intervención larga queda lejos por su punto medio: la que lo dice va siempre
+        lines = [{"t": t, "label": hit.get("speaker", ""), "text": hit["text"][:400]}, *lines[:2]]
     frame = min(vision, key=lambda v: abs(v["t"] - t), default=None)
     text = (frame or {}).get("texto_relevante") or ""
     shows_term = bool(term) and f" {normalize(term)} " in f" {normalize(text)} "
@@ -136,7 +147,7 @@ def collect_proposals(
             k = normalize(text)
             if not k or t is None or n_ctx >= MAX_CONTEXT or (("profile", None), k) in seen or K.is_ephemeral(text):
                 continue
-            lines = evidence_lines(t, utts, vision)
+            lines = evidence_lines(t, utts, vision, claim=text)
             if not lines or not K.supported(text, utts, vision, t):
                 continue
             seen.add((("profile", None), k))
@@ -155,7 +166,7 @@ def collect_proposals(
                     continue
             if per_owner.get(owner, 0) >= MAX_PER_PERSON:
                 continue
-            lines = evidence_lines(t, utts, vision)
+            lines = evidence_lines(t, utts, vision, claim=text)
             if not lines or not K.supported(text, utts, vision, t):
                 continue
             if owner[0] == "new":
@@ -186,6 +197,8 @@ def collect_proposals(
                  "lines": [], "replaces": 0} for s in titles[:MAX_SECTIONS]]
 
     for p in out:
+        if p["kind"] == "termino":
+            p["seen"] = {"n": p.get("n", 1), "heard": not p.get("screen_only", False)}
         p.pop("n", None)
         if p["kind"] in ("termino", "contexto", "seccion") and not profile:
             p["drop"] = True
@@ -232,8 +245,9 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str]
                                   ctx.load("names.json", []), want_sections, screen_terms)
     if profile:
         people = {n for p in ctx.people for n in [p["name"], *(p.get("aliases") or [])]} | set(names.values())
-        proposals += collect_corrections(results, utts, vision, screen_terms, profile,
-                                         [c["text"] for c in ctx.corrections], people)
+        notes = [c["text"] for c in ctx.corrections]
+        proposals += collect_corrections(results, utts, vision, screen_terms, profile, notes, people,
+                                         notes_corrections(ctx, llm, notes))
     proposals = judge_screen_terms(ctx, llm, proposals, vision)
     proposals = judge_proposals(ctx, llm, proposals, profile, names)
     ctx.save("proposals.json", proposals)
@@ -250,12 +264,14 @@ SOURCE_REASON = {
 
 def collect_corrections(results: list[dict[str, Any]], utts: list[dict[str, Any]], vision: list[dict[str, Any]],
                         screen_terms: list[str], profile: dict[str, Any], user_notes: list[str],
-                        people: set[str] = frozenset()) -> list[dict[str, Any]]:
+                        people: set[str] = frozenset(), notes_pairs: list[dict[str, Any]] | None = None
+                        ) -> list[dict[str, Any]]:
     """Formas mal transcritas de un término («Natur» por «Naturgy»): una propuesta por término con sus formas.
 
-    Salen de la IA (que puede apoyarse en tus notas), de la pantalla (un nombre que se lee y suena como algo
-    escrito distinto) y de lo que la fase de corrección ya cambió. Cada forma debe oírse tal cual en la
-    transcripción. Lo que solo deduce la IA queda como dudoso. Los nombres de personas (`people`) no: cómo
+    Salen de la IA (que puede apoyarse en la pantalla), de tus notas (`notes_pairs`) y de lo que la fase de
+    corrección ya cambió. Cada forma debe oírse tal cual en la transcripción. Lo que solo deduce la IA queda
+    como dudoso. Buscar por sonido nombres de la pantalla en la transcripción se probó y se quitó: con un vídeo
+    real salían 15 parejas sin sentido («Meta» por «está», «Chat» por «casa»). Los nombres de personas (`people`) no: cómo
     se oye a una persona son sus otros nombres, y la IA confundía con ellos frases normales («Juan, puedes…»)."""
     glossary = K.effective_glossary(profile)
     known = K.known_forms(profile)
@@ -280,10 +296,8 @@ def collect_corrections(results: list[dict[str, Any]], utts: list[dict[str, Any]
     for r in results:
         for x in r.get("correcciones") or []:
             add(x.get("correcto", ""), x.get("oido", ""), "ia", (x.get("motivo") or "").strip())
-    exclude = {normalize(g["term"]) for g in glossary}
-    for term, forms in K.corrections_from_screen(utts, screen_terms, exclude).items():
-        for f in forms:
-            add(term, f, "pantalla", "")
+    for x in notes_pairs or []:
+        add(x.get("correcto", ""), x.get("oido", ""), "usuario", "Según tus correcciones del vídeo.")
     for term, forms in K.corrections_from_correct_stage(utts).items():
         for f in forms:
             add(term, f, "glosario", "")
@@ -318,6 +332,8 @@ KIND_NAMES = {"termino": "término", "contexto": "hecho del negocio", "dato": "d
 
 
 def judge_lines(batch: list[tuple[int, dict[str, Any]]], names: dict[str, str], people: list[dict[str, Any]]) -> str:
+    """Las propuestas para la pasada de juicio. Un término lleva cuántas veces aparece y si se oye: su frase
+    de ejemplo suele ser cualquiera («Un segundito») y, con ella sola, la IA descartaba términos clave."""
     out = []
     for i, p in batch:
         cat = K.CATEGORY_LABELS.get(p.get("category", ""), "")
@@ -325,10 +341,32 @@ def judge_lines(batch: list[tuple[int, dict[str, Any]]], names: dict[str, str], 
             f"{p['data']['name']}: " + "; ".join(d["text"] for d in p["data"].get("datos", []))
         if p["kind"] == "correccion" and p["data"].get("motivo"):
             text += f" — {p['data']['motivo']}"
-        line = next((ln["text"] for ln in p.get("lines") or []), "")
+        if p["kind"] == "termino":
+            seen = p.get("seen") or {}
+            where = "se oye en la conversación" if seen.get("heard", True) else "solo se ve en pantalla"
+            text += f" (aparece {seen.get('n', 1)} {'vez' if seen.get('n', 1) == 1 else 'veces'}; {where})"
+        lines = p.get("lines") or []
+        if p["kind"] in ("dato", "contexto") and lines:
+            # La línea que más palabras comparte con el dato: con las primeras del fragmento, la IA descartaba
+            # datos ciertos porque «la frase no lo dice»
+            words = {w[:5] for w in K.content_words(p["data"].get("text", ""))}
+            lines = [max(lines, key=lambda ln: len(words & {w[:5] for w in normalize(ln["text"]).split()}))]
+        line = " / ".join(ln["text"][:180] for ln in lines[:2])
         out.append(f"{i}. [{_owner_label(p, names, people)} · {KIND_NAMES.get(p['kind'], p['kind'])}"
-                   f"{' · ' + cat if cat else ''}] {text}" + (f" (de: «{line[:180]}»)" if line else ""))
+                   f"{' · ' + cat if cat else ''}] {text}" + (f" (frase: «{line}»)" if line else ""))
     return "\n".join(out)
+
+
+def notes_corrections(ctx: JobContext, llm: LLMServer, notes: list[str]) -> list[dict[str, Any]]:
+    """Pares «forma mal transcrita → forma correcta» que el usuario escribe en sus correcciones («ALTED es un
+    error: es El Altet»). La extracción por fragmentos no los recogía: los veía como contexto."""
+    if not notes:
+        return []
+    try:
+        r = llm.chat_json(NOTES_SYSTEM, notes_user(notes), NOTES_SCHEMA, max_tokens=1500)
+    except Exception:  # noqa: BLE001  (de mejor esfuerzo)
+        return []
+    return [x for x in r.get("pares") or [] if (x.get("oido") or "").strip() and (x.get("correcto") or "").strip()]
 
 
 def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any]) -> list[dict[str, Any]]:
@@ -400,15 +438,27 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
         indexed = list(enumerate(proposals))
         # Juntas las del mismo dueño y tipo, para que vea los duplicados
         indexed.sort(key=lambda x: (str(x[1]["owner"]), x[1]["kind"]))
+        def judge(batch: list[tuple[int, dict[str, Any]]], with_sections: bool) -> dict[str, Any]:
+            # Con el modo razonamiento: sin él, el juicio cambiaba de una ejecución a otra (un código
+            # promocional salía útil o descartado) y se fiaba demasiado de la frase de ejemplo
+            try:
+                return llm.chat_json(JUDGE_SYSTEM, judge_user(about or "(sin resumen)", kind_name,
+                                                              sections if with_sections else "",
+                                                              judge_lines(batch, names, ctx.people) or "(ninguna)"),
+                                     JUDGE_SCHEMA, max_tokens=16000, thinking=True)
+            except LLMTruncated:
+                if len(batch) < 2:
+                    raise
+                a, b = judge(batch[:len(batch) // 2], with_sections), judge(batch[len(batch) // 2:], False)
+                return {"propuestas": (a.get("propuestas") or []) + (b.get("propuestas") or []),
+                        "secciones": a.get("secciones")}
+
         try:
             for b in range(0, max(1, len(indexed)), JUDGE_BATCH):
                 ctx.check_cancel()
                 batch = indexed[b:b + JUDGE_BATCH]
                 ctx.report(0.97, f"Revisando las propuestas ({b + len(batch)}/{len(indexed)})")
-                r = llm.chat_json(JUDGE_SYSTEM, judge_user(about or "(sin resumen)", kind_name,
-                                                           sections if b == 0 else "",
-                                                           judge_lines(batch, names, ctx.people) or "(ninguna)"),
-                                  JUDGE_SCHEMA, max_tokens=6000)
+                r = judge(batch, b == 0)
                 answer["propuestas"] += r.get("propuestas") or []
                 if b == 0:
                     answer["secciones"] = r.get("secciones") or answer["secciones"]

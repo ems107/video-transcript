@@ -457,8 +457,12 @@ Secciones con las que se organiza el resumen de este tipo de vídeo:
 
 Tipo de vídeo: {profile or "(sin perfil)"}
 {sec}
-Propuestas (número, a quién o a qué se refiere, tipo, texto y la frase de la que sale):
+Propuestas (número, a quién o a qué se refiere, tipo, texto y una frase de ejemplo):
 {proposals}
+
+La frase de un término o de una corrección solo muestra dónde aparece: juzga el término por sí mismo, por \
+cuántas veces aparece y por el tema del vídeo, no por esa frase. La de un dato de una persona sí debe \
+decirlo.
 
 Para cada propuesta devuelve:
 - id: su número.
@@ -475,6 +479,35 @@ Y en «secciones»: encajan (si las secciones sirven para organizar el resumen d
 siguientes de este tipo), motivo, y propuestas: si no encajan, hasta 2 títulos generales que sirvan para \
 cualquier vídeo de este tipo (reemplaza: el número [#…] de la sección que sustituye, o 0). Si encajan o no \
 hay secciones, lista vacía."""
+
+
+# Correcciones de transcripción que el usuario escribe en sus notas del vídeo
+NOTES_SYSTEM = """Lees las notas que un usuario ha escrito sobre la transcripción de una grabación y sacas \
+las palabras o nombres que dice que están mal transcritos, con su forma correcta. Solo lo que dicen las \
+notas: no deduzcas nada."""
+
+NOTES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "pares": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"oido": {"type": "string"}, "correcto": {"type": "string"}},
+                "required": ["oido", "correcto"],
+            },
+        },
+    },
+    "required": ["pares"],
+}
+
+
+def notes_user(notes: list[str]) -> str:
+    return "Notas del usuario:\n" + "\n".join(f"- {n}" for n in notes) + """
+
+Devuelve en «pares» cada palabra o nombre que según las notas está mal escrito en la transcripción: oido, \
+tal como aparece mal escrito; correcto, cómo debe escribirse. Si una nota dice que algo «no se escribe» de \
+una forma, esa forma es la oída. Lista vacía si las notas no hablan de cómo se escribe nada."""
 
 
 # --------------------------------------------------------------------------- seguimientos
