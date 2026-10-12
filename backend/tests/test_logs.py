@@ -136,3 +136,17 @@ def test_recovered_failures_leave_a_warning(caplog):
     assert notes_corrections(None, Failing(), ["ALTED es El Altet"]) == []
     [rec] = [r for r in caplog.records if r.name == "app.pipeline.learn"]
     assert rec.levelname == "WARNING" and rec.exc_info and "El Altet" not in rec.getMessage()
+
+
+def test_web_errors_are_logged_once_without_query(client, caplog):
+    from app import main
+
+    main._web_seen.clear()
+    caplog.set_level(logging.ERROR, logger="web")
+    body = {"message": "x is undefined", "stack": "at VideoDetail\n" + "a" * 5000, "url": "/buscar?q=algo privado"}
+    assert client.post("/api/client-log", json=body).json() == {"ok": True}
+    assert client.post("/api/client-log", json=body).json()["repeated"] is True
+    [rec] = [r for r in caplog.records if r.name == "web"]
+    msg = rec.getMessage()
+    assert msg.startswith("Error en la página /buscar: x is undefined\nat VideoDetail") and "privado" not in msg
+    assert len(msg) < 2200

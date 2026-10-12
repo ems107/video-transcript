@@ -248,6 +248,9 @@ export type Status = {
   to_review: number // vídeos analizados pendientes de revisar
 }
 
+// Error de una respuesta de la API: se muestra al usuario y el servidor ya lo registra (no se reenvía)
+export class ApiError extends Error {}
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -262,7 +265,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     } catch {
       /* respuesta sin JSON */
     }
-    throw new Error(msg)
+    throw new ApiError(msg)
   }
   return res.json() as Promise<T>
 }

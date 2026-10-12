@@ -144,7 +144,7 @@ def setup(level: str = "INFO", keep_days: int = 30, folder: Path = LOGS_DIR,
 
 http_log = logging.getLogger("http")
 SLOW_MS = 1000  # una petición más lenta que esto se registra como aviso
-_QUIET = ("/api/events",)  # dura lo que la página esté abierta
+_QUIET = ("/api/events", "/api/client-log")  # la primera dura lo que la página esté abierta; la otra ya se registra
 _FILES = ("/file", "/thumbnail", "/image", "/audio")  # ficheros: muchas peticiones parciales, sin interés
 
 

@@ -9,6 +9,7 @@ import json
 import logging
 import mimetypes
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -113,6 +114,31 @@ def put_settings(body: Settings) -> Settings:
     if changed:
         log.info("Ajustes cambiados: %s", ", ".join(changed))  # solo los nombres: los valores pueden ser rutas
     return body
+
+
+class ClientLogIn(BaseModel):
+    message: str
+    stack: str = ""
+    url: str = ""
+
+
+web_log = logging.getLogger("web")
+_web_seen: dict[str, float] = {}  # último aviso de cada mensaje, para no llenar el registro con el mismo
+WEB_REPEAT_SECONDS = 60
+
+
+@app.post("/api/client-log")
+def client_log(body: ClientLogIn) -> dict[str, Any]:
+    """Un error de JavaScript de la web, para que quede en el registro con lo demás."""
+    msg, now = body.message.strip()[:500] or "(sin mensaje)", time.monotonic()
+    if now - _web_seen.get(msg, -WEB_REPEAT_SECONDS) < WEB_REPEAT_SECONDS:
+        return {"ok": True, "repeated": True}
+    if len(_web_seen) > 200:
+        _web_seen.clear()
+    _web_seen[msg] = now
+    page = body.url.split("?")[0][:200]  # sin la consulta, que puede llevar lo que buscas
+    web_log.error("Error en la página %s: %s%s", page or "?", msg, f"\n{body.stack[:2000]}" if body.stack else "")
+    return {"ok": True}
 
 
 @app.post("/api/logs/open-folder")
