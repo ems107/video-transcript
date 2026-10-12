@@ -17,6 +17,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   contexto del perfil que ya aceptaste en vídeos anteriores: lo que lo repite con otras palabras queda en «Descartadas por la IA», con el motivo.
 - **La biblioteca dice qué falta por decidir** en cada vídeo: «3 propuestas», «1 duda del seguimiento» o
   «1 voz dudosa», en lugar de un «Queda por decidir» que lo mezclaba todo.
+- La tarjeta de un vídeo ya no repite a una persona cuando un cambio manual de quién habla le crea otro
+  hablante.
 
 ## [1.6.0] - 2026-10-12
 
