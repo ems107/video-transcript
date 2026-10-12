@@ -8,6 +8,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Corregido
+
+- **La app ya no se bloquea al moverte por el vídeo.** Al saltar varias veces de un momento a otro de un
+  vídeo largo, cada salto dejaba ocupada una conexión con la base de datos mientras se enviaba el vídeo; a
+  las 15, toda la app tardaba 30 s en responder y fallaba (biblioteca, perfiles, personas, la cola…).
+
 ## [1.7.1] - 2026-10-13
 
 ### Corregido

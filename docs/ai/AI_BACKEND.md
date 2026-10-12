@@ -105,6 +105,13 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 | Seguimientos | `GET/POST followups`, `GET/PUT/DELETE followups/{id}` (PUT: `name`, `description`, `status`, `summary`, `use_ai_summary`; DELETE `?delete_folder`), `POST followups/{id}/open-folder`, `POST followups/{id}/videos/{video_id} {apply, regenerate}`, `DELETE followups/{id}/videos/{video_id}?rebuild`, `POST followups/{id}/rebuild?all_videos&since_video_id`, `POST/PUT/DELETE followups/{id}/items[/{item_id}]` (DELETE oculta), `GET followups/{id}/versions`, `POST followups/{id}/versions/{vid}/restore`. `POST jobs` admite `followup_ids`; `POST videos/{id}/regenerate` y `POST videos/{id}/remove`, `follow_rebuild[]`; el detalle del vídeo, `GET …/regenerate` y `GET …/removal` incluyen `followups` |
 | Búsqueda | `GET search?q&profile_id&person_id` |
 
+**Ficheros (`FileResponse`):** un endpoint que sirve un fichero llama a `main._release(session)` antes de
+devolverlo. Con FastAPI 0.142, la sesión de `SessionDep` se cierra cuando termina de enviarse la
+respuesta, y el reproductor abre una descarga parcial por cada salto en el vídeo: con 15 abiertas se agotaba
+el pool de SQLAlchemy (5 + 10) y toda la API fallaba a los 30 s. Pasó en la 1.7.0 y no se veía con los
+vídeos de prueba, que caben enteros en el búfer de red: se reproduce con un fichero de cientos de MB y
+varias descargas lentas (`curl --limit-rate`).
+
 Las demás rutas sirven el SPA desde `frontend/dist`. Los errores se devuelven como
 `HTTPException(código, "mensaje en español")`, y la web muestra `detail` tal cual.
 
