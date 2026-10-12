@@ -178,6 +178,10 @@ voces. La fase `voices` lo comprueba:
 - **Dos voces en un hablante** (`detect_splits`): 2-medias sobre sus intervenciones largas ya
   reasignadas. Se propone si la silueta es ≥ 0,45, cada grupo suma ≥ 15 s y los grupos se parecen
   ≤ 0,5. Se guarda en `visual_hints["_split"]`, y el usuario asigna cada grupo con arreglos manuales.
+  La voz de cada grupo (`centroid`, solo en `voices.json`) se compara al identificar con las huellas de
+  otros vídeos (`speaker_fix.split_suggestions`: `greedy_assign` con `voice_match_threshold`) y da
+  `suggested`, que el diálogo trae elegido. En p7, el grupo de Edgar salió a 0,95 de su huella; el de Selu
+  (21 s, con huella de un solo vídeo de 58 s), a 0,41: sin propuesta. No se bajó el umbral por un caso.
 - Las huellas por intervención están en el mismo espacio que las de pyannote (parecido 0,92–0,99), así
   que los centroides limpios sustituyen a los de pyannote en `diarization.json` y son los que se
   guardan al confirmar un hablante.
