@@ -8,6 +8,9 @@ paths:
   - "backend/app/pipeline/analyze.py"
   - "backend/app/pipeline/learn.py"
   - "backend/app/knowledge.py"
+  - "backend/app/pipeline/voices.py"
+  - "backend/app/pipeline/voiceprints.py"
+  - "backend/app/pipeline/names.py"
 ---
 
 # Prompts, glosario e identificación
@@ -15,6 +18,9 @@ paths:
 Lee `docs/ai/AI_PROMPTS.md` antes de editar.
 
 - Prompts en español, genéricos: nunca menciones programas concretos, ni siquiera como ejemplo.
+- Relevancia: que la IA razone y marque lo dudoso, sin reglas fijas ni umbrales ajustados a un caso.
+  Un cambio de prompt se mide contra el actual (control, al menos 2 ejecuciones): ver «Cómo medir un
+  cambio de prompt» en `docs/ai/AI_PROMPTS.md`.
 - No inventar: los prompts de análisis componen `ANALYSIS_RULES`. El LLM nunca reescribe la
   transcripción; solo acepta o rechaza sustituciones concretas.
 - Si cambias claves de un `*_SCHEMA`, actualiza `export.py`, `services.py`, `frontend/src/api.ts` y

@@ -16,3 +16,6 @@ Antes de cambiar nada aquí, lee `docs/ai/AI_PIPELINE.md` (fases, ficheros de tr
 - Lee y escribe con `ctx.load`/`ctx.save`, informa del progreso con `ctx.report(0..1, msg)` y llama
   a `ctx.check_cancel()` en los bucles.
 - Si cambia el formato de un JSON intermedio, ten en cuenta los trabajos a medias en `data/work/`.
+- Las pruebas de punta a punta van en una instancia aislada (`:8771`, `llm_port` 8092), con
+  «Aplicar y continuar» para llegar a `follow` y `learn`, y al terminar se para también su llama-server
+  (ver «Prueba de punta a punta» en `docs/ai/AI_PIPELINE.md`).
