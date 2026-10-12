@@ -19,7 +19,14 @@ las fases.
   `Video.analysis`, así que la web debe tolerar claves ausentes.
 - El contexto del perfil se construye con `profile_block(profile, people)` y se reutiliza en visión,
   correcciones y análisis.
-- Temperatura: 0.2 por defecto y 0.0 para validar correcciones.
+- Muestreo: el de `Settings.llm_*` (ver `AI_MODELS_GPU.md`); con razonamiento, `llm.THINKING_SAMPLING`.
+- **Razonar, no reglas fijas.** Lo que es relevante o ruido (un término de pantalla, un dato, un punto
+  repetido) depende del vídeo: que lo razone la IA con el contexto y marque lo dudoso para el usuario, en
+  vez de umbrales o listas de palabras. Python sí comprueba lo verificable: que una cita exista, que una
+  forma se oiga, que una cifra esté en la evidencia. No ajustes un umbral para que salga bien un caso.
+- **Calidad antes que menos clics.** El usuario quiere tocar poco tras analizar un vídeo, pero prefiere
+  decidir algo dudoso a que se guarde mal. Los datos personales (DNI, dirección, salario…) se guardan si
+  se dicen: no los filtres ni los señales.
 
 ## Uso de lo aprendido en los prompts
 
@@ -183,8 +190,9 @@ voces. La fase `voices` lo comprueba:
   `suggested`, que el diálogo trae elegido. En p7, el grupo de Edgar salió a 0,95 de su huella; el de Selu
   (21 s, con huella de un solo vídeo de 58 s), a 0,41: sin propuesta. No se bajó el umbral por un caso.
 - Las huellas por intervención están en el mismo espacio que las de pyannote (parecido 0,92–0,99), así
-  que los centroides limpios sustituyen a los de pyannote en `diarization.json` y son los que se
-  guardan al confirmar un hablante.
+  que los centroides limpios sustituyen a los de pyannote en `diarization.json` (y son los que usa
+  `identify`). Las huellas que se guardan por persona las calcula después `voiceprints`, al aplicar la
+  revisión, con las líneas ya corregidas.
 
 ## Identificación de hablantes (`pipeline/identify.py`, `pipeline/voice.py`)
 
@@ -211,9 +219,10 @@ claves que empiezan por «_»; el resto del código las ignora y la API las expo
 `aliases`. Al confirmar la propuesta como persona nueva, los apodos pasan a sus `aliases`.
 
 **Nada se confirma solo.** El usuario confirma en la web (`PUT /api/speakers/{id}` o
-`confirm-speakers`). Cada confirmación guarda un `VoiceEmbedding`, así que confirmar mal contamina
-futuras identificaciones (la página Personas tiene la opción «Olvidar voz»). Si cambias umbrales,
-ajusta `test_voice_matching`.
+`confirm-speakers`). La huella de cada persona confirmada se guarda al aplicar la revisión (fase
+`voiceprints`: `VoiceEmbedding` y `VoiceSample`); si no se parece a sus otras huellas queda `doubtful` y
+no se usa hasta que el usuario la acepte. Aun así, confirmar mal contamina futuras identificaciones (la
+ficha de la persona tiene «Olvidar voz»). Si cambias umbrales, ajusta `test_voice_matching`.
 
 ## Resumen (`pipeline/analyze.py`)
 
@@ -295,45 +304,75 @@ final pone cada asunto en una sola lista (tarea, decisión o pendiente).
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 
-**Correcciones de transcripción** (`kind = correccion`, `learn.collect_corrections`). Una propuesta por
-término con las formas en que se oye mal (`data = {term, variants, fuente, motivo}`; clave
-`término|formas`, así una forma nueva es otra propuesta). Fuentes: la lista `correcciones` de
-`LEARN_SCHEMA` (la IA, que ve tus notas y la pantalla), `learn.notes_corrections` (una llamada que saca
-de las correcciones del usuario los pares «oído → correcto»: la extracción por fragmentos no los recogía)
-y `knowledge.corrections_from_correct_stage` (lo que `correct` ya validó). Se probó también buscar por
-sonido los términos de la pantalla en la transcripción (`find_candidates` a 75): con un vídeo real de 37
-min salían 15 parejas sin sentido («Meta» por «está»), y la pasada de juicio las daba por buenas. Cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`).
-`knowledge.correction_source` dice en qué se apoya: `usuario` > `pantalla` > `glosario` > `ia` (solo la
-IA: `juicio` dudosa). Aceptadas, `effective_glossary` las añade como variantes **fiables** de su término
-(o lo crea). Antes, el aprendizaje solo proponía términos escritos tal cual en la transcripción, así que
-nunca proponía uno mal transcrito, que es justo lo que más falta hace.
+**Correcciones de transcripción** (`kind = correccion`, `learn.collect_corrections`).
+- **Qué es.** Una propuesta por término con las formas en que se oye mal: `data = {term, variants, fuente,
+  motivo}`, clave `término|formas` (una forma nueva es otra propuesta). Aceptada, `effective_glossary` la
+  añade como variantes **fiables** de su término (o lo crea).
+- **Fuentes**, por orden de confianza (`knowledge.correction_source`: `usuario` > `pantalla` > `glosario` >
+  `ia`):
+  - `learn.notes_corrections`: una llamada que saca de las notas del usuario los pares «oído → correcto»;
+  - `knowledge.corrections_from_correct_stage`: lo que la fase `correct` ya validó;
+  - la lista `correcciones` de `LEARN_SCHEMA` (la IA, que ve las notas y la pantalla). Solo con esta
+    fuente, la propuesta lleva `juicio` dudosa.
+- **Comprobaciones:** cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`), y no se
+  admiten nombres de personas.
+- **Por qué:**
+  - antes, el aprendizaje solo proponía términos escritos tal cual en la transcripción, así que nunca
+    proponía uno mal transcrito, que es justo lo que más falta hace;
+  - la extracción por fragmentos no recogía los pares de las notas del usuario: los veía como contexto;
+  - se probó buscar por sonido los términos de pantalla en la transcripción (`find_candidates` a 75): con
+    un vídeo real de 37 min salían 15 parejas sin sentido («Meta» por «está») y el juicio las daba por
+    buenas. Se quitó;
+  - la IA proponía «Juan, puedes» → «Juan Pérez»: de ahí lo de los nombres.
 
-**Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`). Después de recoger y comprobar las
-propuestas, la IA las revisa todas juntas (cada término con cuántas veces aparece y si se oye: con solo su
-frase de ejemplo, «Un segundito», descartaba términos clave), en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
-`util`, `dudosa` o `descartar` con motivo, `igual_que` (duplicado de otra propuesta) y `ya_guardado` (el
-`[#id]` de lo ya aceptado que repite: recibe `known_block` solo con los términos y el contexto del perfil, y
-`known_items` guarda en `judgment.raw.json` qué número es cada cosa). Sin lo aceptado, el perfil acumulaba la
-misma frase de vídeos distintos con otras palabras. Con las fichas de las personas también a la vista, descartaba
-datos personales nuevos (salario, cuentas) que antes marcaba dudosos: por eso no se le pasan. Se probó también pasar al perfil los
-datos de persona que fueran del negocio, pero el texto perdía su sujeto («Documenta la configuración…») y
-el modelo lo marcaba con datos que sí eran de la persona: se quitó. `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
-descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso
-lleva `data.juicio`; las alias y las secciones no se juzgan. En la misma llamada valora si las secciones
-del perfil encajan con el vídeo y, si no, propone hasta 2 generales (`section_proposals`, `replaces` solo
-sobre una aprendida; solo si el perfil ya tiene secciones). Las correcciones de transcripción no admiten
-nombres de personas: la IA proponía «Juan, puedes» → «Juan Pérez». Va **con modo razonamiento**
-(`max_tokens` 16000; una tanda que se corta se parte en dos): sin él, el mismo código promocional salía
-útil o descartado según la ejecución (unos 3 min por tanda de `JUDGE_BATCH`). Cada dato lleva la línea que
-más lo respalda (`knowledge.claim_score`: palabras comunes y, sobre todo, sus cifras) y la siguiente; con
-la línea del momento aproximado, el juicio veía la pregunta («¿salario neto?») y descartaba datos ciertos.
-Lo que sale de las correcciones del usuario (`fuente = usuario`) no se juzga. Es de mejor esfuerzo: si
-falla, las propuestas quedan como estaban. Medido en la
-prueba de los 3 vídeos de tutoría: 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
-explicaba), términos como un código promocional o el nombre de un programa del escritorio y un duplicado
-de un término ya aceptado; el prompt de extracción ya pedía no incluirlos.
+**Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`).
+- **Qué hace.** Después de recoger y comprobar las propuestas, la IA las revisa todas juntas, en tandas
+  de `JUDGE_BATCH` ordenadas por dueño y tipo, **con modo razonamiento** (`max_tokens` 16000; una tanda que
+  se corta se parte en dos). Por cada una devuelve `valor` (`util`, `dudosa` o `descartar`), `motivo`,
+  `igual_que` (repite otra propuesta) y `ya_guardado` (el `[#id]` de lo ya aceptado del perfil que repite).
+  En la misma llamada valora si las secciones del perfil encajan con el vídeo y, si no, propone hasta 2
+  generales (`section_proposals`; `replaces` solo sobre una aprendida, y solo si el perfil ya tiene
+  secciones).
+- **Qué recibe.** Cada término, con cuántas veces aparece y si se oye. Cada dato, con la línea que más lo
+  respalda (`knowledge.claim_score`: palabras comunes y, sobre todo, sus cifras) y la siguiente. Lo ya
+  guardado: `known_block` **solo con los términos y el contexto del perfil**; `known_items` guarda en
+  `judgment.raw.json` qué número es cada cosa, para reanudar.
+- **Qué se aplica** (`apply_proposal_judgment`): lo descartado y lo repetido pasan a `descartado_ia` (la web
+  lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso lleva `data.juicio`. No
+  se juzgan las alias, las secciones ni lo que sale de las notas del usuario (`fuente = usuario`). Es de
+  mejor esfuerzo: si falla, las propuestas quedan como estaban (`judgment_error.json`).
+- **Por qué así** (medido con los 3 vídeos de la tutoría):
+  - sin juicio llegaban 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
+    explicaba), un código promocional, el nombre de un programa del escritorio y duplicados, aunque el
+    prompt de extracción ya pedía no incluirlos;
+  - sin razonamiento, el mismo código promocional salía útil o descartado según la ejecución (con él,
+    unos 3 min por tanda);
+  - con solo la frase de ejemplo de un término («Un segundito») descartaba términos clave; con la línea
+    del momento aproximado de un dato veía la pregunta («¿salario neto?») y descartaba datos ciertos;
+  - sin lo ya aceptado, el perfil acumulaba la misma frase de vídeos distintos con otras palabras. Con las
+    fichas de las personas también a la vista, descartaba datos personales nuevos (salario, cuentas,
+    fechas) que sin ellas marcaba dudosos (2 ejecuciones por variante): por eso solo ve el perfil. Detecta
+    la repetición más o menos la mitad de las veces;
+  - se probó pasar al perfil los datos de persona que fueran del negocio, pero el texto perdía su sujeto
+    («Documenta la configuración…»): se quitó.
 
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se
 reintenta, porque la misma petición se volvería a cortar. Antes de subir un `max_tokens`, mira ahí el
 caso real: puede ser una repetición en bucle y no falta de espacio.
+
+## Cómo medir un cambio de prompt
+
+El modelo varía entre ejecuciones, así que una sola prueba no dice si un cambio mejora o empeora:
+- **Compara con un control.** Ejecuta el prompt nuevo y el actual sobre las mismas entradas, al menos 2
+  veces cada uno, y compara elemento a elemento. Un cambio que «funciona» en el caso buscado puede
+  empeorar otros: el bloque de lo guardado en el juicio detectaba la repetición, pero descartaba datos
+  personales que el control marcaba dudosos.
+- **Reutiliza datos ya analizados.** No hace falta volver a analizar vídeos: con la carpeta de datos de una
+  prueba real, un script con `PYTHONPATH=backend` y su `VT_DATA_DIR` puede rehacer las entradas de la
+  fase (por ejemplo, las propuestas de un vídeo desde `KnowledgeItem` y su evidencia) y llamar a
+  `LLMServer.chat_json` con el prompt nuevo. Llama a `stop()` al terminar.
+- **Mide lo que decidió el usuario.** Las decisiones guardadas (aceptado, rechazado) son la referencia: un
+  cambio que descarta lo que el usuario aceptó es una regresión.
+- **Anota el resultado** aquí, en el «por qué» de la parte que cambies, con los números: es lo que evita que
+  otra sesión deshaga algo que costó medir.
