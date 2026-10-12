@@ -14,6 +14,8 @@ progreso. La barra lateral indica cuántos hay en marcha.
 - **Cancelar** detiene un análisis. **Reintentar** lo vuelve a lanzar desde la fase donde se quedó, sin
   repetir lo ya hecho.
 - Si cierras la app a mitad de un análisis, al volver a abrirla **continúa donde se quedó**.
+- **En espera**: el vídeo ya hizo lo más pesado y espera a que [revises](ayuda:revision#los-videos-siguientes-esperan)
+  otro vídeo del mismo perfil o seguimiento encolado antes. **Revisar el otro vídeo** te lleva a él.
 - Si algo falla, el vídeo queda en «Error». Pulsa **Detalles** para ver el mensaje (útil si me lo tienes
   que contar) y **Reintentar** cuando lo hayas resuelto.
 

@@ -76,8 +76,10 @@ def status(session: Session = SessionDep) -> dict[str, Any]:
         "diarization": (Path(s.diarization_model_dir) / "config.yaml").exists(),
     }
     pending = PR.pending_count(session, s.voice_auto_threshold)
+    to_review = session.exec(select(func.count()).select_from(Video).where(
+        Video.review != review.DONE, Video.status == "done")).one()
     return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current,
-            "pending_proposals": pending}
+            "pending_proposals": pending, "to_review": to_review}
 
 
 @app.get("/api/help/values")
@@ -1268,6 +1270,58 @@ def delete_followup_item(followup_id: int, item_id: int, session: Session = Sess
     FS.export(session, f)
     review.check_videos(session, {e.get("video_id") for e in it.events or []})
     return FS.out(session, f, full=True)
+
+
+class ResolveIn(BaseModel):
+    action: str  # mismo | distinto (punto que parece duplicado) · descartar (cambio «posible» que no pasó)
+
+
+@app.post("/api/followups/{followup_id}/items/{item_id}/resolve")
+def resolve_followup_item(followup_id: int, item_id: int, body: ResolveIn,
+                          session: Session = SessionDep) -> dict[str, Any]:
+    """Decide una duda de la IA sobre un punto: si duplica otro, o si un cambio sin frase que lo demuestre pasó."""
+    f = _followup(session, followup_id)
+    it = _item(session, f.id, item_id)
+    FS.record_version(session, f, f"Antes de decidir sobre «{it.text}»")
+    if body.action == "mismo":
+        it.hidden, it.manual, it.review = True, True, {}  # oculto: la IA no lo vuelve a crear
+    elif body.action == "distinto":
+        it.review = {}
+    elif body.action == "descartar":
+        e = FL.open_possible(FS.item_dict(it))
+        if e is None:
+            raise HTTPException(400, "Ese punto no tiene ningún cambio por confirmar")
+        it.events = [{**x, "descartado": True} if x == e else x for x in it.events]
+    else:
+        raise HTTPException(400, "Acción desconocida")
+    session.add(it)
+    FS.touch(session, f)
+    FS.export(session, f)
+    review.check_videos(session, {e.get("video_id") for e in it.events or []})
+    return FS.out(session, f, full=True)
+
+
+@app.get("/api/videos/{video_id}/review-items")
+def video_review_items(video_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    """Puntos de los seguimientos del vídeo con una duda de la IA que salió de este vídeo."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    out = []
+    for f in FS.for_video(session, v.id):
+        its = {it["id"]: it for it in FS.items(session, f.id)}
+        titles = {x.id: x.title for _, x in FS.links(session, f.id)}
+        for it in its.values():
+            reasons = FL.needs_review(it, v.id)
+            if not reasons:
+                continue
+            other = its.get(it["review"].get("de")) if "duplicado" in reasons else None
+            possible = FL.open_possible(it) if "posible" in reasons else None
+            out.append({"followup_id": f.id, "followup_name": f.name, "reasons": reasons,
+                        "item": {**it, "events": [{**e, "video_title": titles.get(e.get("video_id"), "")}
+                                                  for e in it["events"]]},
+                        "same_as": {"id": other["id"], "kind": other["kind"], "text": other["text"],
+                                    "status": other["status"], "hidden": other["hidden"]} if other else None,
+                        "possible": possible})
+    return out
 
 
 @app.get("/api/followups/{followup_id}/versions")

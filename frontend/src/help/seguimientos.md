@@ -34,7 +34,9 @@ En **Seguimientos** → **Nuevo seguimiento**, o desde la página de un vídeo c
 Hay dos formas:
 
 - **Al encolar un vídeo nuevo**: en [Nuevo análisis](ayuda:analizar), marca sus seguimientos. El análisis
-  ya tiene en cuenta lo anterior del tema y, al terminar, el estado se actualiza solo.
+  ya tiene en cuenta lo anterior del tema, y el estado se actualiza cuando [revisas el vídeo](ayuda:revision)
+  y pulsas **Aplicar y continuar**. Las dudas de la IA (un punto que parece repetir otro, un cambio sin
+  frase que lo demuestre) te las pregunta en la revisión.
 - **Con un vídeo ya analizado**: en la página del vídeo, tarjeta **Seguimientos** → **Añadir a un
   seguimiento**, o desde la pestaña **Vídeos** del seguimiento. La IA aplica el vídeo al estado sin
   volver a transcribirlo. Si marcas **Regenerar también el resumen del vídeo**, además se rehace su
@@ -78,7 +80,8 @@ El estado se construye vídeo a vídeo en orden de fecha. Cuando algo cambia en 
 lo rehace:
 
 - al **quitar un vídeo** del seguimiento (o [quitarlo de la app](ayuda:quitar));
-- al [regenerar](ayuda:regenerar) un vídeo que ya estaba aplicado.
+- al [regenerar](ayuda:regenerar) un vídeo que ya estaba aplicado: el estado se rehace desde él cuando
+  vuelves a aplicar su revisión.
 
 **Rehacer el estado** quita lo que aportaron ese vídeo y los posteriores y vuelve a aplicarlos en orden,
 a partir de sus análisis, sin transcribir de nuevo. Lo que cambiaste tú se conserva. **Dejarlo como está**

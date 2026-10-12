@@ -63,17 +63,24 @@ deducir quién es un hablante por la conversación.
 Si el vídeo está en algún [seguimiento](ayuda:seguimientos), también recibe el estado del tema según los
 vídeos anteriores, solo para entender a qué se refiere lo que se dice y relacionarlo.
 
-## 12. Actualizar los seguimientos
-Si el vídeo está en algún [seguimiento](ayuda:seguimientos), la IA aplica lo que dice a su estado: tareas
-que avanzan o se cierran, decisiones que cambian, dudas que se resuelven y lo nuevo. Si esta fase falla, el
-seguimiento queda desactualizado y el vídeo se publica igual.
-
-## 13. Aprender
-Propone lo que ha aprendido del vídeo para el perfil y las personas. Ver [Propuestas](ayuda:propuestas). Si
-esta fase falla, el vídeo se publica igual.
-
-## 14. Publicar
+## 12. Publicar
 Crea la carpeta del vídeo con sus documentos, lo mueve o copia, y lo añade a la biblioteca y a la búsqueda.
+El vídeo queda **pendiente de [revisar](ayuda:revision)**.
+
+Si otro vídeo del mismo perfil o seguimiento encolado antes está sin revisar, el vídeo **espera** después de
+la fase 7 (comprobar las voces) y continúa cuando lo revises.
+
+## Al aplicar la revisión
+Cuando pulsas **Aplicar y continuar**, un trabajo en la cola rehace el resumen si has corregido algo y
+después:
+
+1. **Guarda las voces** de los hablantes confirmados.
+2. **Actualiza los seguimientos.** Si el vídeo está en algún [seguimiento](ayuda:seguimientos), la IA aplica
+   lo que dice a su estado: tareas que avanzan o se cierran, decisiones que cambian, dudas que se resuelven
+   y lo nuevo. Si esta fase falla, el seguimiento queda desactualizado y el trabajo sigue.
+3. **Aprende.** Propone lo que ha aprendido del vídeo para el perfil y las personas. Ver
+   [Propuestas](ayuda:propuestas). Si esta fase falla, el trabajo sigue.
+4. **Actualiza los documentos** de la carpeta del vídeo.
 
 :::tecnico Ficheros de trabajo
 Cada fase escribe sus resultados en `data/work/job_<n>/` (por ejemplo, `vision.json`, `asr.json`,

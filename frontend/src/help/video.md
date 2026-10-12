@@ -36,5 +36,8 @@ Al abrir un vídeo de la Biblioteca ves el reproductor a la izquierda y el anál
 - **El título** se puede editar pulsando sobre él.
 - **Abrir carpeta:** abre en el Explorador la carpeta con los resultados.
 - **[Regenerar análisis](ayuda:regenerar):** vuelve a hacer el resumen (y, si quieres, más fases) con lo
-  que la app sabe ahora.
+  que la app sabe ahora. Después, el vídeo queda pendiente de [revisar](ayuda:revision).
+
+Mientras el vídeo no está revisado, una franja arriba lo avisa, con los cambios sin aplicar y los botones
+**Paso a paso** y **Aplicar y continuar**. Ver [Revisar un vídeo](ayuda:revision).
 - **[Quitar](ayuda:quitar):** saca el vídeo de la app, borrando o no sus ficheros.

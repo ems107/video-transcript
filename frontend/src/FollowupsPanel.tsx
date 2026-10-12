@@ -89,14 +89,16 @@ function AddDialog({ video, onClose, onDone }: { video: VideoDetail; onClose: ()
           <label className="field"><span>Nombre del nuevo seguimiento</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          La IA aplica el vídeo al estado del seguimiento en su fecha: lo que dice de las tareas, decisiones y dudas
-          anteriores, y lo nuevo. Si hay vídeos posteriores, el estado se rehace desde este. No se vuelve a transcribir.
+          {video.review.state === 'pendiente'
+            ? 'El vídeo aún no está revisado: se aplicará al estado del seguimiento cuando pulses «Aplicar y continuar».'
+            : 'La IA aplica el vídeo al estado del seguimiento en su fecha: lo que dice de las tareas, decisiones y dudas '
+              + 'anteriores, y lo nuevo. Si hay vídeos posteriores, el estado se rehace desde este. No se vuelve a transcribir.'}
         </p>
         <label className="check">
           <input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} />
           <span>
             <b>Regenerar también el resumen del vídeo</b>
-            <span className="small muted">Para que el resumen relacione lo que se dice con lo anterior del tema («continúa lo de…»). Tarda como regenerar el análisis.</span>
+            <span className="small muted">Para que el resumen relacione lo que se dice con lo anterior del tema («continúa lo de…»). Tarda como regenerar el análisis, y después el vídeo queda pendiente de revisar.</span>
           </span>
         </label>
         {error && <p className="small danger-text">{error}</p>}

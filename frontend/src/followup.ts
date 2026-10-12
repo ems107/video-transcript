@@ -17,3 +17,8 @@ export function statusClass(kind: FollowupKind, status: string): string {
   if (status === STATUSES[kind][0]) return 'pill run'
   return ['hecha', 'resuelta'].includes(status) ? 'pill ok' : 'pill'
 }
+
+// Estado en que deja un punto cada cambio «posible» al confirmarlo
+export const STATUS_AFTER: Record<string, string> = {
+  hecha: 'hecha', descartada: 'descartada', cambiada: 'cambiada', anulada: 'anulada', resuelta: 'resuelta',
+}

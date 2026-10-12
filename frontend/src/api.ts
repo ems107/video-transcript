@@ -3,7 +3,7 @@
 export type Job = {
   id: number
   video_id: number
-  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled'
+  status: 'queued' | 'running' | 'waiting' | 'done' | 'error' | 'cancelled' // waiting: espera la revisión de otro vídeo
   stage: string
   stage_label: string
   progress: number
@@ -31,7 +31,19 @@ export type VideoCard = {
   people: string[]
   pending_speakers: number
   has_thumbnail: boolean
+  review: ReviewState
 }
+
+// Revisión del vídeo: pendiente → aplicando → propuestas (queda algo por decidir) → revisado
+export type ReviewState = 'pendiente' | 'aplicando' | 'propuestas' | 'revisado'
+export type ReviewChange = { kind: 'correcciones' | 'tramos' | 'hablantes'; n: number; label: string }
+export type ReviewInfo = {
+  state: ReviewState
+  changes: ReviewChange[] // cambios del usuario que aún no se han aplicado
+  pending: { propuestas: number; seguimiento: number } // lo que queda por decidir tras aplicar
+  waiting: { id: number; title: string }[] // vídeos que esperan a que se revise este
+}
+export type ApplyInfo = { stages: string[]; seconds: number; changes: ReviewChange[] }
 
 export type Task = { responsable: string; tarea: string; plazo: string; t: string }
 export type Decision = { decision: string; t: string }
@@ -111,6 +123,7 @@ export type VideoDetail = VideoCard & {
   corrections_pending: boolean // hay correcciones que el análisis actual aún no tiene en cuenta
   overrides_pending: boolean // hay cambios manuales de hablantes que el resumen aún no tiene en cuenta
   followups: { id: number; name: string; status: FollowupStatus; applied: boolean }[] // applied: el estado ya incluye este vídeo
+  review: ReviewInfo
 }
 
 export type GlossaryEntry = { term: string; variants: string[]; definition: string }
@@ -214,6 +227,7 @@ export type Status = {
   ready: boolean
   current_job: number | null
   pending_proposals: number
+  to_review: number // vídeos analizados pendientes de revisar
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -269,6 +283,7 @@ export type FollowupEvent = {
   nota: string
   cita?: string // la frase del vídeo que lo dice (comprobada)
   posible?: FollowupEvent['evento'] // la IA cree que pasó, sin una frase que lo demuestre: lo confirma el usuario
+  descartado?: boolean // el usuario dice que ese cambio «posible» no pasó
   source: 'ia' | 'manual'
   at: string
 }
@@ -281,6 +296,7 @@ export type FollowupItem = {
   status: string
   manual: boolean
   events: FollowupEvent[]
+  review: { tipo?: 'duplicado'; de?: number; motivo?: string } // duda de la IA que decides tú
 }
 export type Followup = {
   id: number
@@ -302,10 +318,21 @@ export type Followup = {
   busy: boolean // hay un trabajo en cola que lo va a actualizar
   job_id: number | null
   rebuild_seconds: number | null
+  pending_videos: { id: number; title: string }[] // se aplicarán al estado cuando los revises
+  to_review: number // puntos con algo que decidir
 }
 export type FollowupDetail = Followup & {
   videos: { video_id: number; title: string; date: string; duration: number; status: string; applied: boolean; contribution: string }[]
   items: FollowupItem[]
+}
+// Punto de un seguimiento con una duda de la IA salida de un vídeo (pantalla «Revisar este vídeo»)
+export type ReviewItem = {
+  followup_id: number
+  followup_name: string
+  reasons: ('duplicado' | 'posible')[]
+  item: FollowupItem
+  same_as: { id: number; kind: FollowupKind; text: string; status: string; hidden: boolean } | null
+  possible: FollowupEvent | null
 }
 export type FollowupVersion = { id: number; reason: string; created_at: string; items: number; videos: number }
 

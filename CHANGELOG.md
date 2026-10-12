@@ -8,6 +8,23 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Revisión de cada vídeo.** Un vídeo recién analizado queda **pendiente de revisar**: hasta que lo
+  revisas, no actualiza sus seguimientos ni propone nada para el perfil. Compruebas hablantes,
+  transcripción y resumen, pulsas **Aplicar y continuar** y, al terminar, decides lo dudoso.
+  - La pantalla **Revisar este vídeo** reúne todo en orden, y una franja en la página del vídeo dice qué
+    cambios faltan por aplicar y cuánto tardará.
+  - Los vídeos del mismo perfil o seguimiento encolados después hacen lo más pesado y **esperan** a esa
+    revisión para aprovechar las voces, el glosario y el seguimiento ya revisados (en la cola, «En espera»).
+  - Si cambias algo de un vídeo ya revisado, vuelve a quedar pendiente hasta que lo apliques.
+  - La barra lateral cuenta los vídeos por revisar.
+
+### Cambiado
+
+- Regenerar el análisis ya no actualiza el seguimiento ni lo aprendido: el vídeo queda pendiente de
+  revisar y se actualizan al aplicar la revisión.
+
 ### Corregido
 
 - Al añadir un vídeo ya analizado a un seguimiento, o al quitarlo, su `resumen.md` ahora muestra o quita

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type FollowupDetail as FD, type FollowupItem, type FollowupKind, type FollowupVersion, type Job, type VideoCard } from '../api'
-import { KIND_ONE, KIND_TITLES, STATUSES, statusClass } from '../followup'
+import { KIND_ONE, KIND_TITLES, STATUS_AFTER, STATUSES, statusClass } from '../followup'
 import { DetachDialog, EventChip } from '../FollowupsPanel'
 import { HelpLink } from '../HelpMarkdown'
 import { fmtDate, fmtDuration, plural } from '../util'
@@ -9,10 +9,6 @@ import { fmtDate, fmtDuration, plural } from '../util'
 type Tab = 'estado' | 'videos' | 'historial'
 const KINDS: FollowupKind[] = ['tarea', 'decision', 'duda']
 // Estado en que deja un punto cada evento (igual que EVENT_STATUS en backend/app/followups.py)
-const STATUS_AFTER: Record<string, string> = {
-  hecha: 'hecha', descartada: 'descartada', cambiada: 'cambiada', anulada: 'anulada', resuelta: 'resuelta',
-}
-
 export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
   const nav = useNavigate()
@@ -94,6 +90,12 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
         <div className="notice small" style={{ marginBottom: '1rem' }}>
           Actualizándose: hay un trabajo en la <Link to="/cola">cola</Link> que va a cambiar este estado.
           {job?.status === 'running' && ` ${job.message}`}
+        </div>
+      )}
+      {f.pending_videos.length > 0 && (
+        <div className="notice small" style={{ marginBottom: '1rem' }}>
+          Se aplicará{f.pending_videos.length > 1 ? 'n' : ''} al estado cuando lo{f.pending_videos.length > 1 ? 's' : ''} revises:{' '}
+          {f.pending_videos.map((v, i) => <span key={v.id}>{i > 0 && ', '}«<Link to={`/videos/${v.id}/revisar`}>{v.title}</Link>»</span>)}.
         </div>
       )}
       {f.stale_from && !f.busy && (

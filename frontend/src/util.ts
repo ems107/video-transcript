@@ -62,6 +62,7 @@ export function useJobs(): Job[] {
 
 export const STATUS_LABEL: Record<string, string> = {
   queued: 'En cola',
+  waiting: 'En espera',
   running: 'Procesando',
   done: 'Completado',
   error: 'Error',

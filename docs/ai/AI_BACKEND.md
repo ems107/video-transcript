@@ -11,8 +11,8 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `Person` | persona global (puede estar en varios perfiles) | `aliases[]` incluye los nombres que aparecen en las videollamadas |
 | `ProfilePersonLink` | relación de muchos a muchos entre perfiles y personas | |
 | `VoiceEmbedding` | huella confirmada (una por hablante confirmado y vídeo) | `vector` en JSON |
-| `Video` | un vídeo | `status`: pending, processing, done o error. `analysis` guarda el JSON completo; `folder` y `video_path` se rellenan al publicar |
-| `Job` | un trabajo de la cola | `status`: queued, running, done, error o cancelled. `options` (ver abajo). `error` incluye el traceback |
+| `Video` | un vídeo | `status`: pending, processing, done o error. `analysis` guarda el JSON completo; `folder` y `video_path` se rellenan al publicar. `review` (pendiente, aplicando, propuestas o revisado) y `voices_applied` (`{etiqueta: persona}` con que se aplicó la revisión; nulo en vídeos anteriores): ver `review.py` y `AI_PIPELINE.md` |
+| `Job` | un trabajo de la cola | `status`: queued, running, waiting (espera la revisión de `options.waiting_for`), done, error o cancelled. `options` (ver abajo). `error` incluye el traceback |
 | `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz, pantalla o contexto. En `visual_hints`, las claves con «_» son internas (`_motivo`, `_apodos`) |
 | `Segment` | intervención de la transcripción | `speaker` es la etiqueta, no el nombre. `original_text` y `corrections` vienen del glosario. `voice`: «» , «reasignada» o «dudosa» (columna añadida con `db.NEW_COLUMNS`) |
 | `SpeakerOverride` | arreglo manual: de `start` a `end` habla `person_id` | ver `speaker_fix.py` |
@@ -24,7 +24,7 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `VideoCorrection` | corrección escrita por el usuario sobre un vídeo | `text`, `updated_at`; la IA nunca la modifica |
 | `Followup` | seguimiento (continuidad de un tema entre vídeos) | `status` abierto o archivado; `summary` + `summary_manual` (si es del usuario, la IA deja el suyo en `summary_ai`); `stale_from`/`stale_reason` = desactualizado; `folder` |
 | `FollowupVideo` | vídeo de un seguimiento | `applied` (el estado lo incluye), `contribution` y `summary` (resumen tras aplicarlo, para volver atrás al rehacer) |
-| `FollowupItem` | tarea, decisión o duda | `status` sale del último evento de `events[{video_id, date, t, evento, nota, source, at}]`; `manual` = tocado por el usuario (la IA ya no cambia su texto ni su estado); `hidden` = borrado por el usuario (se conserva para que la IA no lo vuelva a crear) |
+| `FollowupItem` | tarea, decisión o duda | `status` sale del último evento de `events[{video_id, date, t, evento, nota, source, at}]`; `manual` = tocado por el usuario (la IA ya no cambia su texto ni su estado); `hidden` = borrado por el usuario (se conserva para que la IA no lo vuelva a crear); `review` = duda de la IA que decide el usuario (`{tipo: duplicado, de, motivo}`); un evento con `posible` sin confirmar (o con `descartado`) también se decide en la revisión (`followups.needs_review`) |
 | `FollowupVersion` | copia del estado antes de cada cambio | `snapshot` = `{summary, summary_manual, summary_ai, items, videos}` |
 
 - **Columnas nuevas en tablas existentes:** se declaran en `db.NEW_COLUMNS`. `init_db` las añade con
@@ -97,6 +97,7 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 | Perfiles | CRUD de `profiles` (`person_ids[]` en el cuerpo; la respuesta incluye `learned_count` y `pending_count`), `GET profiles/{id}/knowledge`, `GET profiles/{id}/versions`, `POST profiles/{id}/versions/{vid}/restore`, `POST profiles/from-video {video_id, name}`, `POST profiles/{id}/learn-all` |
 | Personas | CRUD de `people` (`GET people/{id}` devuelve la ficha completa), `DELETE people/{id}/voices`, `GET people/{id}/knowledge`, `GET/POST people/{id}/versions[/{vid}/restore]`, `GET people/duplicates`, `POST people/duplicates/dismiss {a, b}`, `POST people/{id}/merge {into_id}` |
 | Conocimiento | `GET proposals?video_id&profile_id&person_id` (`{items, waiting}`), `POST proposals/decide {accept, reject, edits}`, `PUT knowledge/{id}`, `POST knowledge/{id}/retire`, `POST knowledge/forget-video/{video_id}`, `POST videos/{id}/learn` |
+| Revisión | `GET videos/{id}/apply` (fases, segundos estimados y cambios), `POST videos/{id}/apply` («Aplicar y continuar»), `GET videos/{id}/review-items` (puntos de sus seguimientos con una duda de la IA), `POST followups/{id}/items/{item_id}/resolve {action: mismo\|distinto\|descartar}`. El detalle del vídeo incluye `review` (`review.out`), la tarjeta `review`, y `GET status`, `to_review` |
 | Seguimientos | `GET/POST followups`, `GET/PUT/DELETE followups/{id}` (PUT: `name`, `description`, `status`, `summary`, `use_ai_summary`; DELETE `?delete_folder`), `POST followups/{id}/open-folder`, `POST followups/{id}/videos/{video_id} {apply, regenerate}`, `DELETE followups/{id}/videos/{video_id}?rebuild`, `POST followups/{id}/rebuild?all_videos`, `POST/PUT/DELETE followups/{id}/items[/{item_id}]` (DELETE oculta), `GET followups/{id}/versions`, `POST followups/{id}/versions/{vid}/restore`. `POST jobs` admite `followup_ids`; `POST videos/{id}/regenerate` y `POST videos/{id}/remove`, `follow_rebuild[]`; el detalle del vídeo, `GET …/regenerate` y `GET …/removal` incluyen `followups` |
 | Búsqueda | `GET search?q&profile_id&person_id` |
 
