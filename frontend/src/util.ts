@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Job } from './api'
+import type { Job, SpeakerInfo } from './api'
 
 export function fmtTs(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds))
@@ -84,4 +84,12 @@ export function notifyKnowledge() {
 // «1 vídeo», «3 vídeos»
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
+}
+
+// Persona que tiene ahora el hablante (confirmada o propuesta)
+export const currentPerson = (sp: SpeakerInfo) => sp.person_id ?? sp.suggested_person_id
+
+// Otras personas cuya voz aparece en un hablante dividido: «parece incluir a Selu»
+export function splitOthers(sp: SpeakerInfo): string[] {
+  return (sp.split?.groups ?? []).flatMap((g) => (g.suggested && g.suggested.person_id !== currentPerson(sp) ? [g.suggested.name] : []))
 }

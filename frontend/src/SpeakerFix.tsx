@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type Person, type SegmentInfo, type SpeakerOverride, type VideoDetail, type Word } from './api'
-import { fmtTs, notifyKnowledge } from './util'
+import { currentPerson, fmtTs, notifyKnowledge } from './util'
 import { HelpLink } from './HelpMarkdown'
 
 type Scope = 'line' | 'part' | 'lines'
@@ -132,7 +132,9 @@ export function SplitDialog({ video, people, speakerId, seek, onClose, onSaved }
   const ref = useRef<HTMLDialogElement>(null)
   const sp = video.speakers.find((s) => s.id === speakerId)!
   const groups = sp.split?.groups ?? []
-  const [who, setWho] = useState<{ person_id?: number; new_person_name?: string }[]>(groups.map(() => ({})))
+  // Viene elegida la persona a la que se parece la voz del grupo, salvo si ya es la del hablante
+  const [who, setWho] = useState<{ person_id?: number; new_person_name?: string }[]>(
+    groups.map((g) => (g.suggested && g.suggested.person_id !== currentPerson(sp) ? { person_id: g.suggested.person_id } : {})))
   const [busy, setBusy] = useState(false)
   useEffect(() => { ref.current?.showModal() }, [])
 
@@ -157,11 +159,18 @@ export function SplitDialog({ video, people, speakerId, seek, onClose, onSaved }
       <div className="stack">
         <p className="small muted">
           Las intervenciones de este hablante forman dos grupos de voz distintos. Escucha unas frases de cada grupo y
-          elige quién es. Lo que dejes sin elegir se queda como está. Se guarda como cambios manuales.
+          elige quién es. Si la voz de un grupo se parece a la de alguien de otros vídeos, viene ya elegido: compruébalo.
+          Lo que dejes sin elegir se queda como está. Se guarda como cambios manuales.
         </p>
         {groups.map((g, i) => (
           <div key={i} className="split-group">
             <b>Grupo {i + 1}</b> <span className="small muted">· {Math.round(g.seconds)} s en {g.ranges.length} intervenciones</span>
+            {g.suggested && (
+              <div className="small">
+                Por la voz, parece <b>{g.suggested.name}</b> ({g.suggested.similarity.toFixed(2).replace('.', ',')})
+                {g.suggested.person_id === currentPerson(sp) && <span className="muted">, como ya está</span>}.
+              </div>
+            )}
             <ul className="small">
               {g.samples.map((s) => (
                 <li key={s.start}><button className="link" onClick={() => seek(s.start)}>{fmtTs(s.start)}</button> «{s.text.slice(0, 90)}»</li>

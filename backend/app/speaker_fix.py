@@ -15,6 +15,7 @@ from sqlmodel import Session, select
 from .config import WORK_DIR
 from .models import Job, Segment, Speaker, SpeakerOverride, Video
 from .pipeline.transcript import assign_speakers, flatten_words
+from .pipeline.voice import greedy_assign, person_centroids, similarity_matrix
 from .pipeline.voices import apply_overrides
 
 MANUAL_PREFIX = "MANUAL_"
@@ -46,12 +47,34 @@ def labels_for(session: Session, video_id: int, items: list[dict[str, Any]]) -> 
     return out
 
 
+def split_suggestions(splits: dict[str, Any], voice_db: dict[int, list[list[float]]], threshold: float,
+                      names: dict[int, str]) -> dict[str, Any]:
+    """Propone la persona de cada grupo de voz de un hablante dividido (`suggested`), comparando la voz del
+    grupo con las huellas guardadas como al identificar: con el mismo umbral y sin repetir persona entre los
+    dos grupos. Los grupos de trabajos anteriores no traen su voz y se quedan sin propuesta."""
+    cents = person_centroids(voice_db)
+    out = {}
+    for label, sp in splits.items():
+        groups = [{k: v for k, v in g.items() if k not in ("centroid", "suggested")} for g in sp.get("groups") or []]
+        vecs = {str(i): g["centroid"] for i, g in enumerate(sp.get("groups") or []) if g.get("centroid")}
+        best = greedy_assign(similarity_matrix(vecs, cents), threshold) if vecs and cents else {}
+        for i, g in enumerate(groups):
+            if str(i) in best:
+                pid, sim = best[str(i)]
+                g["suggested"] = {"person_id": pid, "name": names.get(pid, ""), "similarity": round(sim, 2)}
+        out[label] = {**sp, "groups": groups}
+    return out
+
+
 def apply_splits(session: Session, video_id: int, splits: dict[str, Any]) -> None:
-    """Guarda en cada hablante la propuesta de dividirlo (`_split` en `visual_hints`, clave interna)."""
+    """Guarda en cada hablante la propuesta de dividirlo (`_split` en `visual_hints`, clave interna), sin la
+    voz de cada grupo, que no hace falta en la web."""
     for sp in session.exec(select(Speaker).where(Speaker.video_id == video_id)):
         hints = {k: v for k, v in (sp.visual_hints or {}).items() if k != "_split"}
         if sp.label in splits:
-            hints["_split"] = splits[sp.label]
+            split = splits[sp.label]
+            hints["_split"] = {**split, "groups": [{k: v for k, v in g.items() if k != "centroid"}
+                                                   for g in split.get("groups") or []]}
         sp.visual_hints = hints
         session.add(sp)
     session.commit()

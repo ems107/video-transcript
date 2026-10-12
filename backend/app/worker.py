@@ -23,7 +23,7 @@ from . import regenerate as regen
 from .config import DATA_DIR, WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
-from .models import Job, Keyframe, Segment, Video, VoiceEmbedding, VoiceSample
+from .models import Job, Keyframe, Person, Segment, Video, VoiceEmbedding, VoiceSample
 from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision, voiceprints, voices
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
@@ -317,7 +317,12 @@ class Worker:
             identify.run(ctx, voice)
             with Session(engine) as s:
                 services.persist_speakers(s, ctx.video_id, ctx.load("identities.json"))
-                speaker_fix.apply_splits(s, ctx.video_id, ctx.load("voices.json", {}).get("splits", {}))
+                # De quién parece cada grupo de voz, con las huellas de otros vídeos
+                person_names = {p.id: p.name for p in s.exec(select(Person))}
+                splits = speaker_fix.split_suggestions(ctx.load("voices.json", {}).get("splits", {}),
+                                                       services.voice_db(s, exclude_video=ctx.video_id),
+                                                       ctx.settings.voice_match_threshold, person_names)
+                speaker_fix.apply_splits(s, ctx.video_id, splits)
             self._load_names(ctx)
         elif key == "correct":
             self._apply_overrides(ctx)
