@@ -161,7 +161,8 @@ intenta convertir «duplicates» en un entero.
 
 Es un modelo pydantic que se guarda en `data/settings.json`. La web lo edita con `PUT /api/settings`.
 `VT_DATA_DIR` (variable de entorno) cambia la carpeta de datos: base de datos, ajustes, `work/` y
-`voces/`. Se usa para pruebas y para segundas instancias.
+`voces/`. Se usa para pruebas y para segundas instancias. `VT_FRONTEND_DIST` sirve otra compilación de la
+web (la de una rama, sin tocar `frontend/dist`).
 
 Al añadir un ajuste:
 1. Créalo con un valor por defecto, para que los `settings.json` antiguos sigan siendo válidos.

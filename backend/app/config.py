@@ -18,7 +18,8 @@ DATA_DIR = Path(os.environ.get("VT_DATA_DIR") or ROOT_DIR / "data")
 MODELS_DIR = ROOT_DIR / "models"
 WORK_DIR = DATA_DIR / "work"
 SETTINGS_FILE = DATA_DIR / "settings.json"
-FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
+# VT_FRONTEND_DIST: la web de otra compilación (probar una rama sin tocar el dist que sirve la instancia del usuario)
+FRONTEND_DIST = Path(os.environ.get("VT_FRONTEND_DIST") or ROOT_DIR / "frontend" / "dist")
 
 
 class Settings(BaseModel):
