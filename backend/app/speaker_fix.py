@@ -18,6 +18,7 @@ from .pipeline.transcript import assign_speakers, flatten_words
 from .pipeline.voices import apply_overrides
 
 MANUAL_PREFIX = "MANUAL_"
+TOLERANCE = 0.01  # segundos de margen al buscar las palabras de una línea
 
 
 def overrides(session: Session, video_id: int) -> list[dict[str, Any]]:
@@ -79,7 +80,10 @@ def words(session: Session, video_id: int) -> list[dict[str, Any]] | None:
 
 def _split_points(seg: Segment, words: list[dict[str, Any]]) -> list[tuple[float, float, str, str]]:
     """Trocea un segmento por palabras: [(inicio, fin, texto, hablante)], agrupando las consecutivas."""
-    mine = [w for w in words if seg.start - 0.05 <= (w["start"] + w["end"]) / 2 <= seg.end + 0.05 and w["word"].strip()]
+    # Margen mínimo (redondeos): con más, al volver a trocear una línea ya partida entraba la primera palabra de
+    # la siguiente y el texto se repartía mal entre los trozos
+    mine = [w for w in words if seg.start - TOLERANCE <= (w["start"] + w["end"]) / 2 <= seg.end + TOLERANCE
+            and w["word"].strip()]
     tokens = seg.text.split()
     if not mine or not tokens:
         return [(seg.start, seg.end, seg.text, seg.speaker)]

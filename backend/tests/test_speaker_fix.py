@@ -99,3 +99,25 @@ def test_pending_tracks_the_overrides_used():
     assert not speaker_fix.pending({"titulo": "T"}, [])
     assert speaker_fix.pending({"hablantes_aplicados": [1]}, [{"id": 1}, {"id": 2}])
     assert not speaker_fix.pending({"hablantes_aplicados": [2, 1]}, [{"id": 1}, {"id": 2}])
+
+
+def test_a_second_fix_does_not_scramble_an_earlier_one(client, session, tmp_path, monkeypatch):
+    """Cada arreglo vuelve a trocear las líneas de los anteriores: una palabra de la línea siguiente no debe colarse."""
+    v, _, iosu = _setup(session, tmp_path, monkeypatch)
+    vid = v.id
+    for s in session.exec(select(Segment).where(Segment.video_id == vid)):
+        session.delete(s)
+    text = "¿Queremos hacer esto? En algún momento no sabemos"
+    times = [(739.976, 741.036), (741.056, 741.156), (741.176, 741.697), (741.717, 741.757), (741.797, 741.937),
+             (741.977, 742.257), (742.297, 742.357), (742.397, 742.597)]
+    session.add(Segment(video_id=vid, idx=0, start=739.976, end=742.6, speaker="S_E", text=text))
+    session.add(Segment(video_id=vid, idx=1, start=800.0, end=803.0, speaker="S_E", text="Otra frase de Edgar."))
+    session.commit()
+    words = [{"word": w, "start": a, "end": b, "speaker": "S_E"} for w, (a, b) in zip(text.split(), times)]
+    words += [{"word": w, "start": 800.0 + i, "end": 800.5 + i, "speaker": "S_E"}
+              for i, w in enumerate(["Otra", "frase", "de", "Edgar."])]
+    (tmp_path / "job_1" / "words.json").write_text(json.dumps(words), encoding="utf-8")
+    client.post(f"/api/videos/{vid}/speaker-overrides", json={"ranges": [[739.98, 741.7]], "person_id": iosu.id})
+    client.post(f"/api/videos/{vid}/speaker-overrides", json={"ranges": [[800.0, 801.5]], "person_id": iosu.id})
+    session.expire_all()
+    assert _lines(session, vid)[:2] == [("S_I", "¿Queremos hacer esto?"), ("S_E", "En algún momento no sabemos")]
