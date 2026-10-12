@@ -276,7 +276,9 @@ def test_apply_in_order_and_rebuild_respects_manual(session, tmp_analyzed):
     v1, v2 = _video(session, D1, "Primera"), _video(session, D2, "Segunda")
     f = _followup(session, v1, v2)
     ask = FakeAsk(ANSWERS, MENTIONS)
-    FS.rebuild_from(session, f, None, ask)
+    # Solo cuenta para medir el tiempo el vídeo en que se buscan menciones (el primero no tiene estado anterior)
+    assert FS.rebuild_from(session, f, None, ask) == 25
+    assert FS.rebuild_seconds(session, f, None) == FS.rebuild_seconds(session, f, D2) == 25 * 6.0
     its = {it["text"]: it for it in FS.items(session, f.id)}
     assert its["Enviar el informe"]["status"] == "hecha" and its["Abrir la cuenta común"]["status"] == "vigente"
     assert f.summary == "Informe enviado y cuenta decidida."

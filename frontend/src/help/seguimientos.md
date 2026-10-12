@@ -125,7 +125,9 @@ cambios que no valen para el tipo de punto; no vuelve a crear un punto que repit
 borraste (parecido de {{v:seguimiento_parecido}} sobre 100 o más); y acepta como mucho
 {{v:seguimiento_max_menciones}} menciones por bloque.
 
-Tarda unos {{v:ritmo_follow}} s por minuto de vídeo, sobre todo por el modo razonamiento. El estado de un
+Tarda unos {{v:ritmo_follow}} s por minuto de vídeo, sobre todo por el modo razonamiento. El primer vídeo
+de un seguimiento apenas tarda, porque aún no hay puntos que buscar: por eso no cuenta ni para medir el
+ritmo ni para estimar lo que tarda **Rehacer el estado**. El estado de un
 punto sale siempre de su último hito. Para el contexto se envía el resumen, lo abierto y lo cerrado en los
 últimos {{v:seguimiento_recientes}} vídeos, hasta {{v:seguimiento_contexto}} caracteres; si no cabe, se
 recorta primero lo cerrado.

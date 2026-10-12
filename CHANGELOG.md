@@ -25,6 +25,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   habla de «años».
 - Al cambiar quién habla, las líneas seguidas de la misma persona se unen en una sola, en vez de quedar
   partidas en trozos («esté bien y» / «que nos» / …).
+- La estimación de **Rehacer el estado** de un seguimiento es más realista: antes contaba el primer vídeo,
+  que casi no tarda, y salía en torno a la mitad de lo real.
 
 ## [1.5.0] - 2026-10-12
 
