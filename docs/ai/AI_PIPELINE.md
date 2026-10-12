@@ -89,10 +89,12 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
   - `videos/{id}/learn`, `profiles/from-video` y `profiles/{id}/learn-all`: solo `learn`, como trabajo de una
     sola fase (`only: ["learn"]`), que no cambia el estado de la revisión del vídeo.
   - `videos/{id}/apply`: ver «Revisión del vídeo».
-  - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior):
-    `only` (el worker se salta todas las fases que no estén en la lista; lo usan los trabajos que solo
-    rehacen un seguimiento), `follow_rebuild` (ids de seguimientos cuyo estado se rehace desde este
-    vídeo) y `apply` (ejecutar las fases de después de la revisión).
+  - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior,
+    porque cada vídeo reutiliza su último `Job`): `only` (el worker se salta todas las fases que no estén en
+    la lista; lo usan los trabajos que solo rehacen un seguimiento), `follow_rebuild` (ids de seguimientos
+    cuyo estado se rehace desde este vídeo), `apply` (ejecutar las fases de después de la revisión) y
+    `waiting_for`. Una opción nueva que solo valga para un encolado va en esa lista: si no, se arrastra
+    (pasó con `apply` hasta la 1.7.1: regenerar un vídeo revisado aplicaba otra vez su revisión).
 - **`persist_speakers` fusiona:** al repetir `identify`, un hablante confirmado conserva su persona y su
   `id`. Solo cambian las propuestas de los no confirmados, y se borran las etiquetas que ya no existen.
 - **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía

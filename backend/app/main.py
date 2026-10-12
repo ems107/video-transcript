@@ -552,8 +552,9 @@ def regenerate(video_id: int, body: RegenerateIn | None = None, session: Session
     return {"ok": True, "job_id": job.id}
 
 
-# Opciones que valen solo para un encolado: no se arrastran al siguiente
-ONE_SHOT_OPTIONS = ("only", "follow_rebuild")
+# Opciones que valen solo para un encolado: no se arrastran al siguiente. Sin `apply` aquí, regenerar un vídeo
+# ya revisado volvía a ejecutar el seguimiento, el aprendizaje y las huellas sin esperar a la revisión
+ONE_SHOT_OPTIONS = ("only", "follow_rebuild", "apply", "waiting_for")
 
 
 def _requeue(session: Session, v: Video, redo: list[str], message: str, check_work: bool = True,
