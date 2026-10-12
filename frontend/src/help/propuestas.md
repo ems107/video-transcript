@@ -38,8 +38,6 @@ reconocer a una persona o a entender y transcribir los vídeos siguientes, o si 
   plegado al final de las propuestas del vídeo, con su motivo y el botón **Recuperar**.
 - Lo que repite otra propuesta también se descarta.
 - Lo que no tiene claro lo marca como **dudoso**, con el motivo.
-- Si un dato de una persona es en realidad un hecho del negocio (por ejemplo, cómo es el servicio que
-  ofrece), lo propone como **contexto del perfil**.
 
 Un término que solo se ha visto en pantalla, sin que nadie lo mencione, puede tener que ver con la reunión
 o no (una pestaña abierta, un programa del escritorio): también puede salir dudoso. Decide tú: **Aceptar

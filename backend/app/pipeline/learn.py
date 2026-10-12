@@ -7,6 +7,7 @@ no aparece se descarta. El usuario acepta o rechaza cada propuesta en la web.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .. import knowledge as K
@@ -230,8 +231,9 @@ def run(ctx: JobContext, llm: LLMServer, rejected: list[str], pending: list[str]
     proposals = collect_proposals(results, ranges, utts, vision, names, ctx.people, profile,
                                   ctx.load("names.json", []), want_sections, screen_terms)
     if profile:
+        people = {n for p in ctx.people for n in [p["name"], *(p.get("aliases") or [])]} | set(names.values())
         proposals += collect_corrections(results, utts, vision, screen_terms, profile,
-                                         [c["text"] for c in ctx.corrections])
+                                         [c["text"] for c in ctx.corrections], people)
     proposals = judge_screen_terms(ctx, llm, proposals, vision)
     proposals = judge_proposals(ctx, llm, proposals, profile, names)
     ctx.save("proposals.json", proposals)
@@ -247,14 +249,17 @@ SOURCE_REASON = {
 
 
 def collect_corrections(results: list[dict[str, Any]], utts: list[dict[str, Any]], vision: list[dict[str, Any]],
-                        screen_terms: list[str], profile: dict[str, Any], user_notes: list[str]) -> list[dict[str, Any]]:
+                        screen_terms: list[str], profile: dict[str, Any], user_notes: list[str],
+                        people: set[str] = frozenset()) -> list[dict[str, Any]]:
     """Formas mal transcritas de un término («Natur» por «Naturgy»): una propuesta por término con sus formas.
 
     Salen de la IA (que puede apoyarse en tus notas), de la pantalla (un nombre que se lee y suena como algo
     escrito distinto) y de lo que la fase de corrección ya cambió. Cada forma debe oírse tal cual en la
-    transcripción. Lo que solo deduce la IA queda como dudoso."""
+    transcripción. Lo que solo deduce la IA queda como dudoso. Los nombres de personas (`people`) no: cómo
+    se oye a una persona son sus otros nombres, y la IA confundía con ellos frases normales («Juan, puedes…»)."""
     glossary = K.effective_glossary(profile)
     known = K.known_forms(profile)
+    person_words = {w for n in people for w in normalize(n).split() if len(w) > 2}
     found: dict[str, dict[str, Any]] = {}
 
     def add(term: str, form: str, source: str, reason: str) -> None:
@@ -262,6 +267,8 @@ def collect_corrections(results: list[dict[str, Any]], utts: list[dict[str, Any]
         nt, nf = normalize(term), normalize(form)
         if not nt or not nf or nt == nf or (nt, nf) in known or f" {nt} " in f" {nf} ":
             return
+        if set(nt.split()) & person_words:
+            return  # es el nombre de una persona
         if not K.heard_at(form, utts, limit=1):
             return  # la forma oída debe aparecer de verdad en la transcripción
         source = K.correction_source(term, user_notes, vision, screen_terms, glossary) if source == "ia" else source
@@ -324,11 +331,10 @@ def judge_lines(batch: list[tuple[int, dict[str, Any]]], names: dict[str, str], 
     return "\n".join(out)
 
 
-def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any],
-                            has_profile: bool) -> list[dict[str, Any]]:
+def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any]) -> list[dict[str, Any]]:
     """Aplica la pasada de juicio: lo descartado se guarda como `descartado_ia` (se puede recuperar), lo que
-    repite otra propuesta también, lo dudoso se marca y un dato de persona que es del negocio pasa al perfil.
-    Lo que la IA no valora queda como estaba. Las alias y las secciones no se juzgan aquí."""
+    repite otra propuesta también y lo dudoso se marca. Lo que la IA no valora queda como estaba. Las alias y
+    las secciones no se juzgan aquí."""
     verdicts = {x.get("id"): x for x in answer.get("propuestas") or []}
     out = []
     for i, p in enumerate(proposals):
@@ -351,10 +357,6 @@ def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, A
             data["juicio"] = {"valor": "dudosa", "motivo": motivo if valor == "dudosa" else data["juicio"]["motivo"]}
         elif valor == "util" and motivo:
             data["juicio"] = {"valor": "util", "motivo": motivo}
-        if v.get("perfil") and p["kind"] == "dato" and has_profile:
-            out.append({**p, "kind": "contexto", "category": "otro", "owner": ("profile", None),
-                        "data": {**{k: val for k, val in data.items() if k != "text"}, "text": data["text"]}})
-            continue
         out.append({**p, "data": data})
     return out
 
@@ -366,7 +368,8 @@ def section_proposals(answer: dict[str, Any], learned: dict[int, str]) -> list[d
         return []
     out, seen = [], set()
     for x in (sec.get("propuestas") or [])[:2]:
-        title = (x.get("titulo") or "").strip()
+        # La IA a veces copia el número de la lista delante del título («[#01] Acuerdos…»)
+        title = re.sub(r"^\s*\[#?\d+\]\s*", "", x.get("titulo") or "").strip()
         if not title or normalize(title) in seen or normalize(title) in {normalize(t) for t in learned.values()}:
             continue
         seen.add(normalize(title))
@@ -414,9 +417,11 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
             return proposals
         answer["learned_sections"] = learned_sections
         ctx.save("judgment.raw.json", answer)
-    out = apply_proposal_judgment(proposals, answer, bool(profile))
+    out = apply_proposal_judgment(proposals, answer)
     learned = {int(k): v for k, v in (answer.get("learned_sections") or {}).items()}
-    return out + (section_proposals(answer, learned) if profile else [])
+    # Solo si el perfil ya tiene secciones: sin ninguna, las propone la extracción (`want_sections`)
+    has_sections = bool(K.effective_sections(profile)) if profile else False
+    return out + (section_proposals(answer, learned) if has_sections else [])
 
 
 def apply_judgment(proposals: list[dict[str, Any]], answer: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

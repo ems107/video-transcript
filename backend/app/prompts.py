@@ -422,9 +422,8 @@ JUDGE_SCHEMA = {
                     "valor": {"type": "string", "enum": ["util", "dudosa", "descartar"]},
                     "motivo": {"type": "string"},
                     "igual_que": {"type": "integer"},
-                    "perfil": {"type": "boolean"},
                 },
-                "required": ["id", "valor", "motivo", "igual_que", "perfil"],
+                "required": ["id", "valor", "motivo", "igual_que"],
             },
         },
         "secciones": {
@@ -472,8 +471,6 @@ obvio, algo que se ve en pantalla sin relación con el tema, o algo que la frase
 - motivo: por qué, en pocas palabras.
 - igual_que: el número de otra propuesta de esta lista que dice lo mismo (la que sobra lleva el número de \
 la que se queda), o 0.
-- perfil: true solo si es un dato de una persona que en realidad es un hecho duradero del negocio, útil \
-para el tipo de vídeo (se propondrá como contexto del perfil); si no, false.
 Y en «secciones»: encajan (si las secciones sirven para organizar el resumen de este vídeo y de los \
 siguientes de este tipo), motivo, y propuestas: si no encajan, hasta 2 títulos generales que sirvan para \
 cualquier vídeo de este tipo (reemplaza: el número [#…] de la sección que sustituye, o 0). Si encajan o no \

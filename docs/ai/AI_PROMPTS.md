@@ -305,12 +305,14 @@ nunca proponía uno mal transcrito, que es justo lo que más falta hace.
 
 **Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`). Después de recoger y comprobar las
 propuestas, la IA las revisa todas juntas, en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
-`util`, `dudosa` o `descartar` con motivo, `igual_que` (duplicado) y `perfil` (un dato de persona que es
-contexto del negocio). `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
+`util`, `dudosa` o `descartar` con motivo e `igual_que` (duplicado). Se probó también pasar al perfil los
+datos de persona que fueran del negocio, pero el texto perdía su sujeto («Documenta la configuración…») y
+el modelo lo marcaba con datos que sí eran de la persona: se quitó. `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
 descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso
 lleva `data.juicio`; las alias y las secciones no se juzgan. En la misma llamada valora si las secciones
 del perfil encajan con el vídeo y, si no, propone hasta 2 generales (`section_proposals`, `replaces` solo
-sobre una aprendida). Es de mejor esfuerzo: si falla, las propuestas quedan como estaban. Medido en la
+sobre una aprendida; solo si el perfil ya tiene secciones). Las correcciones de transcripción no admiten
+nombres de personas: la IA proponía «Juan, puedes» → «Juan Pérez». Es de mejor esfuerzo: si falla, las propuestas quedan como estaban. Medido en la
 prueba de los 3 vídeos de tutoría: 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
 explicaba), términos como un código promocional o el nombre de un programa del escritorio y un duplicado
 de un término ya aceptado; el prompt de extracción ya pedía no incluirlos.

@@ -222,7 +222,9 @@ def test_corrections_from_the_ai_the_screen_and_the_glossary():
         {"oido": "Yendesa", "correcto": "Endesa", "motivo": "Compañía eléctrica", "t": "00:00:30"},
         {"oido": "Iberdrola", "correcto": "Iberdrola S.A.", "motivo": "no se oye", "t": "00:00:30"},
     ]}]
-    out = collect_corrections(results, utts, vision, ["Ahorro Directo"], profile, ["Natur es Naturgy"])
+    results[0]["correcciones"].append({"oido": "Juan, puedes", "correcto": "Juan Pérez", "motivo": "nombre", "t": "00:00:10"})
+    utts.append({"start": 50.0, "end": 52.0, "speaker": "A", "text": "Juan, puedes documentarlo."})
+    out = collect_corrections(results, utts, vision, ["Ahorro Directo"], profile, ["Natur es Naturgy"], {"Juan Pérez"})
     by_term = {p["data"]["term"]: p["data"] for p in out}
     assert set(by_term) == {"Naturgy", "Endesa", "Mapfre", "Ahorro Directo"}  # Iberdrola no se oye así
     assert by_term["Naturgy"]["fuente"] == "usuario" and "juicio" not in by_term["Naturgy"]
@@ -254,7 +256,7 @@ def test_accepted_corrections_become_trusted_variants():
     assert item_key("correccion", {"term": "Naturgy", "variants": ["Natur", "Naturgi"]}) == "naturgy|natur|naturgi"
 
 
-def test_judgment_discards_dedupes_and_moves_to_the_profile():
+def test_judgment_discards_and_dedupes():
     from app.pipeline.learn import apply_proposal_judgment, section_proposals
 
     def prop(kind, text, owner=("speaker", "S1"), category="conocimiento"):
@@ -271,26 +273,24 @@ def test_judgment_discards_dedupes_and_moves_to_the_profile():
         prop("alias", "Selu"),
     ]
     answer = {"propuestas": [
-        {"id": 0, "valor": "descartar", "motivo": "Es lo que explicó en la sesión", "igual_que": 0, "perfil": False},
-        {"id": 1, "valor": "util", "motivo": "Su cargo", "igual_que": 0, "perfil": False},
-        {"id": 2, "valor": "util", "motivo": "Su cargo", "igual_que": 1, "perfil": False},
-        {"id": 3, "valor": "util", "motivo": "Cómo es el servicio", "igual_que": 0, "perfil": True},
-        {"id": 4, "valor": "descartar", "motivo": "Solo se ve en una pestaña", "igual_que": 0, "perfil": False},
-        {"id": 5, "valor": "dudosa", "motivo": "No queda claro de quién habla", "igual_que": 0, "perfil": False},
-        {"id": 6, "valor": "descartar", "motivo": "no se juzgan", "igual_que": 0, "perfil": False},
+        {"id": 0, "valor": "descartar", "motivo": "Es lo que explicó en la sesión", "igual_que": 0},
+        {"id": 1, "valor": "util", "motivo": "Su cargo", "igual_que": 0},
+        {"id": 2, "valor": "util", "motivo": "Su cargo", "igual_que": 1},
+        {"id": 3, "valor": "util", "motivo": "Cómo es el servicio", "igual_que": 0},
+        {"id": 4, "valor": "descartar", "motivo": "Solo se ve en una pestaña", "igual_que": 0},
+        {"id": 5, "valor": "dudosa", "motivo": "No queda claro de quién habla", "igual_que": 0},
+        {"id": 6, "valor": "descartar", "motivo": "no se juzgan", "igual_que": 0},
     ]}
-    out = apply_proposal_judgment(proposals, answer, has_profile=True)
+    out = apply_proposal_judgment(proposals, answer)
     assert [p.get("status", "propuesto") for p in out] == [
         "descartado_ia", "propuesto", "descartado_ia", "propuesto", "descartado_ia", "propuesto", "propuesto"]
     assert out[2]["data"]["juicio"]["motivo"] == "Repite otra propuesta: «Es planificador financiero en Barymont»."
-    assert out[3]["kind"] == "contexto" and out[3]["owner"] == ("profile", None) and out[3]["category"] == "otro"
+    assert out[3]["kind"] == "dato" and out[3]["data"]["juicio"]["valor"] == "util"
     assert out[5]["data"]["juicio"] == {"valor": "dudosa", "motivo": "No queda claro de quién habla"}
     assert "juicio" not in out[6]["data"]  # las otras formas de nombre no se juzgan
-    # Sin perfil, un dato no se puede pasar al perfil
-    assert apply_proposal_judgment(proposals, answer, has_profile=False)[3]["kind"] == "dato"
 
     sec = {"secciones": {"encajan": False, "motivo": "Son de una reunión administrativa",
-                         "propuestas": [{"titulo": "Qué se trató", "reemplaza": 7}, {"titulo": "Datos", "reemplaza": 99},
+                         "propuestas": [{"titulo": "[#01] Qué se trató", "reemplaza": 7}, {"titulo": "Datos", "reemplaza": 99},
                                         {"titulo": "Otra más", "reemplaza": 0}]}}
     s = section_proposals(sec, {7: "Gestión administrativa y datos"})
     assert [(x["data"]["title"], x["replaces"]) for x in s] == [("Qué se trató", 7), ("Datos", 0)]

@@ -29,9 +29,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   apoyándose en tus correcciones, en lo que se lee en pantalla o en lo que ya corrigió el glosario. Al
   aceptarlas, esas formas se corrigen solas en los vídeos siguientes.
 - **Las propuestas pasan una revisión de la IA** antes de enseñártelas: descarta lo que es contenido de la
-  reunión (lo que se explicó en ella, algo puntual) y lo repetido, marca lo dudoso con su motivo y pasa al
-  perfil los datos que son del negocio. Lo descartado queda plegado en **Descartadas por la IA**, con el
-  botón **Recuperar**.
+  reunión (lo que se explicó en ella, algo puntual) y lo repetido, y marca lo dudoso con su motivo. Lo
+  descartado queda plegado en **Descartadas por la IA**, con el botón **Recuperar**.
 - Si las secciones del resumen del perfil no encajan con un vídeo, la IA propone otras más generales.
 - **Escuchar su voz.** La ficha de cada persona tiene sus mejores muestras de voz (de 5 a 30 s), sacadas de
   los vídeos a su calidad original, para comprobar de oído que es ella. Se guardan solo en tu equipo.
