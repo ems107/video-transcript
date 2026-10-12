@@ -166,7 +166,8 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
 3. Si cambia el formato de un JSON intermedio, ten en cuenta que en `data/work/` puede haber trabajos
    a medias con el formato anterior. Haz que `load` tolere su ausencia (`default`), o borra el `.done`
    afectado.
-4. Pon la lógica pura (sin modelos) en funciones aparte y pruébala en `tests/test_logic.py`.
+4. Pon la lógica pura (sin modelos) en funciones aparte y pruébala en su test (`tests/test_<módulo>.py`;
+   `test_logic.py` reúne la del glosario, la voz, el troceo y la transcripción).
 
 ## Prueba de punta a punta
 

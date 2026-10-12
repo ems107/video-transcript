@@ -91,3 +91,15 @@ git switch --detach v1.0.0          # usar una versión anterior (git switch mai
 
 En GitHub: pestaña **Releases** del repositorio, o el enlace de comparación de cada versión en el
 CHANGELOG.
+
+## Dos versiones seguidas
+
+Si preparas una versión de arreglos y otra con funciones (por ejemplo, 1.6.1 y 1.7.0), publica la primera
+**antes** de fusionar la segunda en `main`:
+
+1. Fusiona la rama de arreglos y ejecuta `release.py patch` (crea su commit «Versión X.Y.Z» y su tag).
+2. Después, fusiona la rama de funciones y ejecuta `release.py minor`.
+
+`release.py` publica siempre el estado actual de `main`. Si ya has fusionado las dos, la primera no puede
+tener su propio commit de versión sin reescribir `main`, y eso no se hace. Así pasó con la 1.6.1: quedó
+como un tag en su fusión (donde `VERSION` aún dice 1.6.0) y sus notas van dentro de la 1.7.0.
