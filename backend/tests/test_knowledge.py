@@ -232,3 +232,14 @@ def test_group_forms_and_their_use():
         "term": "Bárymont", "definition": "CRM", "forms": ["Gestibarymont"]}}]}
     assert [g["term"] for g in K.effective_glossary(profile)] == ["Bárymont", "Gestibarymont"]
     assert "también Gestibarymont" in K.learned_block(profile)
+
+
+def test_the_evidence_line_is_the_one_with_the_numbers():
+    """La frase que respalda un dato es la que tiene sus cifras, aunque la pregunta comparta más palabras."""
+    from app.knowledge import best_moment, claim_score
+
+    utts = [{"start": 10.0, "end": 12.0, "text": "¿Cuál es tu salario neto mensual, Edgar?"},
+            {"start": 13.0, "end": 15.0, "text": "Pues unos 2.200, en doce pagas."}]
+    claim = "Tiene un salario neto mensual de 2.200 euros con 12 pagas"
+    assert claim_score(claim, utts[1]["text"]) > claim_score(claim, utts[0]["text"])
+    assert best_moment(claim, utts, 11.0) == 13.0

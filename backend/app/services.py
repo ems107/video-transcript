@@ -67,10 +67,12 @@ def video_person_ids(session: Session, video_id: int) -> set[int]:
             if sp.person_id or sp.suggested_person_id}
 
 
-def voice_db(session: Session) -> dict[int, list[list[float]]]:
+def voice_db(session: Session, exclude_video: int | None = None) -> dict[int, list[list[float]]]:
+    """Huellas de cada persona para reconocerla (sin las dudosas, que el usuario aún no ha aceptado)."""
     out: dict[int, list[list[float]]] = {}
-    for e in session.exec(select(VoiceEmbedding)):
-        out.setdefault(e.person_id, []).append(e.vector)
+    for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.doubtful.is_(False))):
+        if exclude_video is None or e.video_id != exclude_video:
+            out.setdefault(e.person_id, []).append(e.vector)
     return out
 
 

@@ -62,6 +62,30 @@ def status_for_event(kind: str, status: str) -> str | None:
     return next((ev for ev, st in EVENT_STATUS[kind].items() if st == status), None)
 
 
+def open_possible(it: dict[str, Any]) -> dict[str, Any] | None:
+    """El último cambio «posible» (sin frase que lo demuestre) que el usuario aún no ha confirmado ni descartado."""
+    for e in reversed(it["events"]):
+        if e.get("posible"):
+            done = it["status"] == EVENT_STATUS[it["kind"]].get(e["posible"]) or e.get("descartado")
+            return None if done else e
+    return None
+
+
+def needs_review(it: dict[str, Any], video_id: int | None = None) -> list[str]:
+    """Lo que el usuario debe decidir de un punto: si duplica otro («duplicado») o si un cambio de estado sin
+    frase que lo demuestre es cierto («posible»). Con `video_id`, solo lo que salió de ese vídeo."""
+    if it.get("hidden"):
+        return []
+    out = []
+    created = it["events"][0].get("video_id") if it["events"] else None
+    if it.get("review") and (video_id is None or created == video_id):
+        out.append(it["review"].get("tipo", "duplicado"))
+    e = open_possible(it)
+    if e and (video_id is None or e.get("video_id") == video_id):
+        out.append("posible")
+    return out
+
+
 def event_date(e: dict[str, Any]) -> datetime | None:
     return datetime.fromisoformat(e["date"]) if e.get("date") else None
 
@@ -255,8 +279,9 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
       verdad se aplica; sin ella queda como avance con `posible` (lo confirma el usuario). Se descartan los
       puntos que no existen, los cambios que no valen para el tipo de punto y los avances en el mismo vídeo en
       que aparece el punto. A un punto manual solo se le anotan avances.
-    - Puntos nuevos: todos los `points` del análisis del vídeo, salvo los que la IA relaciona con uno existente
-      («mismos» en `update`) y los que repiten uno existente, también uno borrado por el usuario."""
+    - Puntos nuevos: todos los `points` del análisis del vídeo, salvo los que la IA da por el mismo asunto que
+      uno anterior («clasificacion» en `update`, que también ve los borrados por el usuario) y los que casi
+      repiten el texto de uno existente. Los «dudosos» se crean con `review`, para que decida el usuario."""
     by_id = {short_id(it): it for it in items}
     events, new, discarded = [], [], []
     changes = {x["id"] for x in signals if x["evento"] != "avanza" and x["verified"]}
@@ -292,22 +317,72 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
             ev["posible"] = possible
             ev["nota"] = f"Según la IA: «{x['cita']}»" if x["cita"] else ""
         events.append((it["id"], ev))
-    same = {str(m.get("nuevo", "")).strip().strip("[]").upper() for m in update.get("mismos") or []
-            if str(m.get("existente", "")).strip().strip("[]").upper() in by_id}
+    by_key = {pt["key"]: pt for pt in points}
+    verdict = classify(update, by_id, by_key)
     existing = [(it["kind"], it["text"]) for it in items]
+    skipped: set[str] = set()
+    created: dict[str, dict[str, Any]] = {}  # punto nuevo creado por cada [N…]
+    owners_for: dict[str, list[str]] = {}  # responsables de los [N…] que se unen a otro de este vídeo
+
+    def join_owner(target: dict[str, Any] | None, key: str | None, owner: str) -> None:
+        """La misma tarea encargada a varias personas en este vídeo queda como un punto con todas ellas."""
+        if not owner:
+            return
+        if target is None:
+            owners_for.setdefault(key or "", []).append(owner)
+        elif normalize(owner) not in {normalize(o) for o in target["owner"].split(", ") if o}:
+            target["owner"] = ", ".join(x for x in (target["owner"], owner) if x)
+
     for pt in points:
-        if pt["key"] in same:
+        relation, other, motivo = verdict.get(pt["key"], ("nuevo", None, ""))
+        if relation == "mismo" and other not in skipped:  # si los dos se dan por «el mismo», queda uno
+            skipped.add(pt["key"])
+            if other in by_key:
+                join_owner(created.get(other), other, pt["owner"])
+            discarded.append(f"{pt['key']} «{pt['text']}»: el mismo que {other}")
             continue
-        if any(k == pt["kind"] and _similar(pt["text"], other) for k, other in existing):
+        # Red de seguridad: casi el mismo texto que un punto existente (también uno borrado por el usuario)
+        twin = next((n for n in new if n["kind"] == pt["kind"] and _similar(pt["text"], n["text"])), None)
+        if twin is not None or any(k == pt["kind"] and _similar(pt["text"], txt) for k, txt in existing):
+            if twin is not None:
+                join_owner(twin, None, pt["owner"])
             discarded.append(f"{pt['key']} «{pt['text']}»: ya existe")
             continue
         existing.append((pt["kind"], pt["text"]))
         t = _valid_t(pt["t"], duration)
-        new.append({"kind": pt["kind"], "text": pt["text"], "owner": pt["owner"], "due": pt["due"],
-                    "status": INITIAL[pt["kind"]], "manual": False, "hidden": False,
-                    "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t) if t is not None else "",
-                                "evento": "creada", "nota": "", "source": "ia", "at": at.isoformat()}]})
+        review: dict[str, Any] = {}
+        if relation == "dudoso" and other:
+            target = by_id.get(other)
+            review = {"tipo": "duplicado", "de": target["id"] if target else None,
+                      "texto": target["text"] if target else by_key[other]["text"], "motivo": motivo}
+        item = {"kind": pt["kind"], "text": pt["text"], "owner": pt["owner"], "due": pt["due"],
+                "status": INITIAL[pt["kind"]], "manual": False, "hidden": False, "review": review,
+                "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t) if t is not None else "",
+                            "evento": "creada", "nota": "", "source": "ia", "at": at.isoformat()}]}
+        for o in owners_for.pop(pt["key"], []):
+            join_owner(item, None, o)
+        created[pt["key"]] = item
+        new.append(item)
     return {"events": events, "new": new, "discarded": discarded}
+
+
+def _ref(x: Any) -> str:
+    return str(x or "").strip().strip("[]").upper()
+
+
+def classify(update: dict[str, Any], by_id: dict[str, dict[str, Any]],
+             by_key: dict[str, dict[str, Any]]) -> dict[str, tuple[str, str | None, str]]:
+    """Qué dice la IA de cada punto del vídeo: `{N…: (mismo|nuevo|dudoso, id con el que lo compara, motivo)}`.
+
+    Se descartan las comparaciones con un id que no existe (o con el propio punto): el punto queda como nuevo."""
+    out: dict[str, tuple[str, str | None, str]] = {}
+    for c in update.get("clasificacion") or []:
+        key, other, relation = _ref(c.get("nuevo")), _ref(c.get("existente")), c.get("relacion", "nuevo")
+        if key not in by_key or relation not in ("mismo", "dudoso") or other == key \
+                or (other not in by_id and other not in by_key):
+            continue
+        out[key] = (relation, other, str(c.get("motivo") or "").strip())
+    return out
 
 
 def revert(items: list[dict[str, Any]], video_ids: set[int]) -> dict[str, Any]:
@@ -328,6 +403,12 @@ def revert(items: list[dict[str, Any]], video_ids: set[int]) -> dict[str, Any]:
             continue
         update[it["id"]] = [e for e in evs if e not in from_ia or (e is evs[0] and e["evento"] == "creada")]
     return {"delete": delete, "update": update}
+
+
+def hidden_block(items: list[dict[str, Any]]) -> str:
+    """Los puntos que borró el usuario, con su id, para que la IA no los vuelva a crear."""
+    labels = {"tarea": "tarea", "decision": "decisión", "duda": "duda"}
+    return "\n".join(f"- [{short_id(it)}] {labels[it['kind']]}: {it['text']}" for it in items if it.get("hidden"))
 
 
 def analysis_text(a: dict[str, Any], points: list[dict[str, Any]], signals: list[dict[str, Any]],
@@ -351,6 +432,20 @@ def analysis_text(a: dict[str, Any], points: list[dict[str, Any]], signals: list
     if a.get("resumen_detallado"):
         parts.append("Resumen detallado del vídeo:\n" + a["resumen_detallado"][:max_chars])
     return "\n\n".join(parts)
+
+
+MOMENT_RE = re.compile(r"\[(\d{4}-\d{2}-\d{2})[ T·]+(\d{1,2}:\d{2}:\d{2})\]")
+
+
+def link_moments(text: str, videos: list[dict[str, Any]]) -> str:
+    """Las marcas «[AAAA-MM-DD hh:mm:ss]» del resumen, con enlace al documento del vídeo de esa fecha."""
+    links = {f"{v['date']:%Y-%m-%d}": v.get("link") for v in videos}
+
+    def repl(m: re.Match[str]) -> str:
+        link = links.get(m.group(1))
+        label = f"{m.group(1)} {m.group(2)}"
+        return f"[{label}]({link}/resumen.md)" if link else label
+    return MOMENT_RE.sub(repl, text)
 
 
 def render_markdown(f: dict[str, Any], items: list[dict[str, Any]], videos: list[dict[str, Any]]) -> str:
@@ -377,7 +472,7 @@ def render_markdown(f: dict[str, Any], items: list[dict[str, Any]], videos: list
         out += [f"- **Aviso:** el estado no está al día desde el {f['stale_from']:%Y-%m-%d}. {f.get('stale_reason', '')}"]
     out.append("")
     if f.get("summary"):
-        out += ["## Resumen", "", f["summary"].strip(), ""]
+        out += ["## Resumen", "", link_moments(f["summary"].strip(), videos), ""]
     shown = [it for it in items if not it.get("hidden")]
     for kind in KINDS:
         rows = [it for it in shown if it["kind"] == kind]
@@ -396,7 +491,8 @@ def render_markdown(f: dict[str, Any], items: list[dict[str, Any]], videos: list
                     w = where(e)
                     label = EVENT_LABELS.get(e["evento"], e["evento"])
                     if e.get("posible"):
-                        label += f" (posible: {EVENT_LABELS.get(e['posible'], e['posible'])}, sin confirmar)"
+                        state = "descartado por ti" if e.get("descartado") else "sin confirmar"
+                        label += f" (posible: {EVENT_LABELS.get(e['posible'], e['posible'])}, {state})"
                     out.append(f"  - {label}{(' · ' + w) if w else ''}{note}")
         out.append("")
     if videos:

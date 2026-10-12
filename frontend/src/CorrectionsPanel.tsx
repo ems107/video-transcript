@@ -3,12 +3,7 @@ import { api, type VideoDetail } from './api'
 import { HelpLink } from './HelpMarkdown'
 
 // Correcciones del usuario sobre el análisis de un vídeo. La IA las recibe como hechos al regenerar
-export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
-  video: VideoDetail
-  running: boolean
-  onChange: () => void
-  onRegenerate: () => void
-}) {
+export function CorrectionsPanel({ video, onChange }: { video: VideoDetail; onChange: () => void }) {
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -27,7 +22,7 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
     <div className="card pad" style={{ marginTop: '1rem' }}>
       <h3 style={{ margin: 0 }}>Correcciones <HelpLink to="correcciones" /></h3>
       <p className="small muted" style={{ marginTop: '0.35rem' }}>
-        Escribe aquí lo que el análisis ha interpretado mal, como hechos sobre lo que ocurre en el vídeo. Al regenerar, la
+        Escribe aquí lo que el análisis ha interpretado mal, como hechos sobre lo que ocurre en el vídeo. Al aplicar, la
         IA vuelve a escribir el análisis desde cero, sin ver el anterior, y recibe estas correcciones como hechos que
         prevalecen sobre la grabación. Por eso cada corrección debe entenderse por sí sola, sin referirse a partes del
         resumen. Se aplican en cada regeneración: mantenlas aunque el resumen ya salga bien. Afectan al resumen, las tareas
@@ -52,7 +47,7 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
                   <span className="grow">{c.text}</span>
                   <span className="actions">
                     <span className={c.applied ? 'pill ok' : 'pill warn'}
-                      title={c.applied ? 'El análisis actual ya la tiene en cuenta' : 'Se aplicará la próxima vez que regeneres el análisis'}>
+                      title={c.applied ? 'El análisis actual ya la tiene en cuenta' : 'Se aplicará con «Aplicar y continuar»'}>
                       {c.applied ? 'Aplicada' : 'Pendiente'}
                     </span>
                     <button className="sm" disabled={busy} onClick={() => setEditing({ id: c.id, text: c.text })}>Editar</button>
@@ -72,9 +67,8 @@ export function CorrectionsPanel({ video, running, onChange, onRegenerate }: {
           onClick={() => act(async () => { await api.post(`/api/videos/${video.id}/corrections`, { text }); setText('') })}>Añadir</button>
       </div>
       {video.corrections_pending && (
-        <div className="notice inline small" style={{ marginTop: '0.75rem' }}>
-          <span>Hay correcciones sin aplicar al análisis.</span>
-          <button className="sm primary" disabled={running} onClick={onRegenerate}>Regenerar</button>
+        <div className="notice small" style={{ marginTop: '0.75rem' }}>
+          Hay correcciones sin aplicar al análisis: se aplicarán con <b>Aplicar y continuar</b>.
         </div>
       )}
     </div>

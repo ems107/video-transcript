@@ -17,3 +17,13 @@ export function statusClass(kind: FollowupKind, status: string): string {
   if (status === STATUSES[kind][0]) return 'pill run'
   return ['hecha', 'resuelta'].includes(status) ? 'pill ok' : 'pill'
 }
+
+// Estado en que deja un punto cada cambio «posible» al confirmarlo
+export const STATUS_AFTER: Record<string, string> = {
+  hecha: 'hecha', descartada: 'descartada', cambiada: 'cambiada', anulada: 'anulada', resuelta: 'resuelta',
+}
+
+// «8 sep»: fecha corta de un vídeo en el recorrido de un punto
+export function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+}

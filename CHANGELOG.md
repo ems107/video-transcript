@@ -8,6 +8,60 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Cada vídeo se revisa antes de que cuente para el perfil, los seguimientos y las voces, y lo que la IA
+propone llega más limpio.
+
+### Añadido
+
+- **Revisión de cada vídeo.** Un vídeo recién analizado queda **pendiente de revisar**: hasta que lo
+  revisas, no actualiza sus seguimientos ni propone nada para el perfil. Compruebas hablantes,
+  transcripción y resumen, pulsas **Aplicar y continuar** y, al terminar, decides lo dudoso.
+  - La pantalla **Revisar este vídeo** reúne todo en orden, y una franja en la página del vídeo dice qué
+    cambios faltan por aplicar y cuánto tardará.
+  - Los vídeos del mismo perfil o seguimiento encolados después hacen lo más pesado y **esperan** a esa
+    revisión para aprovechar las voces, el glosario y el seguimiento ya revisados (en la cola, «En espera»).
+  - Si cambias algo de un vídeo ya revisado, vuelve a quedar pendiente hasta que lo apliques.
+  - La barra lateral cuenta los vídeos por revisar.
+  - **Aplicar y continuar** no espera a que termine el análisis de otro vídeo: los trabajos cortos van
+    primero, y el análisis en curso se pausa al acabar su fase.
+- **Seguimientos sin duplicados.** Cada tarea, decisión o duda de un vídeo nuevo se compara con las
+  anteriores (también con las que borraste y con las del mismo vídeo): si es la misma, aunque esté escrita
+  de otra forma, no se repite; si la IA duda, pregunta «¿Es lo mismo que…?». Lo que borras ya no vuelve al
+  rehacer el estado.
+- Un cambio de estado «posible» (sin frase que lo demuestre) se puede descartar con **No pasó**.
+- Si un vídeo encarga la misma tarea a varias personas, el seguimiento la guarda como un solo punto con
+  todas ellas como responsables (antes se quedaba solo con la primera).
+- **Rehacer el estado…** de un seguimiento cuando quieras, eligiendo desde qué vídeo.
+- **Correcciones de transcripción.** La IA propone cómo se oyen mal los términos («Natur» por «Naturgy»),
+  apoyándose en tus correcciones o en lo que ya corrigió el glosario. Al
+  aceptarlas, esas formas se corrigen solas en los vídeos siguientes.
+- **Las propuestas pasan una revisión de la IA** antes de enseñártelas: descarta lo que es contenido de la
+  reunión (lo que se explicó en ella, algo puntual) y lo repetido, y marca lo dudoso con su motivo. Lo
+  descartado queda plegado en **Descartadas por la IA**, con el botón **Recuperar**.
+- Si las secciones del resumen del perfil no encajan con un vídeo, la IA propone otras más generales.
+- **Escuchar su voz.** La ficha de cada persona tiene sus mejores muestras de voz (de 5 a 30 s), sacadas de
+  los vídeos a su calidad original, para comprobar de oído que es ella. Se guardan solo en tu equipo.
+- **Recalcular las voces** de los vídeos ya revisados, desde **Personas**.
+
+### Cambiado
+
+- La voz de cada persona se guarda al aplicar la revisión, con sus frases tal como quedan después de tus
+  arreglos de quién habla: si estaba mezclada con otra persona, ninguna se queda con la voz de la otra. Si
+  habla menos de 5 s, no se guarda; si no se parece a la de sus otros vídeos, queda como dudosa hasta que
+  decidas.
+- Las propuestas se ordenan por lo que más ayuda en los vídeos siguientes: primero las correcciones de
+  transcripción y lo que identifica a cada persona; al final lo dudoso.
+- El resumen de un seguimiento cuenta la evolución de toda la serie (lo que aportó cada vídeo), no solo el
+  último, y sus momentos llevan la fecha del vídeo y enlazan con él.
+- Un seguimiento da por hecho el punto que consiste en el propio vídeo (por ejemplo, «Realizar la sesión de
+  diagnóstico» en esa sesión), y ya no da por hecho lo que se dice que se hará después de la reunión.
+- Regenerar el análisis ya no actualiza el seguimiento ni lo aprendido: el vídeo queda pendiente de
+  revisar y se actualizan al aplicar la revisión.
+
+### Corregido
+
+- Al cambiar quién habla varias veces en un vídeo, las líneas ya arregladas no se desordenan.
+
 ## [1.5.1] - 2026-10-12
 
 ### Corregido

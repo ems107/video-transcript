@@ -24,4 +24,5 @@ Lee `docs/ai/AI_PROMPTS.md` antes de editar.
   `test_knowledge.py` y `test_learn.py`.
 - Aprendizaje: la IA solo propone. Toda propuesta se verifica en Python (evidencia real, no
   inventada ni puntual). Lo aprendido nunca corrige la transcripción sin validación del LLM
-  (`trusted=False`).
+  (`trusted=False`), salvo las correcciones de transcripción aceptadas (`kind = correccion`): el usuario
+  las aceptó viendo dónde se oyen, como una variante manual del glosario.

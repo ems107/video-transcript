@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, type Person, type PersonDetail as PD } from '../api'
+import { api, type Person, type PersonDetail as PD, type PersonVoice } from '../api'
 import { KnowledgeList, ProposalList, VersionHistory } from '../knowledge'
 import { fmtDate, fmtDuration, notifyKnowledge, plural } from '../util'
 import { HelpLink } from '../HelpMarkdown'
@@ -65,6 +65,28 @@ function MergeBox({ p, people }: { p: PD; people: Person[] }) {
   )
 }
 
+// «Su voz»: las mejores muestras de su voz en los vídeos, para comprobar de oído que es ella
+function VoiceCard({ personId }: { personId: number }) {
+  const [v, setV] = useState<PersonVoice | null>(null)
+  useEffect(() => { api.get<PersonVoice>(`/api/people/${personId}/voice`).then(setV) }, [personId])
+  if (!v) return null
+  return (
+    <div className="card pad">
+      <h3 style={{ marginTop: 0 }}>Su voz <HelpLink to="personas#su-voz" /></h3>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        {plural(v.prints, 'huella', 'huellas')} para reconocerla{v.doubtful > 0 && ` y ${plural(v.doubtful, 'dudosa', 'dudosas')} sin usar`}.
+        {v.samples.length > 0 ? ' Escucha sus mejores muestras para comprobar que es ella:' : ' Aún no hay muestras: se guardan al aplicar la revisión de un vídeo en que habla.'}
+      </p>
+      {v.samples.map((smp) => (
+        <div key={smp.id} style={{ marginBottom: '0.5rem' }}>
+          <div className="small">{smp.video_id ? <Link to={`/videos/${smp.video_id}`}>{smp.video_title}</Link> : smp.video_title} · {fmtDuration(smp.seconds)}</div>
+          <audio controls preload="none" src={`/api/voice-samples/${smp.id}/audio`} style={{ width: '100%' }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function PersonDetail() {
   const { id } = useParams()
   const [params, setParams] = useSearchParams()
@@ -88,7 +110,7 @@ export default function PersonDetail() {
       <h1 style={{ margin: '0.25rem 0' }}>{p.name}</h1>
       <div className="muted small" style={{ marginBottom: '0.75rem' }}>
         {p.role && `${p.role} · `}{plural(p.stats.videos, 'vídeo', 'vídeos')}{p.stats.speaking_time > 0 && ` · ${fmtDuration(p.stats.speaking_time)} hablando`}
-        {p.stats.last_seen && ` · última vez ${fmtDate(p.stats.last_seen)}`} · {plural(p.voice_samples, 'muestra', 'muestras')} de voz
+        {p.stats.last_seen && ` · última vez ${fmtDate(p.stats.last_seen)}`} · {plural(p.voice_samples, 'huella', 'huellas')} de voz
         {p.profiles.length > 0 && <> · {p.profiles.map((pr, i) => <span key={pr.id}>{i > 0 && ', '}<Link to={`/perfiles/${pr.id}`}>{pr.name}</Link></span>)}</>}
       </div>
       <div className="tabs">
@@ -101,6 +123,7 @@ export default function PersonDetail() {
         <div className="detail">
           <div className="stack">
             <ManualForm key={JSON.stringify([p.name, p.role, p.aliases, p.notes])} p={p} onSaved={load} />
+            <VoiceCard personId={p.id} />
             <MergeBox p={p} people={people} />
           </div>
           <div className="stack" style={{ minWidth: 0 }}>

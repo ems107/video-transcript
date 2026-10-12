@@ -104,6 +104,12 @@ button.danger { color: var(--danger); }
 button.link { border: none; background: none; padding: 0; color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; }
 button.sm { padding: 0.2rem 0.55rem; font-size: 0.85rem; }
+/* Enlaces con aspecto de botón */
+a.btn { text-decoration: none; }
+a.btn:hover { background: var(--surface-2); }
+.btn.sm { padding: 0.2rem 0.55rem; font-size: 0.85rem; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+.btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
 
 input, textarea, select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);

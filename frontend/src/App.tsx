@@ -16,6 +16,7 @@ import PersonDetail from './pages/PersonDetail'
 import Help from './pages/Help'
 import Followups from './pages/Followups'
 import FollowupDetail from './pages/FollowupDetail'
+import Review from './pages/Review'
 
 const CHECK_LABELS: Record<string, string> = {
   ffmpeg: 'ffmpeg',
@@ -29,7 +30,7 @@ const CHECK_LABELS: Record<string, string> = {
 
 export default function App() {
   const jobs = useJobs()
-  const active = jobs.filter((j) => j.status === 'queued' || j.status === 'running').length
+  const active = jobs.filter((j) => j.status === 'queued' || j.status === 'running' || j.status === 'waiting').length
   const [status, setStatus] = useState<Status | null>(null)
 
   // El contador de propuestas cambia al terminar trabajos o al decidir propuestas
@@ -51,7 +52,9 @@ export default function App() {
           <small>Transcripción y análisis local</small>
         </div>
         <nav className="nav">
-          <NavLink to="/" end>Biblioteca</NavLink>
+          <NavLink to="/" end>
+            Biblioteca {!!status?.to_review && <span className="badge" title="Vídeos por revisar">{status.to_review}</span>}
+          </NavLink>
           <NavLink to="/nuevo">Nuevo análisis</NavLink>
           <NavLink to="/cola">
             Cola {active > 0 && <span className="badge">{active}</span>}
@@ -79,6 +82,7 @@ export default function App() {
           <Route path="/nuevo" element={<NewAnalysis />} />
           <Route path="/cola" element={<Queue jobs={jobs} />} />
           <Route path="/videos/:id" element={<VideoDetail jobs={jobs} />} />
+          <Route path="/videos/:id/revisar" element={<Review jobs={jobs} />} />
           <Route path="/buscar" element={<Search />} />
           <Route path="/propuestas" element={<Proposals />} />
           <Route path="/perfiles" element={<Profiles />} />

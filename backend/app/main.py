@@ -27,13 +27,13 @@ from . import people as people_mod
 from . import regenerate as regen
 from . import followups as FL
 from . import followups_store as FS
-from . import help_values, removal, speaker_fix
+from . import estimates, help_values, removal, review, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
     Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person,
-    Profile, ProfilePersonLink, Segment, Speaker, Video, SpeakerOverride, VideoCorrection, VoiceEmbedding,
+    Profile, ProfilePersonLink, Segment, Speaker, Video, SpeakerOverride, VideoCorrection, VoiceEmbedding, VoiceSample,
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
@@ -76,8 +76,10 @@ def status(session: Session = SessionDep) -> dict[str, Any]:
         "diarization": (Path(s.diarization_model_dir) / "config.yaml").exists(),
     }
     pending = PR.pending_count(session, s.voice_auto_threshold)
+    to_review = session.exec(select(func.count()).select_from(Video).where(
+        Video.review != review.DONE, Video.status == "done")).one()
     return {"version": __version__, "checks": checks, "ready": all(checks.values()), "current_job": worker.current,
-            "pending_proposals": pending}
+            "pending_proposals": pending, "to_review": to_review}
 
 
 @app.get("/api/help/values")
@@ -146,7 +148,7 @@ def create_job(body: JobCreate, session: Session = SessionDep) -> dict[str, Any]
     followups = [_404(session.get(Followup, fid), "Seguimiento") for fid in dict.fromkeys(body.followup_ids)]
     if any(f.status != "abierto" for f in followups):
         raise HTTPException(400, "Un seguimiento archivado no admite vídeos nuevos")
-    video = Video(source_path=str(p), title=p.stem, profile_id=body.profile_id)
+    video = Video(source_path=str(p), title=p.stem, profile_id=body.profile_id, review=review.PENDING)
     session.add(video)
     session.commit()
     for f in followups:
@@ -169,9 +171,14 @@ def list_jobs(session: Session = SessionDep, limit: int = 30) -> list[dict[str, 
 @app.post("/api/jobs/{job_id}/cancel")
 def cancel_job(job_id: int, session: Session = SessionDep) -> dict[str, Any]:
     job = _404(session.get(Job, job_id), "Trabajo")
-    if job.status == "queued":
+    if job.status in ("queued", "waiting"):
         job.status, job.message = "cancelled", "Cancelado"
-        session.add(job)
+        v = session.get(Video, job.video_id)
+        if v.status == "processing":
+            v.status = "done" if v.folder else "pending"
+        if v.review == review.APPLYING:
+            v.review = review.PENDING
+        session.add(job), session.add(v)
         session.commit()
     else:
         worker.cancel(job_id)
@@ -221,6 +228,7 @@ def video_card(session: Session, v: Video) -> dict[str, Any]:
         "summary": v.summary_md,
         "people": [names[s.label] for s in sps],
         "pending_speakers": sum(1 for s in sps if not s.confirmed),
+        "review": v.review,
         "has_thumbnail": bool(v.folder and (Path(v.folder) / "miniatura.jpg").exists()),
     }
 
@@ -279,6 +287,7 @@ def get_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
                        "visible_text": k.visible_text, "participants": k.participants,
                        "active_speaker": k.active_speaker} for k in frames],
         "job": job_out(job) if job else None,
+        "review": review.out(session, v),
     }
 
 
@@ -320,6 +329,7 @@ def add_correction(video_id: int, body: CorrectionIn, session: Session = Session
         raise HTTPException(400, "La corrección está vacía")
     session.add(VideoCorrection(video_id=video_id, text=body.text.strip()))
     session.commit()
+    review.mark_changed(session, session.get(Video, video_id))
     return {"ok": True}
 
 
@@ -332,13 +342,17 @@ def update_correction(correction_id: int, body: CorrectionIn, session: Session =
         c.text, c.updated_at = body.text.strip(), models_now()
         session.add(c)
         session.commit()
+        review.mark_changed(session, session.get(Video, c.video_id))
     return {"ok": True}
 
 
 @app.delete("/api/corrections/{correction_id}")
 def delete_correction(correction_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    session.delete(_404(session.get(VideoCorrection, correction_id), "Corrección"))
+    c = _404(session.get(VideoCorrection, correction_id), "Corrección")
+    vid = c.video_id
+    session.delete(c)
     session.commit()
+    review.mark_changed(session, session.get(Video, vid))
     return {"ok": True}
 
 
@@ -350,6 +364,7 @@ class OverrideIn(BaseModel):
 
 def _after_speaker_change(session: Session, v: Video, removed: list[tuple[float, float]] = ()) -> None:
     speaker_fix.refresh_segments(session, v, removed)
+    review.mark_changed(session, v)
     services.export_video(session, v)
     services.index_video(session, v)
 
@@ -439,7 +454,10 @@ def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -
         raise HTTPException(400, "El vídeo se está procesando")
     for f in FS.for_video(session, v.id):
         _detach(session, f, v, f.id in body.follow_rebuild)
-    return removal.remove(session, v, removal.Options(**body.model_dump(exclude={"follow_rebuild"})))
+    out = removal.remove(session, v, removal.Options(**body.model_dump(exclude={"follow_rebuild"})))
+    review.release_waiting(session)
+    worker.notify()
+    return out
 
 
 @app.delete("/api/videos/{video_id}")
@@ -540,7 +558,7 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
              extra: dict[str, Any] | None = None) -> Job:
     """Vuelve a encolar el último trabajo del vídeo repitiendo solo las fases indicadas."""
     last = _last_job(session, v)
-    if not last or last.status in ("queued", "running"):
+    if not last or last.status in ("queued", "running", "waiting"):
         raise HTTPException(400, "Hay un trabajo en curso para este vídeo")
     if check_work and not (WORK_DIR / f"job_{last.id}" / "corrected.json").exists():
         raise HTTPException(400, "Faltan los datos intermedios de este vídeo; hay que analizarlo de nuevo desde cero")
@@ -559,8 +577,35 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
 def learn_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     """Vuelve a proponer conocimiento a partir de un vídeo ya analizado."""
     v = _404(session.get(Video, video_id), "Vídeo")
-    job = _requeue(session, v, ["learn"], "Aprendiendo del vídeo")
+    job = _requeue(session, v, ["learn"], "Aprendiendo del vídeo", extra={"only": ["learn"]})
     return {"ok": True, "job_id": job.id}
+
+
+@app.post("/api/videos/{video_id}/apply")
+def apply_review(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """«Aplicar y continuar»: aplica los cambios del usuario, guarda las voces, actualiza los seguimientos y
+    propone conocimiento. Después queda lo dudoso por decidir (ver `review.py`)."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    if not v.analysis or v.status != "done":
+        raise HTTPException(400, "El vídeo aún no está analizado")
+    stages = review.apply_stages(session, v)
+    rebuild = [f.id for f in FS.for_video(session, v.id, only_open=True)]
+    job = _requeue(session, v, stages, "Aplicando la revisión", check_work="analyze" in stages,
+                   extra={"apply": True, "follow_rebuild": rebuild})
+    v.review = review.APPLYING
+    session.add(v)
+    session.commit()
+    return {"ok": True, "job_id": job.id}
+
+
+@app.get("/api/videos/{video_id}/apply")
+def apply_info(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Qué hará «Aplicar y continuar» y cuánto tardará."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    stages = review.apply_stages(session, v)
+    est = estimates.estimate(session, [s for s in stages if s != "follow"], v.duration, None)["total"]
+    est += sum(FS.rebuild_seconds(session, f, FS.date_of(v)) for f in FS.for_video(session, v.id, only_open=True))
+    return {"stages": stages, "seconds": round(est), "changes": review.changes(session, v)}
 
 
 # --------------------------------------------------------------------------- hablantes
@@ -590,16 +635,10 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
         if video.profile_id:
             session.add(ProfilePersonLink(profile_id=video.profile_id, person_id=person.id))
 
-    # Quitar la huella anterior de este vídeo si se cambia de persona
-    for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.video_id == video.id)):
-        if sp.person_id and e.person_id == sp.person_id:
-            session.delete(e)
-
+    # La voz no se guarda aquí: se calcula al aplicar la revisión, con las intervenciones ya arregladas
     old_pid = sp.person_id
     sp.person_id = person_id
     sp.confirmed = bool(person_id) and body.confirm
-    if sp.confirmed and sp.embedding:
-        session.add(VoiceEmbedding(person_id=person_id, video_id=video.id, vector=sp.embedding))
     session.add(sp)
     session.commit()
 
@@ -615,6 +654,7 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
         PR.link_to_profile(session, video, person_id)
     services.export_video(session, video)
     services.index_video(session, video)
+    review.mark_changed(session, video)  # su voz se guarda al aplicar la revisión
     return {"ok": True, "name": new_name}
 
 
@@ -837,11 +877,83 @@ def delete_person(person_id: int, session: Session = SessionDep) -> dict[str, An
 
 @app.delete("/api/people/{person_id}/voices")
 def reset_voices(person_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    """Olvida las huellas de voz de una persona (por si se asignaron mal)."""
+    """Olvida las huellas y las muestras de voz de una persona (por si se asignaron mal)."""
     for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.person_id == person_id)):
         session.delete(e)
+    for smp in session.exec(select(VoiceSample).where(VoiceSample.person_id == person_id)):
+        Path(smp.path).unlink(missing_ok=True)
+        session.delete(smp)
     session.commit()
     return {"ok": True}
+
+
+@app.get("/api/people/{person_id}/voice")
+def person_voice(person_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Sus huellas y sus mejores muestras de voz (las 3 de más calidad), para escucharla."""
+    _404(session.get(Person, person_id), "Persona")
+    prints = session.exec(select(VoiceEmbedding).where(VoiceEmbedding.person_id == person_id)).all()
+    samples = sorted(session.exec(select(VoiceSample).where(VoiceSample.person_id == person_id)).all(),
+                     key=lambda x: -x.score)
+    out = []
+    for smp in samples:
+        if not Path(smp.path).is_file():
+            continue
+        v = session.get(Video, smp.video_id) if smp.video_id else None
+        out.append({"id": smp.id, "video_id": smp.video_id, "video_title": v.title if v else "(vídeo quitado)",
+                    "seconds": smp.seconds, "score": smp.score})
+        if len(out) == 3:
+            break
+    return {"prints": len([e for e in prints if not e.doubtful]), "doubtful": len([e for e in prints if e.doubtful]),
+            "samples": out}
+
+
+@app.get("/api/voice-samples/{sample_id}/audio")
+def voice_sample_audio(sample_id: int, session: Session = SessionDep):
+    smp = _404(session.get(VoiceSample, sample_id), "Muestra")
+    if not Path(smp.path).is_file():
+        raise HTTPException(404, "No se encuentra el audio de la muestra")
+    return FileResponse(smp.path, media_type="audio/flac")
+
+
+class VoiceDecision(BaseModel):
+    keep: bool
+
+
+@app.post("/api/voice-embeddings/{embedding_id}/decide")
+def decide_voice(embedding_id: int, body: VoiceDecision, session: Session = SessionDep) -> dict[str, Any]:
+    """Una huella dudosa (no se parece a las otras de esa persona): guardarla igualmente o descartarla."""
+    e = _404(session.get(VoiceEmbedding, embedding_id), "Huella")
+    vid = e.video_id
+    if body.keep:
+        e.doubtful = False
+        session.add(e)
+    else:
+        for smp in session.exec(select(VoiceSample).where(VoiceSample.person_id == e.person_id,
+                                                          VoiceSample.video_id == vid)):
+            Path(smp.path).unlink(missing_ok=True)
+            session.delete(smp)
+        session.delete(e)
+    session.commit()
+    review.check_videos(session, {vid})
+    return {"ok": True}
+
+
+@app.post("/api/voices/recompute")
+def recompute_voices(session: Session = SessionDep) -> dict[str, Any]:
+    """Recalcula las huellas y las muestras de voz de los vídeos revisados que aún tienen sus datos de trabajo
+    y su archivo de vídeo. Encola un trabajo corto por vídeo."""
+    queued, skipped = 0, 0
+    for v in session.exec(select(Video).where(Video.status == "done", Video.review == review.DONE)).all():
+        last = _last_job(session, v)
+        work = WORK_DIR / f"job_{last.id}" if last else None
+        if not (work and (work / "utterances.json").exists() and regen.video_file(v)) \
+                or last.status in ("queued", "running", "waiting"):
+            skipped += 1
+            continue
+        _requeue(session, v, ["voiceprints"], "Recalculando las voces", check_work=False,
+                 extra={"only": ["voiceprints"]})
+        queued += 1
+    return {"queued": queued, "skipped": skipped}
 
 
 # --------------------------------------------------------------------------- conocimiento aprendido
@@ -859,6 +971,7 @@ class ItemEdit(BaseModel):
     title: str | None = None
     name: str | None = None
     category: str | None = None
+    variants: list[str] | None = None  # formas oídas de una corrección de transcripción
 
 
 @app.get("/api/proposals")
@@ -873,7 +986,10 @@ def get_proposals(
 
 @app.post("/api/proposals/decide")
 def decide_proposals(body: Decision, session: Session = SessionDep) -> dict[str, Any]:
-    return PR.decide(session, load_settings().voice_auto_threshold, body.accept, body.reject, body.edits)
+    videos = {it.video_id for i in [*body.accept, *body.reject] if (it := session.get(KnowledgeItem, i))}
+    out = PR.decide(session, load_settings().voice_auto_threshold, body.accept, body.reject, body.edits)
+    review.check_videos(session, videos)
+    return out
 
 
 @app.get("/api/profiles/{profile_id}/knowledge")
@@ -899,6 +1015,23 @@ def edit_knowledge(item_id: int, body: ItemEdit, session: Session = SessionDep) 
     if it.status != "aceptado":
         raise HTTPException(400, "Solo se pueden editar datos aceptados; las propuestas se editan al aceptarlas")
     PR.update_item(session, it, body.model_dump(exclude_none=True))
+    return {"ok": True}
+
+
+@app.post("/api/knowledge/{item_id}/recover")
+def recover_proposal(item_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Vuelve a proponer algo que descartó la pasada de juicio de la IA."""
+    it = _404(session.get(KnowledgeItem, item_id), "Propuesta")
+    if it.status != "descartado_ia":
+        raise HTTPException(400, "Solo se pueden recuperar las propuestas descartadas por la IA")
+    it.status = "propuesto"
+    session.add(it)
+    session.commit()
+    v = session.get(Video, it.video_id) if it.video_id else None
+    if v and v.review == review.DONE:
+        v.review = review.PROPOSALS  # vuelve a haber algo por decidir
+        session.add(v)
+        session.commit()
     return {"ok": True}
 
 
@@ -941,7 +1074,7 @@ def profile_from_video(body: FromVideo, session: Session = SessionDep) -> dict[s
     session.commit()
     KS.record_version(session, f"Creado desde el vídeo «{v.title}»", profile_id=p.id)
     try:
-        _requeue(session, v, ["learn"], "Creando el perfil a partir del vídeo")
+        _requeue(session, v, ["learn"], "Creando el perfil a partir del vídeo", extra={"only": ["learn"]})
     except HTTPException:
         v.profile_id = previous
         session.add(v)
@@ -958,7 +1091,7 @@ def learn_all(profile_id: int, session: Session = SessionDep) -> dict[str, Any]:
     queued, skipped = 0, 0
     for v in session.exec(select(Video).where(Video.profile_id == profile_id, Video.status == "done")):
         try:
-            _requeue(session, v, ["learn"], "Aprendiendo del vídeo")
+            _requeue(session, v, ["learn"], "Aprendiendo del vídeo", extra={"only": ["learn"]})
             queued += 1
         except HTTPException:
             skipped += 1
@@ -1106,7 +1239,9 @@ def add_followup_video(followup_id: int, video_id: int, body: FollowupVideoIn | 
     session.add(FollowupVideo(followup_id=f.id, video_id=v.id))
     session.commit()
     job = None
-    if body.regenerate:
+    if v.review == review.PENDING:
+        pass  # se aplicará al seguimiento al revisar el vídeo
+    elif body.regenerate:
         job = regenerate(v.id, RegenerateIn(level="analysis", follow_rebuild=[f.id]), session)
     elif body.apply:
         job = {"job_id": _queue_follow(session, f, v, f"Añadiendo al seguimiento «{f.name}»").id}
@@ -1128,12 +1263,17 @@ def remove_followup_video(followup_id: int, video_id: int, rebuild: bool = False
 
 
 @app.post("/api/followups/{followup_id}/rebuild")
-def rebuild_followup(followup_id: int, all_videos: bool = False, session: Session = SessionDep) -> dict[str, Any]:
-    """Rehace el estado desde que está desactualizado (o desde el principio)."""
+def rebuild_followup(followup_id: int, all_videos: bool = False, since_video_id: int | None = None,
+                     session: Session = SessionDep) -> dict[str, Any]:
+    """Rehace el estado desde un vídeo, desde que está desactualizado o desde el principio."""
     f = _followup(session, followup_id)
-    since = None if all_videos else f.stale_from
-    if not all_videos and since is None:
-        raise HTTPException(400, "El estado ya está al día")
+    if since_video_id is not None:
+        _404(session.get(FollowupVideo, (f.id, since_video_id)), "Vídeo del seguimiento")
+        since = FS.date_of(session.get(Video, since_video_id))
+    else:
+        since = None if all_videos else f.stale_from
+        if not all_videos and since is None:
+            raise HTTPException(400, "El estado ya está al día")
     first = FS.first_from(session, f, since)
     if first:
         job = _queue_follow(session, f, first, f"Rehaciendo el seguimiento «{f.name}»")
@@ -1203,6 +1343,7 @@ def update_followup_item(followup_id: int, item_id: int, body: FollowupItemIn,
     session.add(it)
     FS.touch(session, f)
     FS.export(session, f)
+    review.check_videos(session, {e.get("video_id") for e in it.events or []})
     return FS.out(session, f, full=True)
 
 
@@ -1216,7 +1357,60 @@ def delete_followup_item(followup_id: int, item_id: int, session: Session = Sess
     session.add(it)
     FS.touch(session, f)
     FS.export(session, f)
+    review.check_videos(session, {e.get("video_id") for e in it.events or []})
     return FS.out(session, f, full=True)
+
+
+class ResolveIn(BaseModel):
+    action: str  # mismo | distinto (punto que parece duplicado) · descartar (cambio «posible» que no pasó)
+
+
+@app.post("/api/followups/{followup_id}/items/{item_id}/resolve")
+def resolve_followup_item(followup_id: int, item_id: int, body: ResolveIn,
+                          session: Session = SessionDep) -> dict[str, Any]:
+    """Decide una duda de la IA sobre un punto: si duplica otro, o si un cambio sin frase que lo demuestre pasó."""
+    f = _followup(session, followup_id)
+    it = _item(session, f.id, item_id)
+    FS.record_version(session, f, f"Antes de decidir sobre «{it.text}»")
+    if body.action == "mismo":
+        it.hidden, it.manual, it.review = True, True, {}  # oculto: la IA no lo vuelve a crear
+    elif body.action == "distinto":
+        it.review = {}
+    elif body.action == "descartar":
+        e = FL.open_possible(FS.item_dict(it))
+        if e is None:
+            raise HTTPException(400, "Ese punto no tiene ningún cambio por confirmar")
+        it.events = [{**x, "descartado": True} if x == e else x for x in it.events]
+    else:
+        raise HTTPException(400, "Acción desconocida")
+    session.add(it)
+    FS.touch(session, f)
+    FS.export(session, f)
+    review.check_videos(session, {e.get("video_id") for e in it.events or []})
+    return FS.out(session, f, full=True)
+
+
+@app.get("/api/videos/{video_id}/review-items")
+def video_review_items(video_id: int, session: Session = SessionDep) -> list[dict[str, Any]]:
+    """Puntos de los seguimientos del vídeo con una duda de la IA que salió de este vídeo."""
+    v = _404(session.get(Video, video_id), "Vídeo")
+    out = []
+    for f in FS.for_video(session, v.id):
+        its = {it["id"]: it for it in FS.items(session, f.id)}
+        titles = {x.id: x.title for _, x in FS.links(session, f.id)}
+        for it in its.values():
+            reasons = FL.needs_review(it, v.id)
+            if not reasons:
+                continue
+            other = its.get(it["review"].get("de")) if "duplicado" in reasons else None
+            possible = FL.open_possible(it) if "posible" in reasons else None
+            out.append({"followup_id": f.id, "followup_name": f.name, "reasons": reasons,
+                        "item": {**it, "events": [{**e, "video_title": titles.get(e.get("video_id"), "")}
+                                                  for e in it["events"]]},
+                        "same_as": {"id": other["id"], "kind": other["kind"], "text": other["text"],
+                                    "status": other["status"], "hidden": other["hidden"]} if other else None,
+                        "possible": possible})
+    return out
 
 
 @app.get("/api/followups/{followup_id}/versions")

@@ -4,7 +4,7 @@ import { api, type Job } from '../api'
 import { fmtDate, STATUS_LABEL } from '../util'
 import { HelpLink } from '../HelpMarkdown'
 
-const PILL: Record<string, string> = { running: 'run', done: 'ok', error: 'err', cancelled: '', queued: '' }
+const PILL: Record<string, string> = { running: 'run', done: 'ok', error: 'err', cancelled: '', queued: '', waiting: 'warn' }
 
 export function JobRow({ job }: { job: Job }) {
   const [showErr, setShowErr] = useState(false)
@@ -23,7 +23,10 @@ export function JobRow({ job }: { job: Job }) {
           </div>
         </div>
         <div className="row">
-          {(job.status === 'running' || job.status === 'queued') && (
+          {job.status === 'waiting' && typeof job.options.waiting_for === 'number' && (
+            <Link className="btn sm" to={`/videos/${job.options.waiting_for}/revisar`}>Revisar el otro vídeo</Link>
+          )}
+          {(job.status === 'running' || job.status === 'queued' || job.status === 'waiting') && (
             <button className="sm danger" onClick={() => api.post(`/api/jobs/${job.id}/cancel`)}>Cancelar</button>
           )}
           {(job.status === 'error' || job.status === 'cancelled') && (
@@ -47,7 +50,11 @@ export default function Queue({ jobs }: { jobs: Job[] }) {
   return (
     <>
       <h1>Cola de procesamiento <HelpLink to="cola" /></h1>
-      <p className="muted small">Los vídeos se procesan de uno en uno. Si cierras la aplicación, el trabajo se reanuda desde la última fase completada.</p>
+      <p className="muted small">
+        Los vídeos se procesan de uno en uno. Si cierras la aplicación, el trabajo se reanuda desde la última fase completada.
+        Un vídeo del mismo perfil o seguimiento que otro sin revisar hace lo más pesado y <b>espera</b> a esa revisión antes
+        de identificar a los hablantes y resumir.
+      </p>
       <div className="stack">
         {jobs.length === 0 && <div className="card pad muted">No hay trabajos.</div>}
         {jobs.map((j) => <JobRow key={j.id} job={j} />)}

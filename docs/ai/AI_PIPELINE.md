@@ -22,6 +22,7 @@ worker crea `<fase>.done`.
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |
 | `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `names.json`, `probe.json` | `analysis.json` (`analysis.partial.json`), `context_identities.json` y propuestas «contexto» en `Speaker` | llama-server |
+| `voiceprints` | `voiceprints.py` vía `worker._voiceprints` (solo al aplicar la revisión) | `audio.wav` (si falta, repite `ingest`), `utterances.json` con los arreglos, `Speaker` confirmados | filas `VoiceEmbedding` y `VoiceSample` del vídeo (sustituye las anteriores), `data/voces/<persona>/<vídeo>.flac`, `Video.voices_applied` | modelo de huellas de pyannote |
 | `follow` | `worker._follow` → `followups_store.update_for_video` | `analysis.json` y `corrected.json` (o `Video.analysis` y `Segment` si ya está publicado) | filas `FollowupItem`/`FollowupVideo`/`FollowupVersion` y `Seguimiento - Nombre/seguimiento.md` | llama-server (solo si el vídeo está en algún seguimiento) |
 | `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla), `screen_judgment.json` (valoración de los términos vistos solo en pantalla; `screen_judgment.raw.json` para reanudar) y filas `KnowledgeItem` | llama-server |
 | `publish` | `worker._publish` | todo lo anterior | carpeta final (con `datos/`), `Segment`, `Keyframe`, FTS | — |
@@ -42,6 +43,36 @@ Formas clave:
 - `analysis.json`: sigue `FINAL_SCHEMA` de `prompts.py`. Las claves están en español, y la web y
   `export.py` dependen de ellas.
 
+## Revisión del vídeo (`review.py`)
+
+`Video.review`: `pendiente` → `aplicando` → `propuestas` → `revisado` (los vídeos anteriores a la 1.6.0
+quedan `revisado` por la columna de `db.NEW_COLUMNS`).
+- **Fases tras la revisión** (`worker.AFTER_REVIEW`: `voiceprints`, `follow`, `learn`): solo se ejecutan en
+  un trabajo con `options.apply` o si están en `only`. El trabajo inicial y las regeneraciones manuales se
+  las saltan **sin** crear su marca y dejan el vídeo `pendiente`.
+- **«Aplicar y continuar»** (`POST videos/{id}/apply`): `_requeue` con `review.apply_stages` (`correct` y
+  `analyze` si hay correcciones o arreglos de hablantes sin aplicar, y siempre `voiceprints`, `follow`,
+  `learn`, `publish`), `apply: true` y `follow_rebuild` con sus seguimientos abiertos. Al terminar, el
+  vídeo pasa a `propuestas` y `review.check_done` lo deja `revisado` si no queda nada por decidir
+  (propuestas `propuesto` de ese vídeo ni puntos con `followups.needs_review`). Lo comprueban también
+  `proposals/decide` y los endpoints de puntos del seguimiento.
+- **Espera:** antes de la primera fase de `review.GATED_STAGES` (names, identify, correct, analyze) que haya
+  que ejecutar, `worker._wait` busca con `review.blocker` un vídeo relacionado (mismo perfil o seguimiento)
+  de `id` menor sin revisar. Si lo hay, el trabajo pasa a `waiting` con `options.waiting_for` y el worker
+  sigue con otro. `review.release_waiting` (en cada vuelta del bucle del worker y al quitar un vídeo) los
+  vuelve a `queued`. Los trabajos con `only` no esperan.
+- **Cambios del usuario** (correcciones, arreglos de hablantes, confirmar o cambiar un hablante) llaman a
+  `review.mark_changed`: un vídeo `revisado` o en `propuestas` vuelve a `pendiente`. `review.changes` lista
+  lo que falta por aplicar (`voices_applied` frente a los hablantes confirmados para las voces).
+- **Prioridad:** los trabajos cortos (`worker.is_short`: `apply` u `only`) se eligen antes que los demás, y
+  un análisis largo cede el turno entre fase y fase si hay uno en cola (`_yield_to_short`: vuelve a
+  `queued` y se reanuda por sus marcas). Sin esto, «Aplicar y continuar» esperaba a que terminara el
+  análisis pesado del vídeo siguiente (unos 45 min).
+- **Audio:** `_cleanup(keep_audio=True)` mientras el vídeo no está revisado (lo necesita `voiceprints`);
+  `review.drop_audio` lo borra al quedar revisado.
+- **Seguimientos:** `rebuild_from` y `first_from` se saltan los vídeos `pendiente`; se aplican al aplicar
+  su revisión.
+
 ## Reglas del worker
 
 - **Reanudación:** si existe `<fase>.done`, la fase se salta. Al arrancar, los trabajos `running`
@@ -55,11 +86,13 @@ Formas clave:
     archivo de vídeo, y los demás, los JSON de trabajo. `full` llama antes a
     `regenerate.unconfirm_speakers`: al volver a separar las voces, las etiquetas ya no significan lo
     mismo. Las huellas de voz se conservan, así que `identify` vuelve a proponer a cada persona.
-  - `videos/{id}/learn` y `profiles/from-video`: solo `learn`.
+  - `videos/{id}/learn`, `profiles/from-video` y `profiles/{id}/learn-all`: solo `learn`, como trabajo de una
+    sola fase (`only: ["learn"]`), que no cambia el estado de la revisión del vídeo.
+  - `videos/{id}/apply`: ver «Revisión del vídeo».
   - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior):
     `only` (el worker se salta todas las fases que no estén en la lista; lo usan los trabajos que solo
-    rehacen un seguimiento) y `follow_rebuild` (ids de seguimientos cuyo estado se rehace desde este
-    vídeo).
+    rehacen un seguimiento), `follow_rebuild` (ids de seguimientos cuyo estado se rehace desde este
+    vídeo) y `apply` (ejecutar las fases de después de la revisión).
 - **`persist_speakers` fusiona:** al repetir `identify`, un hablante confirmado conserva su persona y su
   `id`. Solo cambian las propuestas de los no confirmados, y se borran las etiquetas que ya no existen.
 - **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía
@@ -96,7 +129,7 @@ Formas clave:
 - **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual
   (ver `test_learn_failure_does_not_break_the_job`). Si el vídeo no tiene perfil, solo propone datos
   de personas. Los detalles están en `AI_PROMPTS.md` (aprendizaje).
-- **GPU:** antes de una fase de `GPU_TORCH_STAGES` (asr, align, diarize) se llama a `llm.stop()`.
+- **GPU:** antes de una fase de `GPU_TORCH_STAGES` (asr, align, diarize, voices, voiceprints) se llama a `llm.stop()`.
   Después de las demás se llama a `free_gpu()`. Cada fase con torch descarga su modelo al acabar (`del`
   + `free_gpu()`). Las fases que usan el LLM llaman a `llm.start()`, que no hace nada si ya está
   arrancado.

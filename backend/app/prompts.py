@@ -350,8 +350,17 @@ LEARN_SCHEMA = {
             },
         },
         "secciones": {"type": "array", "items": {"type": "string"}},
+        "correcciones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"oido": {"type": "string"}, "correcto": {"type": "string"},
+                               "motivo": {"type": "string"}, "t": {"type": "string"}},
+                "required": ["oido", "correcto", "motivo", "t"],
+            },
+        },
     },
-    "required": ["terminos", "contexto", "personas", "secciones"],
+    "required": ["terminos", "contexto", "personas", "secciones", "correcciones"],
 }
 
 
@@ -363,7 +372,12 @@ def learn_user(context: str, known: str, rejected: list[str], candidates: list[s
         "personas), escritos tal como aparecen; no palabras comunes. definicion: qué es, de forma general y "
         "duradera, solo si se explica o es evidente; si no, cadena vacía.\n"
         "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
-        if with_profile else "- terminos y contexto: listas vacías.\n"
+        "- correcciones: nombres propios o términos del negocio que la transcripción escribe mal (suenan como "
+        "otro nombre que encaja por el contexto, la pantalla o las notas del usuario; por ejemplo, una empresa "
+        "conocida escrita como otra palabra). oido: tal como aparece escrito en la transcripción; correcto: "
+        "cómo se escribe; motivo: por qué lo crees; t: la marca de tiempo. No incluyas palabras comunes ni "
+        "faltas de ortografía. Lista vacía si no hay.\n"
+        if with_profile else "- terminos, contexto y correcciones: listas vacías.\n"
     )
     sections = ("- secciones: hasta 5 títulos de secciones para organizar el resumen de cualquier vídeo de este \
 tipo, no solo de este. Deben servir aunque el próximo vídeo trate otro tema: describen la estructura (por \
@@ -384,6 +398,118 @@ Devuelve:
 el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento \
 (materias o sistemas que domina, no hechos concretos que sabe), relacion, personal u otro. dato: la frase.
 {sections}"""
+
+
+# --------------------------------------------------------------------------- juicio de las propuestas
+
+# Segunda pasada: la IA revisa todas las propuestas juntas antes de enseñarlas. La extracción, fragmento a
+# fragmento, proponía lo que se explicaba en la reunión como datos de quien lo explicaba («Sabe que la regla
+# del 72…») y términos sin valor para el perfil; pedírselo con más fuerza en el mismo prompt no bastaba.
+JUDGE_SYSTEM = """Revisas lo que la IA ha propuesto aprender de una grabación (reunión o sesión de trabajo) \
+antes de enseñárselo al usuario. Lo aceptado se usará para reconocer a las personas y para entender y \
+transcribir las próximas grabaciones del mismo tipo. Razona cada propuesta con lo que se sabe del vídeo y \
+de su evidencia; no apliques reglas fijas por palabras."""
+
+JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "propuestas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "valor": {"type": "string", "enum": ["util", "dudosa", "descartar"]},
+                    "motivo": {"type": "string"},
+                    "igual_que": {"type": "integer"},
+                },
+                "required": ["id", "valor", "motivo", "igual_que"],
+            },
+        },
+        "secciones": {
+            "type": "object",
+            "properties": {
+                "encajan": {"type": "boolean"},
+                "motivo": {"type": "string"},
+                "propuestas": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"titulo": {"type": "string"}, "reemplaza": {"type": "integer"}},
+                        "required": ["titulo", "reemplaza"],
+                    },
+                },
+            },
+            "required": ["encajan", "motivo", "propuestas"],
+        },
+    },
+    "required": ["propuestas", "secciones"],
+}
+
+
+def judge_user(about: str, profile: str, sections: str, proposals: str) -> str:
+    sec = (f"""
+Secciones con las que se organiza el resumen de este tipo de vídeo:
+{sections}
+""" if sections else "")
+    return f"""De qué trata el vídeo:
+{about}
+
+Tipo de vídeo: {profile or "(sin perfil)"}
+{sec}
+Propuestas (número, a quién o a qué se refiere, tipo, texto y una frase de ejemplo):
+{proposals}
+
+La frase de un término o de una corrección solo muestra dónde aparece: juzga el término por sí mismo, por \
+cuántas veces aparece y por el tema del vídeo, no por esa frase. La de un dato de una persona sí debe \
+decirlo.
+
+Para cada propuesta devuelve:
+- id: su número.
+- valor: «util» si es un dato duradero de una persona para su ficha (quién es, su cargo, su organización, \
+su relación con los demás, cómo la llaman, y también sus datos personales: estudios, edad, familia, \
+contacto, documento o dirección, que el usuario quiere guardar) o si ayuda a entender o transcribir \
+próximas grabaciones de este tipo (un término o un \
+nombre que se repetirá, cómo se oye mal un nombre, un hecho duradero del negocio); «dudosa» si puede servir \
+pero no está claro, o si la frase de la que sale no lo dice del todo; «descartar» si es contenido puntual \
+de esta reunión (lo que se explicó, se enseñó o se hizo en ella, una tarea, un dato de un momento), algo \
+obvio, algo que se ve en pantalla sin relación con el tema, o algo que la frase no dice.
+- motivo: por qué, en pocas palabras.
+- igual_que: el número de otra propuesta de esta lista que dice lo mismo (la que sobra lleva el número de \
+la que se queda), o 0.
+Y en «secciones»: encajan (si las secciones sirven para organizar el resumen de este vídeo y de los \
+siguientes de este tipo), motivo, y propuestas: si no encajan, hasta 2 títulos generales que sirvan para \
+cualquier vídeo de este tipo (reemplaza: el número [#…] de la sección que sustituye, o 0). Si encajan o no \
+hay secciones, lista vacía."""
+
+
+# Correcciones de transcripción que el usuario escribe en sus notas del vídeo
+NOTES_SYSTEM = """Lees las notas que un usuario ha escrito sobre la transcripción de una grabación y sacas \
+las palabras o nombres que dice que están mal transcritos, con su forma correcta. Solo lo que dicen las \
+notas: no deduzcas nada."""
+
+NOTES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "pares": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"oido": {"type": "string"}, "correcto": {"type": "string"}},
+                "required": ["oido", "correcto"],
+            },
+        },
+    },
+    "required": ["pares"],
+}
+
+
+def notes_user(notes: list[str]) -> str:
+    return "Notas del usuario:\n" + "\n".join(f"- {n}" for n in notes) + """
+
+Devuelve en «pares» cada palabra o nombre que según las notas está mal escrito en la transcripción: oido, \
+tal como aparece mal escrito; correcto, cómo debe escribirse. Si una nota dice que algo «no se escribe» de \
+una forma, esa forma es la oída. Lista vacía si las notas no hablan de cómo se escribe nada."""
 
 
 # --------------------------------------------------------------------------- seguimientos
@@ -412,18 +538,23 @@ según los vídeos anteriores y el análisis de un vídeo nuevo, y devuelves sol
 FOLLOW_SCHEMA = {
     "type": "object",
     "properties": {
-        "mismos": {
+        "clasificacion": {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"nuevo": {"type": "string"}, "existente": {"type": "string"}},
-                "required": ["nuevo", "existente"],
+                "properties": {
+                    "nuevo": {"type": "string"},
+                    "relacion": {"type": "string", "enum": ["mismo", "nuevo", "dudoso"]},
+                    "existente": {"type": "string"},
+                    "motivo": {"type": "string"},
+                },
+                "required": ["nuevo", "relacion", "existente", "motivo"],
             },
         },
         "resumen": {"type": "string"},
         "aporte": {"type": "string"},
     },
-    "required": ["mismos", "resumen", "aporte"],
+    "required": ["clasificacion", "resumen", "aporte"],
 }
 
 # Qué dice el vídeo de cada punto abierto. Va aparte y con el modo razonamiento: dentro del resumen, o sin
@@ -454,10 +585,15 @@ FOLLOW_CHECK_SCHEMA = {
 }
 
 
-def follow_check_user(points: str, video: str, part: int, total: int, body: str) -> str:
+def follow_check_user(points: str, video: str, part: int, total: int, body: str, about: str = "") -> str:
+    meeting = (f"""
+De qué trata esta reunión: {about}
+Si un asunto es hacer esta misma reunión o sesión (por ejemplo, «realizar la sesión de X» y esta es esa \
+sesión), está hecho: márcalo con la primera frase que muestre que se está haciendo.
+""" if about else "")
     return f"""Asuntos pendientes de reuniones anteriores del mismo tema:
 {points}
-
+{meeting}
 Transcripción de la reunión del {video} (parte {part} de {total}):
 {body}
 
@@ -468,27 +604,36 @@ avanza si se habla de él pero sigue igual.
 - t: la marca de tiempo de la frase.
 - cita: la frase que lo dice, copiada literalmente, sin comillas ni puntos suspensivos.
 Se puede hablar de un asunto sin nombrarlo igual (por ejemplo, «lo que ayer fallaba ya funciona» o «ya \
-sale como predeterminado»). Si no se habla de un asunto, no lo pongas."""
+sale como predeterminado»). Algo que se dice que se hará después de la reunión no está hecho aunque se \
+hable de ello. Si no se habla de un asunto, no lo pongas."""
 
 
-def follow_user(state: str, video: str, analysis: str) -> str:
+def follow_user(state: str, video: str, analysis: str, contributions: list[str] | None = None,
+                hidden: str = "") -> str:
     previous = ("Estado del tema según los vídeos anteriores:\n" + state) if state else \
         "Es el primer vídeo del tema: aún no hay estado."
-    return f"""{previous}
+    history = ("\n\nLo que aportó cada vídeo anterior, en orden:\n" + "\n".join(f"- {c}" for c in contributions)) \
+        if contributions else ""
+    removed = ("\n\nPuntos que el usuario borró: no se vuelven a crear (si un punto de este vídeo es uno de ellos, "
+               "es «mismo»):\n" + hidden) if hidden else ""
+    return f"""{previous}{history}{removed}
 
 Vídeo nuevo: {video}
 
 {analysis}
 
 Devuelve:
-- mismos: puntos de este vídeo ([N…]) que son el mismo asunto que un punto del estado ([T…], [D…], [P…]), \
-para no duplicarlo (por ejemplo, la misma tarea encargada otra vez). nuevo: el [N…]; existente: el del \
-estado. Los demás puntos de este vídeo se añaden al estado tal cual. Una decisión que cambia otra anterior \
-no es «la misma». Lista vacía si no hay ninguno.
-- resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
-ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior y \
-consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo. Usa lo que dicen las menciones \
-comprobadas sobre los asuntos anteriores; no des por hecho lo que no dicen.
+- clasificacion: una entrada por cada punto de este vídeo ([N…]). relacion: «mismo» si es el mismo asunto \
+que un punto anterior (del estado, uno borrado por el usuario u otro punto de este vídeo), aunque cambie la \
+redacción o el detalle (la misma tarea encargada otra vez, o la misma cuestión como tarea y como duda); \
+«nuevo» si no tiene que ver con ninguno; «dudoso» si puede ser el mismo pero no está claro. existente: el \
+id con el que lo comparas ([T…], [D…], [P…] o [N…]), o "" si es nuevo. motivo: por qué, en pocas palabras. \
+Una decisión que cambia otra anterior no es «la misma».
+- resumen: la evolución del tema desde el primer vídeo hasta este incluido, en 1-3 párrafos: de dónde se \
+partió, qué ha pasado en cada vídeo y dónde está ahora. Usa lo que aportó cada vídeo anterior y el estado \
+de los puntos; no lo centres en este vídeo. Si citas un momento, escribe la fecha de su vídeo y la marca, \
+así: [AAAA-MM-DD hh:mm:ss]. Usa lo que dicen las menciones comprobadas sobre los asuntos anteriores; no \
+des por hecho lo que no dicen.
 - aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
 
 
@@ -539,7 +684,7 @@ que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
 LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
-               "mismos": 30, "menciones": 20}
+               "clasificacion": 40, "menciones": 20, "correcciones": 15, "propuestas": 30}
 LIST_DEFAULT = 40
 
 

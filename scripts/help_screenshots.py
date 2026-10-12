@@ -75,22 +75,42 @@ def wait_jobs(c: httpx.Client, label: str) -> None:
         time.sleep(4)
 
 
-def prepare(c: httpx.Client) -> dict[str, int]:
-    """Analiza los vídeos de muestra y reproduce el uso normal de la app."""
-    for name in ("reunion_prueba.mp4", "incidencia_pedidos.mp4"):
-        c.post("/api/jobs", json={"path": str(SAMPLES / name), "options": {"file_mode": "copy"}})
-        wait_jobs(c, f"análisis de {name}")
-    videos = {v["title"]: v["id"] for v in c.get("/api/videos").json()}
-    v1 = min(videos.values())
-    c.post(f"/api/videos/{v1}/confirm-speakers")
-    for sp in c.get(f"/api/videos/{v1}").json()["speakers"]:
+def confirm_all(c: httpx.Client, vid: int) -> None:
+    c.post(f"/api/videos/{vid}/confirm-speakers")
+    for sp in c.get(f"/api/videos/{vid}").json()["speakers"]:
         if not sp["confirmed"]:
             c.put(f"/api/speakers/{sp['id']}", json={"new_person_name": "Juan Pérez", "confirm": True})
+
+
+def apply(c: httpx.Client, vid: int, label: str) -> None:
+    c.post(f"/api/videos/{vid}/apply")
+    wait_jobs(c, label)
+
+
+def prepare(c: httpx.Client) -> dict[str, int]:
+    """Analiza los vídeos de muestra y reproduce el uso normal de la app, con la revisión de cada vídeo."""
+    c.post("/api/jobs", json={"path": str(SAMPLES / "reunion_prueba.mp4"), "options": {"file_mode": "copy"}})
+    wait_jobs(c, "análisis del primer vídeo")
+    v1 = c.get("/api/videos").json()[0]["id"]
+    confirm_all(c, v1)
+    apply(c, v1, "revisión del primer vídeo")
     c.post("/api/profiles/from-video", json={"video_id": v1, "name": "Reuniones de proyecto"})
     wait_jobs(c, "perfil a partir del vídeo")
     items = c.get("/api/proposals", params={"video_id": v1}).json()["items"]
     accept = [x["id"] for x in items][: max(1, len(items) * 2 // 3)]
-    c.post("/api/proposals/decide", json={"accept": accept, "reject": [], "edits": {}})
+    c.post("/api/proposals/decide", json={"accept": accept, "reject": [x["id"] for x in items if x["id"] not in accept],
+                                          "edits": {}})
+    f = c.post("/api/followups", json={"name": "Proyecto de pedidos"}).json()
+    c.post(f"/api/followups/{f['id']}/videos/{v1}", json={"apply": True})
+    wait_jobs(c, "aplicar el primer vídeo al seguimiento")
+    # El segundo, encolado con el perfil y el seguimiento; su revisión queda a medias (propuestas por decidir)
+    c.post("/api/jobs", json={"path": str(SAMPLES / "incidencia_pedidos.mp4"), "profile_id": 1,
+                              "followup_ids": [f["id"]], "options": {"file_mode": "copy"}})
+    wait_jobs(c, "análisis del segundo vídeo")
+    v2 = max(v["id"] for v in c.get("/api/videos").json())
+    confirm_all(c, v2)
+    apply(c, v2, "revisión del segundo vídeo")
+    # En el primero, un cambio de hablante y una corrección: vuelve a quedar pendiente de aplicar
     d = c.get(f"/api/videos/{v1}").json()
     seg = next((s for s in d["segments"] if len(s["text"].split()) > 6), d["segments"][0])
     words = c.get(f"/api/videos/{v1}/words", params={"start": seg["start"], "end": seg["end"]}).json()
@@ -100,11 +120,7 @@ def prepare(c: httpx.Client) -> dict[str, int]:
                json={"ranges": [[words[0]["start"], words[min(1, len(words) - 1)]["end"]]], "person_id": other["person_id"]})
     c.post(f"/api/videos/{v1}/corrections",
            json={"text": "El informe de costes lo prepara María López, no Juan Pérez."})
-    f = c.post("/api/followups", json={"name": "Proyecto de pedidos"}).json()
-    for vid in sorted(videos.values()):
-        c.post(f"/api/followups/{f['id']}/videos/{vid}", json={"apply": True})
-        wait_jobs(c, "aplicar el vídeo al seguimiento")
-    return {"v1": v1, "v2": max(videos.values()), "followup": f["id"]}
+    return {"v1": v1, "v2": v2, "followup": f["id"]}
 
 
 # --------------------------------------------------------------------------- Chrome por CDP
@@ -211,6 +227,7 @@ async def capture_all(ids: dict[str, int], ws_url: str) -> None:
         await shoot(c, "cola")
         await go(c, f"/videos/{v1}")
         await shoot(c, "video")
+        await shoot(c, "video-revision", ".warn-box")
         await shoot(c, "hablantes", "(" + CARD.format(json.dumps("Hablantes")) + ")")
         await shoot(c, "correcciones", "(" + CARD.format(json.dumps("Correcciones")) + ")")
         await shoot(c, "video-seguimientos", "(" + CARD.format(json.dumps("Seguimientos")) + ")")
@@ -230,6 +247,8 @@ async def capture_all(ids: dict[str, int], ws_url: str) -> None:
         await click_text(c, "Quitar", 2)
         await shoot(c, "quitar", "dialog[open]")
         await click_text(c, "Cancelar", 0.8)
+        await go(c, f"/videos/{v2}/revisar")
+        await shoot(c, "revision")
         await go(c, "/propuestas")
         await shoot(c, "propuestas")
         await go(c, "/perfiles/1?tab=aprendido")
@@ -247,7 +266,6 @@ async def capture_all(ids: dict[str, int], ws_url: str) -> None:
         await asyncio.sleep(0.8)
         await shoot(c, "seguimiento")
         task.cancel()
-        _ = v2
 
 
 def start_chrome(tmp: Path) -> subprocess.Popen:

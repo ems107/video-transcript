@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Followup, type FollowupEvent, type VideoDetail } from './api'
-import { EVENT_LABELS } from './followup'
+import { EVENT_LABELS, shortDate } from './followup'
 import { HelpLink } from './HelpMarkdown'
 import { parseTs } from './util'
 
@@ -89,14 +89,16 @@ function AddDialog({ video, onClose, onDone }: { video: VideoDetail; onClose: ()
           <label className="field"><span>Nombre del nuevo seguimiento</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          La IA aplica el vídeo al estado del seguimiento en su fecha: lo que dice de las tareas, decisiones y dudas
-          anteriores, y lo nuevo. Si hay vídeos posteriores, el estado se rehace desde este. No se vuelve a transcribir.
+          {video.review.state === 'pendiente'
+            ? 'El vídeo aún no está revisado: se aplicará al estado del seguimiento cuando pulses «Aplicar y continuar».'
+            : 'La IA aplica el vídeo al estado del seguimiento en su fecha: lo que dice de las tareas, decisiones y dudas '
+              + 'anteriores, y lo nuevo. Si hay vídeos posteriores, el estado se rehace desde este. No se vuelve a transcribir.'}
         </p>
         <label className="check">
           <input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} />
           <span>
             <b>Regenerar también el resumen del vídeo</b>
-            <span className="small muted">Para que el resumen relacione lo que se dice con lo anterior del tema («continúa lo de…»). Tarda como regenerar el análisis.</span>
+            <span className="small muted">Para que el resumen relacione lo que se dice con lo anterior del tema («continúa lo de…»). Tarda como regenerar el análisis, y después el vídeo queda pendiente de revisar.</span>
           </span>
         </label>
         {error && <p className="small danger-text">{error}</p>}
@@ -167,13 +169,11 @@ export function FollowupChoice({ name, rebuild, onChange, rebuildText, keepText 
   )
 }
 
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-}
-
 // Un hito del recorrido de un punto: fecha y momento del vídeo (con enlace) y qué pasó
-export function EventChip({ e, onConfirm }: { e: FollowupEvent; onConfirm?: (evento: FollowupEvent['evento']) => void }) {
-  const label = e.posible ? `¿${EVENT_LABELS[e.posible] ?? e.posible}?` : EVENT_LABELS[e.evento] ?? e.evento
+export function EventChip({ e, onConfirm, onDismiss }: {
+  e: FollowupEvent; onConfirm?: (evento: FollowupEvent['evento']) => void; onDismiss?: () => void
+}) {
+  const label = e.posible ? `¿${EVENT_LABELS[e.posible] ?? e.posible}?${e.descartado ? ' (no pasó)' : ''}` : EVENT_LABELS[e.evento] ?? e.evento
   const where = e.source === 'manual'
     ? <span title={`Cambio tuyo, ${new Date(e.at).toLocaleString('es-ES')}`}>a mano</span>
     : e.date && e.video_id
@@ -188,6 +188,9 @@ export function EventChip({ e, onConfirm }: { e: FollowupEvent; onConfirm?: (eve
       {e.posible && onConfirm && (
         <button className="sm" title="La IA cree que pasó, pero no encontró la frase que lo dice: compruébalo en el vídeo"
           onClick={() => onConfirm(e.posible!)}>Confirmar</button>
+      )}
+      {e.posible && onDismiss && (
+        <button className="sm" title="No pasó: el punto sigue como estaba" onClick={onDismiss}>No pasó</button>
       )}
     </span>
   )

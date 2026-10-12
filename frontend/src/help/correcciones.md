@@ -13,8 +13,9 @@ refiere un apodo, qué se decidió… Las escribes tú en la tarjeta **Correccio
 
 - Escribir una corrección **no cambia nada al momento**: se guarda con el vídeo. Aparece como
   **Pendiente** y la tarjeta avisa de que hay correcciones sin aplicar.
-- Al [regenerar el análisis](ayuda:regenerar), la IA recibe todas las correcciones del vídeo como
-  **hechos verificados que prevalecen** sobre lo que parezca decir la grabación. Pasan a **Aplicada**.
+- Al pulsar **Aplicar y continuar** ([Revisar un vídeo](ayuda:revision)) o al [regenerar el
+  análisis](ayuda:regenerar), la IA recibe todas las correcciones del vídeo como **hechos verificados que
+  prevalecen** sobre lo que parezca decir la grabación. Pasan a **Aplicada**.
 - **Se aplican en cada regeneración.** Mantenlas aunque el resumen ya salga bien: la IA vuelve a escribir
   el análisis desde cero y, sin la corrección, podría repetir el error.
 - La IA nunca escribe ni modifica las correcciones.

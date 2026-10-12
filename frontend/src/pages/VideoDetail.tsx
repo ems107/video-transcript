@@ -10,6 +10,7 @@ import { FollowupsPanel } from '../FollowupsPanel'
 import { RegenerateDialog } from '../RegenerateDialog'
 import { OverridesList, SpeakerFixDialog, SplitDialog } from '../SpeakerFix'
 import { RemoveDialog } from '../RemoveDialog'
+import { ReviewBanner } from './Review'
 import { HelpLink } from '../HelpMarkdown'
 
 type Tab = 'resumen' | 'transcripcion' | 'tareas' | 'pantalla'
@@ -45,8 +46,8 @@ function TsLink({ ts, seek }: { ts: string; seek: (t: number) => void }) {
   return <span className="ts-link" onClick={() => seek(t)}>{ts}</span>
 }
 
-function SpeakerPanel({ video, people, onChange, seek, onRegenerate }: {
-  video: VD; people: Person[]; onChange: () => void; seek: (t: number) => void; onRegenerate: () => void
+function SpeakerPanel({ video, people, onChange, seek }: {
+  video: VD; people: Person[]; onChange: () => void; seek: (t: number) => void
 }) {
   const [splitting, setSplitting] = useState<number | null>(null)
   const [editing, setEditing] = useState<number | null>(null)
@@ -130,14 +131,13 @@ function SpeakerPanel({ video, people, onChange, seek, onRegenerate }: {
         </div>
       ))}
       <p className="small muted" style={{ marginBottom: 0 }}>
-        Al confirmar, se guarda la huella de voz para reconocer a esa persona en próximos vídeos. Si una frase está
-        asignada a quien no es, pulsa su nombre en la transcripción.
+        Al aplicar la revisión, se guarda la voz de cada persona confirmada para reconocerla en próximos vídeos. Si una
+        frase está asignada a quien no es, pulsa su nombre en la transcripción.
       </p>
       <OverridesList video={video} onChange={onChange} />
       {video.overrides_pending && (
-        <div className="notice inline small" style={{ marginTop: '0.75rem' }}>
-          <span>Hay cambios de hablantes que el resumen aún no tiene en cuenta.</span>
-          <button className="sm primary" onClick={onRegenerate}>Regenerar</button>
+        <div className="notice small" style={{ marginTop: '0.75rem' }}>
+          Hay cambios de quién habla que el resumen aún no tiene en cuenta: se aplicarán con <b>Aplicar y continuar</b>.
         </div>
       )}
       {splitting !== null && (
@@ -280,7 +280,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
   const doubtful = video.segments.filter((s) => s.voice === 'dudosa').length
   const segments = video.segments.filter((s) => (!onlyDoubtful || s.voice === 'dudosa')
     && (!f || s.text.toLowerCase().includes(f) || s.name.toLowerCase().includes(f)))
-  const running = job && (job.status === 'running' || job.status === 'queued')
+  const running = job && (job.status === 'running' || job.status === 'queued' || job.status === 'waiting')
 
   function changeTab(t: Tab) {
     setTab(t)
@@ -325,6 +325,7 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
         </div>
       </div>
 
+      <ReviewBanner video={video} onChange={load} />
       {running && job && <div style={{ marginBottom: '1rem' }}><JobRow job={job} /></div>}
       {job?.status === 'error' && <div style={{ marginBottom: '1rem' }}><JobRow job={job} /></div>}
 
@@ -336,12 +337,12 @@ export default function VideoDetail({ jobs }: { jobs: Job[] }) {
           )}
           {video.folder && <div className="small muted" style={{ marginTop: '0.4rem', wordBreak: 'break-all' }}>{video.folder}</div>}
           {video.speakers.length > 0 && (
-            <SpeakerPanel video={video} people={people} onChange={load} seek={seek} onRegenerate={() => setRegenerating(true)} />
+            <SpeakerPanel video={video} people={people} onChange={load} seek={seek} />
           )}
           <KnowledgePanel video={video} running={!!running} onChange={load} />
           <FollowupsPanel video={video} running={!!running} onChange={load} />
           {video.status === 'done' && (
-            <CorrectionsPanel video={video} running={!!running} onChange={load} onRegenerate={() => setRegenerating(true)} />
+            <CorrectionsPanel video={video} onChange={load} />
           )}
         </div>
 

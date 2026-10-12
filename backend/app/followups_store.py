@@ -44,7 +44,7 @@ def date_of(v: Video) -> datetime:
 
 def item_dict(it: FollowupItem) -> dict[str, Any]:
     return {"id": it.id, "kind": it.kind, "text": it.text, "owner": it.owner, "due": it.due, "status": it.status,
-            "manual": it.manual, "hidden": it.hidden, "events": list(it.events or [])}
+            "manual": it.manual, "hidden": it.hidden, "events": list(it.events or []), "review": dict(it.review or {})}
 
 
 def items(session: Session, fid: int) -> list[dict[str, Any]]:
@@ -185,9 +185,12 @@ def _points_block(items_: list[dict[str, Any]]) -> str:
 
 
 def mentions(session: Session, video: Video, state_items: list[dict[str, Any]], utts: list[dict[str, Any]],
-             ask: Ask, when: datetime) -> list[dict[str, Any]]:
+             ask: Ask, when: datetime, about: str = "") -> list[dict[str, Any]]:
     """Qué dice el vídeo de cada punto del estado, leyendo su transcripción por bloques (con el modo
-    razonamiento), y con la cita comprobada (`followups.check_signals`)."""
+    razonamiento), y con la cita comprobada (`followups.check_signals`).
+
+    `about`: de qué trata el vídeo (título y resumen breve), para cerrar los puntos que son el propio vídeo
+    («realizar la sesión de diagnóstico» en la sesión de diagnóstico)."""
     from . import services  # services importa este módulo
     from .pipeline.analyze import chunk_lines, timeline
 
@@ -197,7 +200,7 @@ def mentions(session: Session, video: Video, state_items: list[dict[str, Any]], 
     chunks = chunk_lines(timeline(utts, [], services.speaker_names(session, video.id)), load_settings().chunk_minutes)
     def check(part: int, lines: list[tuple[float, str]]) -> list[dict[str, Any]]:
         body = "\n".join(line for _, line in lines)
-        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", part, len(chunks), body),
+        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", part, len(chunks), body, about),
                 FOLLOW_CHECK_SCHEMA, True)
         return r.get("menciones") or []
 
@@ -229,11 +232,17 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     # Antes de publicar, el título del vídeo aún es el nombre del fichero
     desc = f"{when:%Y-%m-%d} «{analysis.get('titulo') or video.title}» (duración {fmt_ts(video.duration)})"
     visible = F.state_at(all_items, when)
-    signals = mentions(session, video, visible, utts, ask, when)
+    hidden = [it for it in all_items if it.get("hidden")]
+    about = f"«{analysis.get('titulo') or video.title}». {analysis.get('resumen_breve') or ''}".strip()
+    signals = mentions(session, video, visible, utts, ask, when, about)
     points = F.analysis_points(analysis)
-    r = ask(FOLLOW_SYSTEM, follow_user(state, desc, F.analysis_text(analysis, points, signals)), FOLLOW_SCHEMA, False)
-    plan = F.apply_update(visible + [it for it in all_items if it.get("hidden")], r, video.id, when, video.duration,
-                          now(), points, signals)
+    # El resumen de la serie se escribe con lo que aportó cada vídeo anterior, no solo con el último resumen
+    ordered = links(session, f.id)
+    before = ordered[:next((i for i, (_, v) in enumerate(ordered) if v.id == video.id), len(ordered))]
+    contributions = [f"{date_of(v):%Y-%m-%d}: {fv.contribution}" for fv, v in before if fv.applied and fv.contribution]
+    r = ask(FOLLOW_SYSTEM, follow_user(state, desc, F.analysis_text(analysis, points, signals), contributions,
+                                       F.hidden_block(hidden)), FOLLOW_SCHEMA, False)
+    plan = F.apply_update(visible + hidden, r, video.id, when, video.duration, now(), points, signals)
     for iid, ev in plan["events"]:
         it = session.get(FollowupItem, iid)
         it.events = F.sort_events([*(it.events or []), ev])
@@ -278,8 +287,8 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
     minutes = 0.0
     for i, (_, v) in enumerate(affected):
         analysis = current.get(v.id) or v.analysis
-        if not analysis:
-            continue  # aún sin analizar: se aplicará al terminar su análisis
+        if not analysis or v.review == "pendiente":
+            continue  # aún sin analizar o sin revisar: se aplicará al aplicar su revisión
         report(i / len(affected), f"«{f.name}»: vídeo {i + 1} de {len(affected)}")
         if apply_video(session, f, v, analysis, ask, current_utts.get(v.id))["revisado"]:
             minutes += v.duration / 60
@@ -373,8 +382,8 @@ def rebuild_seconds(session: Session, f: Followup, since: datetime | None) -> fl
 
 def first_from(session: Session, f: Followup, since: datetime | None) -> Video | None:
     """Primer vídeo analizado del seguimiento desde esa fecha: el trabajo que rehace el estado va en él."""
-    return next((v for _, v in links(session, f.id)
-                 if v.analysis and v.status == "done" and (since is None or date_of(v) >= since)), None)
+    return next((v for _, v in links(session, f.id) if v.analysis and v.status == "done"
+                 and v.review != "pendiente" and (since is None or date_of(v) >= since)), None)
 
 def busy_job(session: Session, fid: int) -> Job | None:
     """Trabajo en cola o en curso que va a actualizar este seguimiento."""
@@ -403,11 +412,16 @@ def out(session: Session, f: Followup, full: bool = False) -> dict[str, Any]:
         "profile_id": max(set(profiles), key=profiles.count) if profiles else None,
         "busy": bool(job), "job_id": job.id if job else None,
         "rebuild_seconds": round(rebuild_seconds(session, f, f.stale_from)) if f.stale_from else None,
+        # Vídeos que se aplicarán al estado cuando el usuario los revise
+        "pending_videos": [{"id": v.id, "title": v.title} for _, v in ls if v.review == "pendiente"],
+        "to_review": sum(len(F.needs_review(it)) > 0 for it in shown),
     }
     if full:
         titles = {v.id: v.title for _, v in ls}
         data["videos"] = [{"video_id": v.id, "title": v.title, "date": date_of(v), "duration": v.duration,
-                           "status": v.status, "applied": fv.applied, "contribution": fv.contribution}
+                           "status": v.status, "review": v.review, "applied": fv.applied,
+                           "contribution": fv.contribution,
+                           "rebuild_seconds": round(rebuild_seconds(session, f, date_of(v)))}
                           for fv, v in ls]
         data["items"] = [{**it, "events": [{**e, "video_title": titles.get(e.get("video_id"), "")} for e in it["events"]]}
                          for it in shown]

@@ -17,7 +17,7 @@ from .pipeline.glossary import normalize
 from .pipeline.transcript import fmt_ts
 from .pipeline.voice import match_name
 
-PROFILE_KINDS = ("termino", "contexto", "seccion")
+PROFILE_KINDS = ("termino", "contexto", "seccion", "correccion")
 PERSON_KINDS = ("dato", "alias")
 PROFILE_CATEGORIES = ("proyecto", "cliente", "sistema", "proceso", "sigla", "otro")
 PERSON_CATEGORIES = ("cargo", "organizacion", "equipo", "responsabilidad", "proyecto", "conocimiento", "relacion",
@@ -40,6 +40,8 @@ _GENERIC_NAME = re.compile(r"^(hablante|speaker|participante|usuario|alguien|yo)
 def item_text(kind: str, data: dict[str, Any]) -> str:
     if kind == "termino":
         return data.get("term", "")
+    if kind == "correccion":
+        return f"{data.get('term', '')} (se oye como {', '.join(data.get('variants') or [])})"
     if kind == "seccion":
         return data.get("title", "")
     if kind in ("alias", "nueva_persona"):
@@ -48,6 +50,8 @@ def item_text(kind: str, data: dict[str, Any]) -> str:
 
 
 def item_key(kind: str, data: dict[str, Any]) -> str:
+    if kind == "correccion":  # el término y sus formas oídas: otra forma nueva es otra propuesta
+        return normalize(data.get("term", "")) + "|" + "|".join(sorted(normalize(v) for v in data.get("variants") or []))
     return normalize(item_text(kind, data))
 
 
@@ -59,7 +63,7 @@ def find_match(kind: str, key: str, items: list[dict[str, Any]], threshold: floa
     for it in items:
         if it["kind"] != kind or not it.get("key"):
             continue
-        if kind in ("termino", "alias", "nueva_persona", "seccion"):
+        if kind in ("termino", "alias", "nueva_persona", "seccion", "correccion"):
             s = 100.0 if it["key"] == key else 0.0
         else:
             s = fuzz.token_sort_ratio(key, it["key"])
@@ -191,7 +195,7 @@ habitualmente principal principales equipo grupo area departamento
 """.split())
 
 
-def _content_words(text: str) -> list[str]:
+def content_words(text: str) -> list[str]:
     words = []
     for raw in text.split():
         w = normalize(raw)
@@ -240,12 +244,33 @@ def numbers_backed(text: str, near: str) -> bool:
     return True
 
 
+def claim_score(claim: str, line: str) -> int:
+    """Cuánto respalda una línea una frase: palabras con contenido en común y, sobre todo, sus cifras (la
+    pregunta «¿cuál es tu salario neto?» comparte más palabras que la respuesta «2.200 euros»)."""
+    words = {w[:5] for w in content_words(claim)}
+    score = len(words & {w[:5] for w in normalize(line).split()})
+    return score + 3 * sum(1 for n in _numbers(claim) if numbers_backed(n, line))
+
+
+def best_moment(text: str, utts: list[dict[str, Any]], t: float, window: float = 60.0) -> float:
+    """Inicio de la intervención que más respalda la frase (`claim_score`), cerca de `t` (o `t` si ninguna).
+
+    La marca de tiempo de la IA es aproximada: la evidencia se centra en la frase que de verdad lo dice."""
+    best, best_n = t, 0
+    for u in utts:
+        if u["end"] >= t - window and u["start"] <= t + window:
+            n = claim_score(text, u["text"])
+            if n > best_n:
+                best, best_n = float(u["start"]), n
+    return best
+
+
 def supported(text: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]], t: float,
               window: float = 60.0) -> bool:
     """Si la transcripción (o la pantalla) alrededor de `t` respalda la frase: comparten la mayoría de sus
     palabras con contenido y todas sus cifras. Evita que se cuelen datos inventados o copiados de otro
     sitio."""
-    words = _content_words(text)
+    words = content_words(text)
     if not words:
         return False
     near = [u["text"] for u in utts if u["end"] >= t - window and u["start"] <= t + window]
@@ -410,11 +435,15 @@ def merged_aliases(target: dict[str, Any], source: dict[str, Any]) -> list[str]:
 # --------------------------------------------------------------------------- uso en los prompts
 
 def effective_glossary(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Glosario manual seguido de los términos aprendidos (marcados como no fiables para corregir)."""
+    """Glosario manual seguido de los términos aprendidos (marcados como no fiables para corregir).
+
+    Las correcciones de transcripción aceptadas añaden sus formas oídas como variantes de su término (o lo
+    crean). Son fiables: el usuario las aceptó viendo dónde se oyen, como si las hubiera escrito él."""
     profile = profile or {}
     out = [{**g, "trusted": True} for g in profile.get("glossary") or [] if g.get("term")]
     seen = {normalize(g["term"]) for g in out}
-    for it in profile.get("learned") or []:
+    learned = profile.get("learned") or []
+    for it in learned:
         if it["kind"] != "termino":
             continue
         term = it["data"].get("term", "").strip()
@@ -426,6 +455,59 @@ def effective_glossary(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
                 if normalize(form) not in seen:
                     seen.add(normalize(form))
                     out.append({"term": form, "variants": [], "definition": "", "trusted": False})
+    for it in learned:
+        if it["kind"] != "correccion":
+            continue
+        term = it["data"].get("term", "").strip()
+        variants = [v for v in it["data"].get("variants") or [] if v.strip()]
+        entry = next((g for g in out if normalize(g["term"]) == normalize(term)), None)
+        if entry is None:
+            out.append({"term": term, "variants": variants, "definition": "", "trusted": True})
+            continue
+        known = {normalize(v) for v in entry.get("variants") or []}
+        entry["variants"] = [*(entry.get("variants") or []), *(v for v in variants if normalize(v) not in known)]
+        entry["trusted"] = True
+    return out
+
+
+def known_forms(profile: dict[str, Any] | None) -> set[tuple[str, str]]:
+    """(término, forma oída) ya conocidos, normalizados: no se vuelven a proponer."""
+    out = set()
+    for g in effective_glossary(profile):
+        out |= {(normalize(g["term"]), normalize(v)) for v in g.get("variants") or []}
+    return out
+
+
+# --------------------------------------------------------------------------- correcciones de transcripción
+
+def heard_at(form: str, utts: list[dict[str, Any]], limit: int = 5) -> list[float]:
+    """Momentos en que una forma se oye tal cual (en el texto que salió de Whisper, antes del glosario)."""
+    n = normalize(form)
+    out = [float(u["start"]) for u in utts if _contains(normalize(u.get("original_text") or u["text"]), n)]
+    return out[:limit]
+
+
+def correction_source(term: str, user_notes: list[str], vision: list[dict[str, Any]], screen_terms: list[str],
+                      glossary: list[dict[str, Any]]) -> str:
+    """En qué se apoya la forma correcta, de más a menos fiable: tus notas, la pantalla, el glosario o solo la IA."""
+    n = normalize(term)
+    if any(_contains(normalize(x), n) for x in user_notes):
+        return "usuario"
+    if any(normalize(x) == n for x in screen_terms) or any(
+            _contains(normalize(" ".join([v.get("texto_relevante", ""), *v.get("terminos", [])])), n) for v in vision):
+        return "pantalla"
+    if any(normalize(g["term"]) == n for g in glossary):
+        return "glosario"
+    return "ia"
+
+
+def corrections_from_correct_stage(utts: list[dict[str, Any]]) -> dict[str, set[str]]:
+    """Formas que la fase de corrección validó como un término del glosario: {término: {forma oída}}."""
+    out: dict[str, set[str]] = {}
+    for u in utts:
+        for c in u.get("corrections") or []:
+            if c.get("kind") == "fonetica" and normalize(c["original"]) != normalize(c["suggestion"]):
+                out.setdefault(c["suggestion"], set()).add(c["original"].strip(" .,;:¿?¡!"))
     return out
 
 
@@ -450,6 +532,9 @@ def learned_block(profile: dict[str, Any] | None, max_chars: int = 6000) -> str:
         if it["kind"] == "contexto":
             cat = CATEGORY_LABELS.get(it.get("category", ""), "")
             line = f"- {f'[{cat}] ' if cat else ''}{it['data'].get('text', '')}"
+        elif it["kind"] == "correccion":
+            line = (f"- Término «{it['data'].get('term', '')}» (en la transcripción a veces aparece como "
+                    f"{', '.join(it['data'].get('variants') or [])})")
         elif it["kind"] == "termino" and normalize(it["data"].get("term", "")) not in manual_terms:
             d = it["data"].get("definition", "")
             forms = it["data"].get("forms") or []

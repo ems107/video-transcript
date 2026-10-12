@@ -13,7 +13,7 @@ from . import estimates
 from . import followups
 from . import knowledge as K
 from .config import load_settings
-from .pipeline import analyze, identify, learn, names, transcript, voices
+from .pipeline import analyze, identify, learn, names, transcript, voiceprints, voices
 from .pipeline.voice import assign_visual_names
 from .prompts import LIST_LIMITS
 from .services import CONTEXT_CONFIDENCE
@@ -36,6 +36,9 @@ def values() -> dict[str, Any]:
         "voz_tramo_minimo": voices.MIN_RUN,
         "voz_division_silueta": voices.SPLIT_SILHOUETTE,
         "voz_division_segundos": voices.SPLIT_SECONDS,
+        "voz_huella_minimo": round(voiceprints.MIN_SECONDS),
+        "voz_muestra_objetivo": round(voiceprints.TARGET_SECONDS),
+        "voz_muestra_maximo": round(voiceprints.MAX_SECONDS),
         # Nombres en pantalla
         "nombres_parecido": names.SIMILAR,
         "nombres_tildes_pct": round(names.ACCENT_SHARE * 100),
@@ -51,6 +54,8 @@ def values() -> dict[str, Any]:
         "aprender_max_por_persona": learn.MAX_PER_PERSON,
         "aprender_max_personas_nuevas": learn.MAX_NEW_PEOPLE,
         "aprender_max_secciones": learn.MAX_SECTIONS,
+        "aprender_max_correcciones": learn.MAX_CORRECTIONS,
+        "aprender_juicio_tanda": learn.JUDGE_BATCH,
         # Seguimientos
         "seguimiento_contexto": followups.FOLLOW_CONTEXT_CHARS,
         "seguimiento_recientes": followups.RECENT_VIDEOS,

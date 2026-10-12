@@ -177,6 +177,51 @@ confirma sola.
 **Consecuencia:** si se analiza un vídeo anterior a otros del seguimiento, o se cambia uno del medio, el
 estado queda desactualizado hasta que lo rehaces. Ver [Seguimientos](ayuda:seguimientos#desactualizado-y-rehacer).
 
+## Revisar antes de que un vídeo cuente
+
+**Qué:** hasta que revisas un vídeo y pulsas **Aplicar y continuar**, no actualiza sus seguimientos, no
+propone nada y no guarda voces. Los vídeos del mismo perfil o seguimiento encolados después hacen lo más
+pesado y **esperan** a esa revisión antes de identificar a los hablantes y resumir.
+
+**Por qué:** en la prueba con tres vídeos de una tutoría, cada vídeo pedía entre 30 y 60 decisiones,
+sobre todo por duplicados y ruido creados antes de que pudieras corregir el vídeo: al corregir y
+regenerar, el seguimiento y lo aprendido se rehacían y volvían a aparecer. Con la revisión antes, se
+calculan una sola vez y con la información buena; y el vídeo siguiente ya usa las voces, el glosario y el
+seguimiento revisados.
+
+**Consecuencia:** un vídeo sin revisar frena a los relacionados que encoles después (no a los demás).
+Esperar desde el principio costaría unos 30–45 minutos más por vídeo: por eso la pantalla y la
+transcripción se adelantan. Ver [Revisar un vídeo](ayuda:revision).
+
+## Voz mínima y voces dudosas
+
+**Qué:** la voz de una persona en un vídeo se guarda solo si suma al menos {{v:voz_huella_minimo}} s
+limpios, y queda **dudosa** (sin usar hasta que decidas) si no se parece a la de sus otros vídeos (menos
+de {{v:voice_match_threshold}}).
+
+**Por qué:** una huella hecha con muy poca voz, o con la de otra persona, haría que la app la reconociera
+mal en los vídeos siguientes. Con 5 s se reconoce una voz de oído y bastan para una muestra.
+
+**Consecuencia:** quien apenas habla en un vídeo no gana voz de ese vídeo. Ver
+[Su voz](ayuda:personas#su-voz).
+
+## Revisión de las propuestas por la IA
+
+**Qué:** antes de enseñártelas, la IA revisa todas las propuestas de un vídeo juntas y descarta lo que es
+contenido de esa reunión o repite otra propuesta. Lo descartado no se pierde: queda en **Descartadas por la
+IA**, con su motivo y **Recuperar**.
+
+**Por qué:** la extracción, fragmento a fragmento, proponía lo que se explicaba en la reunión como datos
+de quien lo explicaba («Sabe que la regla del 72…») y términos sin valor para el perfil. Pedírselo con más
+fuerza en el mismo prompt no bastaba, y una regla fija por palabras («Sabe que…») quitaría también datos
+buenos.
+
+**Consecuencia:** la IA revisa con su **modo razonamiento**, que tarda unos 3 minutos por cada
+{{v:aprender_juicio_tanda}} propuestas (de 3 a 7 minutos por vídeo en una tutoría de 40–50 minutos). Sin
+razonar era más rápido, pero el resultado cambiaba de una vez a otra. Aun así no es perfecta: a veces
+descarta algo cierto (por eso puedes **recuperarlo**) o deja pasar algo dudoso. Lo que sale de tus
+correcciones no lo juzga. Si la revisión falla, se enseñan todas.
+
 ## Nada se confirma solo
 
 **Qué:** ni los hablantes, ni lo aprendido, ni las identidades deducidas se dan por buenos sin que los

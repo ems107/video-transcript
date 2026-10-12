@@ -35,10 +35,17 @@ export default function People() {
     <>
       <div className="spread" style={{ marginBottom: '1rem' }}>
         <h1 style={{ margin: 0 }}>Personas <HelpLink to="personas" /></h1>
-        {!d && <button className="primary" onClick={() => setD({ name: '', role: '', aliases: '', notes: '' })}>+ Nueva persona</button>}
+        <span className="row" style={{ gap: '0.5rem' }}>
+          <button title="Vuelve a calcular las voces de los vídeos revisados, con las líneas ya corregidas, y guarda sus muestras" onClick={async () => {
+            if (!confirm('¿Recalcular las voces de todos los vídeos revisados? Se encola un trabajo corto por vídeo (necesita el archivo de vídeo).')) return
+            const r = await api.post<{ queued: number; skipped: number }>('/api/voices/recompute')
+            alert(`${r.queued} vídeo(s) en la cola${r.skipped ? `; ${r.skipped} sin el archivo de vídeo o sus datos de trabajo` : ''}.`)
+          }}>Recalcular las voces</button>
+          {!d && <button className="primary" onClick={() => setD({ name: '', role: '', aliases: '', notes: '' })}>+ Nueva persona</button>}
+        </span>
       </div>
       <p className="muted small">
-        Cada vez que confirmas a una persona como hablante de un vídeo se guarda una muestra de su voz; con más muestras, el reconocimiento automático mejora.
+        Cada vez que aplicas la revisión de un vídeo se guarda la voz de cada persona confirmada; con más vídeos, el reconocimiento automático mejora.
         Además, la IA propone lo que aprende de cada persona en los vídeos (cargo, proyectos, conocimientos…); ábrela para ver su ficha.
       </p>
       {dups.length > 0 && (
@@ -85,7 +92,7 @@ export default function People() {
       )}
       <div className="card">
         <table className="tbl">
-          <thead><tr><th>Nombre</th><th>Rol</th><th>Otros nombres</th><th>Aprendido</th><th>Muestras de voz</th><th>Vídeos</th><th /></tr></thead>
+          <thead><tr><th>Nombre</th><th>Rol</th><th>Otros nombres</th><th>Aprendido</th><th>Huellas de voz</th><th>Vídeos</th><th /></tr></thead>
           <tbody>
             {people.map((p) => (
               <tr key={p.id}>
@@ -99,7 +106,7 @@ export default function People() {
                   <button className="sm" onClick={() => setD({ id: p.id, name: p.name, role: p.role, aliases: p.aliases.join(', '), notes: p.notes })}>Editar</button>{' '}
                   {p.voice_samples > 0 && (
                     <button className="sm" title="Olvidar las muestras de voz (si se asignaron mal)" onClick={async () => {
-                      if (confirm(`¿Olvidar las ${p.voice_samples} muestras de voz de ${p.name}?`)) { await api.del(`/api/people/${p.id}/voices`); load() }
+                      if (confirm(`¿Olvidar la voz de ${p.name} (sus ${p.voice_samples} huellas y sus muestras)?`)) { await api.del(`/api/people/${p.id}/voices`); load() }
                     }}>Olvidar voz</button>
                   )}{' '}
                   <button className="sm danger" onClick={async () => {

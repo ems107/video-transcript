@@ -19,11 +19,30 @@ reconoce por su voz y por su nombre, y va completando su ficha con lo que acepta
 - **Vídeos:** en cuáles aparece, cuánto ha hablado y si está confirmada.
 - Pestañas **Propuestas** e **[Historial](ayuda:historial)**.
 
-## Voz
+## Su voz
 
-La lista de **Personas** muestra cuántas **muestras de voz** tiene cada una: se guarda una al confirmarla
-como hablante en un vídeo. Con más muestras, la reconoce mejor. Si alguna se guardó por error (se
-confirmó al hablante equivocado), **Olvidar voz** las borra.
+Al aplicar la [revisión de un vídeo](ayuda:revision), la app guarda la voz de cada persona confirmada en
+él: una **huella** para reconocerla (una lista de números que describe cómo suena, no un audio) y una
+**muestra**, sus mejores tramos unidos en un audio corto. La lista de **Personas** muestra cuántas huellas
+tiene cada una; con más vídeos, la reconoce mejor.
+
+- La huella se calcula con las frases de esa persona **tal como quedan después de tus arreglos** de quién
+  habla. Si una persona estaba mezclada con otra, ninguna de las dos se queda con la voz de la otra.
+- Si habla menos de {{v:voz_huella_minimo}} s limpios en el vídeo, no se guarda nada: sería poco fiable.
+- Si la huella no se parece a la de sus otros vídeos (menos de {{v:voice_match_threshold}}), queda como
+  **dudosa** y no se usa hasta que decidas en la revisión: **Es su voz: guardarla** o **Descartarla**.
+  Suele significar que el hablante estaba mal asignado.
+
+La tarjeta **Su voz** de la ficha tiene sus 3 mejores muestras para **escucharla** y comprobar de oído que
+es ella. Cada muestra dura entre {{v:voz_huella_minimo}} y {{v:voz_muestra_maximo}} s (se buscan unos
+{{v:voz_muestra_objetivo}}), con los tramos que más se parecen a su huella, sacados del vídeo original a su
+calidad. Se guardan solo en tu equipo, en los datos de la app (`data/voces/`), no en la carpeta del vídeo:
+son datos biométricos de otras personas.
+
+Si alguna voz se guardó por error, **Olvidar voz** borra sus huellas y sus muestras. **Recalcular las
+voces** (arriba en **Personas**) vuelve a calcular las de todos los vídeos revisados que conservan su
+archivo de vídeo: útil para los vídeos de antes de esta versión, cuyas huellas se guardaban al confirmar,
+sin tener en cuenta tus arreglos.
 
 ## Duplicados y fusión
 

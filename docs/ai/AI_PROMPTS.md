@@ -270,17 +270,60 @@ final pone cada asunto en una sola lista (tarea, decisión o pendiente).
      Medido con dos vídeos reales: dentro del resumen o sin razonar, el modelo no encontraba los cierres
      dichos de pasada («lo que ayer fallaba ya ha funcionado») e inventaba momentos («00:57:33» en un vídeo
      de 25 min) y citas; con razonamiento, todas las citas existían y encontró el cierre (unos 2 min por
-     bloque de 25 min).
+     bloque de 25 min). Recibe también de qué trata el vídeo (título y resumen breve): sin eso no cerraba
+     «Realizar la sesión de diagnóstico» en la propia sesión. Si un bloque se corta por `max_tokens`
+     (`LLMTruncated`), se repite en dos mitades.
   2. `FOLLOW_*` sin razonamiento: con el estado, los **puntos del vídeo** (`followups.analysis_points`:
-     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones y el resumen, devuelve
-     `mismos` (qué `[N…]` es un punto existente), `resumen` y `aporte`.
+     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones, el resumen, **lo que
+     aportó cada vídeo anterior** (`FollowupVideo.contribution`) y **los puntos borrados por el usuario**
+     (`followups.hidden_block`, con su id), devuelve `clasificacion` (por cada `[N…]`: `mismo`, `nuevo` o
+     `dudoso` frente a un punto del estado, uno borrado u otro `[N…]`, con motivo), `resumen` (de toda la
+     serie; las marcas con fecha `[AAAA-MM-DD hh:mm:ss]`, que la web y `followups.link_moments` enlazan
+     con el vídeo) y `aporte`. Antes, con `mismos` y la comparación difusa, cada vídeo repetía 3–6 puntos
+     con otra redacción, los borrados volvían al rehacer y el resumen describía solo el último vídeo.
   3. `followups.apply_update`: los hitos salen de las menciones (un cambio de estado con cita comprobada se
      aplica; sin ella queda como «avanza» con `posible: <evento>`, que la web muestra como «¿hecha?» con un
-     botón Confirmar); a un punto manual solo se le anotan avances. Los puntos nuevos son los del análisis
-     menos los «mismos» y los parecidos a uno existente o borrado (`DUPLICATE`): no los inventa la IA, que
-     variaba en cada ejecución.
+     botón Confirmar o «No pasó», que marca el evento `descartado`); a un punto manual solo se le anotan
+     avances. Los puntos nuevos son los del análisis menos los «mismo» (`followups.classify` descarta los
+     ids que no existen) y los casi iguales en texto a uno existente o borrado (`DUPLICATE`, red de
+     seguridad): no los inventa la IA, que variaba en cada ejecución. Los «dudoso» se crean con
+     `review = {tipo: duplicado, de, texto, motivo}` y los decide el usuario (`POST …/resolve`).
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
+
+**Correcciones de transcripción** (`kind = correccion`, `learn.collect_corrections`). Una propuesta por
+término con las formas en que se oye mal (`data = {term, variants, fuente, motivo}`; clave
+`término|formas`, así una forma nueva es otra propuesta). Fuentes: la lista `correcciones` de
+`LEARN_SCHEMA` (la IA, que ve tus notas y la pantalla), `learn.notes_corrections` (una llamada que saca
+de las correcciones del usuario los pares «oído → correcto»: la extracción por fragmentos no los recogía)
+y `knowledge.corrections_from_correct_stage` (lo que `correct` ya validó). Se probó también buscar por
+sonido los términos de la pantalla en la transcripción (`find_candidates` a 75): con un vídeo real de 37
+min salían 15 parejas sin sentido («Meta» por «está»), y la pasada de juicio las daba por buenas. Cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`).
+`knowledge.correction_source` dice en qué se apoya: `usuario` > `pantalla` > `glosario` > `ia` (solo la
+IA: `juicio` dudosa). Aceptadas, `effective_glossary` las añade como variantes **fiables** de su término
+(o lo crea). Antes, el aprendizaje solo proponía términos escritos tal cual en la transcripción, así que
+nunca proponía uno mal transcrito, que es justo lo que más falta hace.
+
+**Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`). Después de recoger y comprobar las
+propuestas, la IA las revisa todas juntas (cada término con cuántas veces aparece y si se oye: con solo su
+frase de ejemplo, «Un segundito», descartaba términos clave), en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
+`util`, `dudosa` o `descartar` con motivo e `igual_que` (duplicado). Se probó también pasar al perfil los
+datos de persona que fueran del negocio, pero el texto perdía su sujeto («Documenta la configuración…») y
+el modelo lo marcaba con datos que sí eran de la persona: se quitó. `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
+descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso
+lleva `data.juicio`; las alias y las secciones no se juzgan. En la misma llamada valora si las secciones
+del perfil encajan con el vídeo y, si no, propone hasta 2 generales (`section_proposals`, `replaces` solo
+sobre una aprendida; solo si el perfil ya tiene secciones). Las correcciones de transcripción no admiten
+nombres de personas: la IA proponía «Juan, puedes» → «Juan Pérez». Va **con modo razonamiento**
+(`max_tokens` 16000; una tanda que se corta se parte en dos): sin él, el mismo código promocional salía
+útil o descartado según la ejecución (unos 3 min por tanda de `JUDGE_BATCH`). Cada dato lleva la línea que
+más lo respalda (`knowledge.claim_score`: palabras comunes y, sobre todo, sus cifras) y la siguiente; con
+la línea del momento aproximado, el juicio veía la pregunta («¿salario neto?») y descartaba datos ciertos.
+Lo que sale de las correcciones del usuario (`fuente = usuario`) no se juzga. Es de mejor esfuerzo: si
+falla, las propuestas quedan como estaban. Medido en la
+prueba de los 3 vídeos de tutoría: 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
+explicaba), términos como un código promocional o el nombre de un programa del escritorio y un duplicado
+de un término ya aceptado; el prompt de extracción ya pedía no incluirlos.
 
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se

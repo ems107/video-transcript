@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type FollowupDetail as FD, type FollowupItem, type FollowupKind, type FollowupVersion, type Job, type VideoCard } from '../api'
-import { KIND_ONE, KIND_TITLES, STATUSES, statusClass } from '../followup'
+import { KIND_ONE, KIND_TITLES, shortDate, STATUS_AFTER, STATUSES, statusClass } from '../followup'
 import { DetachDialog, EventChip } from '../FollowupsPanel'
 import { HelpLink } from '../HelpMarkdown'
-import { fmtDate, fmtDuration, plural } from '../util'
+import { fmtDate, fmtDuration, parseTs, plural } from '../util'
 
 type Tab = 'estado' | 'videos' | 'historial'
 const KINDS: FollowupKind[] = ['tarea', 'decision', 'duda']
 // Estado en que deja un punto cada evento (igual que EVENT_STATUS en backend/app/followups.py)
-const STATUS_AFTER: Record<string, string> = {
-  hecha: 'hecha', descartada: 'descartada', cambiada: 'cambiada', anulada: 'anulada', resuelta: 'resuelta',
-}
-
 export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
   const { id } = useParams()
   const nav = useNavigate()
@@ -21,6 +17,7 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
   const [f, setF] = useState<FD | null>(null)
   const [error, setError] = useState('')
   const [editName, setEditName] = useState<{ name: string; description: string } | null>(null)
+  const [rebuilding, setRebuilding] = useState(false)
 
   const load = useCallback(() => {
     api.get<FD>(`/api/followups/${id}`).then(setF).catch((e) => setError(e.message))
@@ -76,6 +73,8 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
         </div>
         <div className="row">
           <button onClick={() => act(() => api.post(`/api/followups/${f.id}/open-folder`))}>Abrir carpeta</button>
+          <button disabled={f.busy || !f.videos.some((v) => v.applied)} onClick={() => setRebuilding(!rebuilding)}
+            title="La IA vuelve a aplicar los vídeos desde el que elijas; lo que cambiaste tú se conserva">Rehacer el estado…</button>
           <button onClick={() => act(() => api.put(`/api/followups/${f.id}`, { status: f.status === 'abierto' ? 'archivado' : 'abierto' }))}
             title={f.status === 'abierto' ? 'Deja de aparecer al encolar y no admite vídeos nuevos; se puede reabrir' : ''}>
             {f.status === 'abierto' ? 'Archivar' : 'Reabrir'}
@@ -96,6 +95,12 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
           {job?.status === 'running' && ` ${job.message}`}
         </div>
       )}
+      {f.pending_videos.length > 0 && (
+        <div className="notice small" style={{ marginBottom: '1rem' }}>
+          El estado se actualizará con {f.pending_videos.length > 1 ? 'estos vídeos' : 'este vídeo'} cuando apliques su revisión:{' '}
+          {f.pending_videos.map((v, i) => <span key={v.id}>{i > 0 && ', '}«<Link to={`/videos/${v.id}/revisar`}>{v.title}</Link>»</span>)}.
+        </div>
+      )}
       {f.stale_from && !f.busy && (
         <div className="notice inline small warn-box" style={{ marginBottom: '1rem' }}>
           <span><b>El estado no está al día</b> desde el {fmtDate(f.stale_from)}. {f.stale_reason}</span>
@@ -104,6 +109,7 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
           </button>
         </div>
       )}
+      {rebuilding && !f.busy && <RebuildPanel f={f} act={act} onClose={() => setRebuilding(false)} />}
 
       <div className="tabs">
         {tabs.map(([k, label]) => (
@@ -118,6 +124,50 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
 }
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>
+
+// Rehacer el estado desde un vídeo elegido (no hace falta que esté desactualizado)
+function RebuildPanel({ f, act, onClose }: { f: FD; act: Act; onClose: () => void }) {
+  const videos = f.videos.filter((v) => v.review !== 'pendiente')
+  const [from, setFrom] = useState(String(videos[0]?.video_id ?? ''))
+  const chosen = videos.find((v) => String(v.video_id) === from)
+  return (
+    <div className="notice inline small" style={{ marginBottom: '1rem' }}>
+      <span>
+        Rehacer el estado desde{' '}
+        <select value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 'auto' }}>
+          {videos.map((v) => <option key={v.video_id} value={v.video_id}>{fmtDate(v.date)} · {v.title}</option>)}
+        </select>
+        . La IA quita lo que aportaron ese vídeo y los siguientes y los vuelve a aplicar. Lo que cambiaste o borraste tú
+        se conserva.
+      </span>
+      <span className="row" style={{ gap: '0.35rem' }}>
+        <button className="sm" onClick={onClose}>Cancelar</button>
+        <button className="sm primary" disabled={!chosen} onClick={() => act(async () => {
+          const r = await api.post(`/api/followups/${f.id}/rebuild?since_video_id=${from}`)
+          onClose()
+          return r
+        })}>Rehacer{chosen ? ` (≈ ${fmtDuration(Math.max(chosen.rebuild_seconds, 30))})` : ''}</button>
+      </span>
+    </div>
+  )
+}
+
+// Texto con marcas «[AAAA-MM-DD hh:mm:ss]» que enlazan al vídeo de esa fecha en ese momento
+function MomentText({ text, f }: { text: string; f: FD }) {
+  const parts = text.split(/(\[\d{4}-\d{2}-\d{2}[ T·]+\d{1,2}:\d{2}:\d{2}\])/)
+  return (
+    <>
+      {parts.map((p, i) => {
+        const m = p.match(/^\[(\d{4}-\d{2}-\d{2})[ T·]+(\d{1,2}:\d{2}:\d{2})\]$/)
+        if (!m) return <span key={i}>{p}</span>
+        const v = f.videos.find((x) => x.date.slice(0, 10) === m[1])
+        const label = `${shortDate(m[1])} · ${m[2]}`
+        return v ? <Link key={i} to={`/videos/${v.video_id}?t=${parseTs(m[2]) ?? 0}&tab=resumen`} title={v.title}>{label}</Link>
+          : <span key={i}>{label}</span>
+      })}
+    </>
+  )
+}
 
 function SummaryCard({ f, act }: { f: FD; act: Act }) {
   const [editing, setEditing] = useState<string | null>(null)
@@ -142,7 +192,7 @@ function SummaryCard({ f, act }: { f: FD; act: Act }) {
           </div>
         </div>
       ) : (
-        <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{f.summary || <span className="muted">Aún no hay resumen: se escribe al aplicar el primer vídeo.</span>}</p>
+        <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{f.summary ? <MomentText text={f.summary} f={f} /> : <span className="muted">Aún no hay resumen: se escribe al aplicar el primer vídeo.</span>}</p>
       )}
       {f.summary_ai && (
         <div className="notice small" style={{ marginTop: '0.75rem' }}>
@@ -153,7 +203,7 @@ function SummaryCard({ f, act }: { f: FD; act: Act }) {
               <button className="sm primary" onClick={() => act(() => api.put(`/api/followups/${f.id}`, { use_ai_summary: true }))}>Usar el de la IA</button>
             </span>
           </div>
-          {showAi && <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{f.summary_ai}</p>}
+          {showAi && <p style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}><MomentText text={f.summary_ai} f={f} /></p>}
         </div>
       )}
     </div>
@@ -238,6 +288,14 @@ function ItemRow({ f, it, act }: { f: FD; it: FollowupItem; act: Act }) {
             {it.owner && <span className="muted"> — {it.owner}</span>}
             {it.due && <span className="muted"> (plazo: {it.due})</span>}
             {it.manual && <> <span className="pill" title="Lo has creado o cambiado tú: la IA ya no cambia su texto ni su estado">tuyo</span></>}
+            {it.review?.tipo === 'duplicado' && (
+              <div className="small warn-box" style={{ padding: '0.3rem 0.5rem', marginTop: '0.3rem' }}>
+                ¿Es lo mismo que «{f.items.find((x) => x.id === it.review.de)?.text ?? it.review.texto ?? 'otro punto'}»?
+                {it.review.motivo && <span className="muted"> {it.review.motivo}</span>}{' '}
+                <button className="sm" onClick={() => act(() => api.post(`${url}/resolve`, { action: 'mismo' }))}>Sí, borrar este</button>{' '}
+                <button className="sm" onClick={() => act(() => api.post(`${url}/resolve`, { action: 'distinto' }))}>No, es distinto</button>
+              </div>
+            )}
           </span>
         )}
         {!edit && (
@@ -249,8 +307,11 @@ function ItemRow({ f, it, act }: { f: FD; it: FollowupItem; act: Act }) {
       </div>
       <div className="events">
         {it.events.map((e, i) => (
-          <EventChip key={i} e={e} onConfirm={e.posible && i === lastPossible && it.status !== STATUS_AFTER[e.posible]
-            ? () => act(() => api.put(url, { status: STATUS_AFTER[e.posible!] })) : undefined} />
+          <EventChip key={i} e={e}
+            onConfirm={e.posible && !e.descartado && i === lastPossible && it.status !== STATUS_AFTER[e.posible]
+              ? () => act(() => api.put(url, { status: STATUS_AFTER[e.posible!] })) : undefined}
+            onDismiss={e.posible && !e.descartado && i === lastPossible && it.status !== STATUS_AFTER[e.posible]
+              ? () => act(() => api.post(`${url}/resolve`, { action: 'descartar' })) : undefined} />
         ))}
       </div>
     </li>

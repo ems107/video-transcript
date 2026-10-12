@@ -74,6 +74,25 @@ def extract_audio(src: Path, dst: Path, track: int | None, n_tracks: int) -> Non
     run(args)
 
 
+def extract_clips(src: Path, dst: Path, ranges: list[tuple[float, float]], track: int | None, n_tracks: int) -> None:
+    """Une en un solo audio (FLAC mono, a la frecuencia del original) unos tramos del vídeo.
+
+    track=None mezcla todas las pistas, igual que el audio que se transcribe."""
+    if track is None and n_tracks > 1:
+        inputs = "".join(f"[0:a:{i}]" for i in range(n_tracks))
+        chain = [f"{inputs}amix=inputs={n_tracks}:normalize=0,asplit={len(ranges)}"
+                 + "".join(f"[s{i}]" for i in range(len(ranges)))]
+        sources = [f"[s{i}]" for i in range(len(ranges))]
+    else:
+        chain = [f"[0:a:{track or 0}]asplit={len(ranges)}" + "".join(f"[s{i}]" for i in range(len(ranges)))]
+        sources = [f"[s{i}]" for i in range(len(ranges))]
+    for i, (a, b) in enumerate(ranges):
+        chain.append(f"{sources[i]}atrim=start={a:.2f}:end={b:.2f},asetpts=PTS-STARTPTS[c{i}]")
+    chain.append("".join(f"[c{i}]" for i in range(len(ranges))) + f"concat=n={len(ranges)}:v=0:a=1[out]")
+    run([_bin("ffmpeg"), "-y", "-v", "error", "-i", str(src), "-filter_complex", ";".join(chain),
+         "-map", "[out]", "-ac", "1", "-c:a", "flac", str(dst)])
+
+
 def sample_frames(src: Path, out_dir: Path, every: float, width: int = 320) -> list[tuple[float, Path]]:
     """Extrae un fotograma pequeño cada `every` segundos (para detectar cambios de escena)."""
     out_dir.mkdir(parents=True, exist_ok=True)
