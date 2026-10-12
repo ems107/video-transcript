@@ -52,7 +52,8 @@ export function ReviewBanner({ video, onChange }: { video: VideoDetail; onChange
   }
   if (r.state === 'propuestas') {
     const parts = [r.pending.propuestas && plural(r.pending.propuestas, 'propuesta para el perfil', 'propuestas para el perfil'),
-      r.pending.seguimiento && plural(r.pending.seguimiento, 'duda del seguimiento', 'dudas del seguimiento')].filter(Boolean)
+      r.pending.seguimiento && plural(r.pending.seguimiento, 'duda del seguimiento', 'dudas del seguimiento'),
+      r.pending.voces && plural(r.pending.voces, 'voz dudosa', 'voces dudosas')].filter(Boolean)
     return (
       <div className="notice inline small warn-box" style={{ marginBottom: '1rem' }}>
         <span><b>Queda por decidir:</b> {parts.join(' y ')}.{waiting}</span>
@@ -191,6 +192,29 @@ export default function Review({ jobs }: { jobs: Job[] }) {
           <p className="small muted">Aparecerá al aplicar el paso 1.</p>
         ) : (
           <>
+            {r.doubtful_voices.length > 0 && (
+              <>
+                <h4>Voces dudosas</h4>
+                <p className="small muted">
+                  La voz de estas personas en este vídeo no se parece a la de sus otros vídeos. Puede que el hablante esté
+                  mal asignado. Escúchala: si es ella, guárdala; si no, descártala y revisa quién habla.
+                </p>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {r.doubtful_voices.map((d) => (
+                    <li key={d.id} className="card pad" style={{ marginBottom: '0.5rem' }}>
+                      <div><b>{d.person_name}</b> <span className="muted small">
+                        · {fmtDuration(d.seconds)} de voz{d.similarity !== null && ` · parecido con sus otros vídeos: ${Math.round(d.similarity * 100)} %`}
+                      </span></div>
+                      {d.sample_id && <audio controls preload="none" src={`/api/voice-samples/${d.sample_id}/audio`} style={{ width: '100%', marginTop: '0.3rem' }} />}
+                      <div className="row" style={{ gap: '0.35rem', marginTop: '0.3rem' }}>
+                        <button className="sm primary" onClick={async () => { await api.post(`/api/voice-embeddings/${d.id}/decide`, { keep: true }); load() }}>Es su voz: guardarla</button>
+                        <button className="sm" onClick={async () => { await api.post(`/api/voice-embeddings/${d.id}/decide`, { keep: false }); load() }}>Descartarla</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <h4>Seguimientos</h4>
             {items.length === 0 ? <p className="small muted">Nada que decidir.</p> : (
               <ul style={{ listStyle: 'none', padding: 0 }}>

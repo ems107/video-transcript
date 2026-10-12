@@ -20,7 +20,7 @@ from . import __version__
 from . import proposals as PR
 from . import services
 from .config import WORK_DIR
-from .models import Job, Keyframe, KnowledgeItem, Person, Profile, Segment, Speaker, Video, VoiceEmbedding
+from .models import Job, Keyframe, KnowledgeItem, Person, Profile, Segment, Speaker, Video, VoiceEmbedding, VoiceSample
 
 APP_FILES = ("transcripcion.md", "transcripcion.txt", "resumen.md", "analisis.json", "miniatura.jpg")
 APP_DIRS = ("fotogramas", "datos")
@@ -157,6 +157,9 @@ def remove(session: Session, v: Video, opts: Options) -> dict[str, Any]:
     if opts.forget:
         for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.video_id == v.id)):
             session.delete(e)
+        for smp in session.exec(select(VoiceSample).where(VoiceSample.video_id == v.id)):
+            Path(smp.path).unlink(missing_ok=True)  # está en los datos de la app, no en la carpeta del usuario
+            session.delete(smp)
     # Lo pendiente de este vídeo ya no se podría revisar; lo aceptado se conserva salvo que se olvide
     for it in session.exec(select(KnowledgeItem).where(KnowledgeItem.video_id == v.id,
                                                        KnowledgeItem.status.in_(["propuesto", "descartado_ia"]))):

@@ -20,6 +20,7 @@ from .models import (
     Speaker,
     Video,
     VoiceEmbedding,
+    VoiceSample,
 )
 from .pipeline.glossary import normalize
 from .pipeline.voice import match_name, person_centroids
@@ -113,6 +114,9 @@ def merge(session: Session, source: Person, target: Person) -> None:
     for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.person_id == source.id)):
         e.person_id = target.id
         session.add(e)
+    for smp in session.exec(select(VoiceSample).where(VoiceSample.person_id == source.id)):
+        smp.person_id = target.id
+        session.add(smp)
     for sp in session.exec(select(Speaker).where(
             (Speaker.person_id == source.id) | (Speaker.suggested_person_id == source.id))):
         if sp.person_id == source.id:

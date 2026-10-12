@@ -20,7 +20,7 @@ from . import followups as F
 from . import followups_store as FS
 from . import services, speaker_fix
 from .config import WORK_DIR
-from .models import FollowupItem, FollowupVideo, Job, KnowledgeItem, Speaker, Video
+from .models import FollowupItem, FollowupVideo, Job, KnowledgeItem, Person, Speaker, Video, VoiceEmbedding, VoiceSample
 
 log = logging.getLogger(__name__)
 
@@ -104,7 +104,9 @@ def pending(session: Session, v: Video) -> dict[str, int]:
     for f in FS.for_video(session, v.id):
         rows = session.exec(select(FollowupItem).where(FollowupItem.followup_id == f.id)).all()
         follow += sum(1 for it in rows if F.needs_review(FS.item_dict(it), v.id))
-    return {"propuestas": proposals, "seguimiento": follow}
+    voices = len(session.exec(select(VoiceEmbedding.id).where(VoiceEmbedding.video_id == v.id,
+                                                               VoiceEmbedding.doubtful.is_(True))).all())
+    return {"propuestas": proposals, "seguimiento": follow, "voces": voices}
 
 
 def mark_changed(session: Session, v: Video) -> None:
@@ -159,9 +161,18 @@ def release_waiting(session: Session) -> int:
 def out(session: Session, v: Video) -> dict[str, Any]:
     """Estado de la revisión para la web."""
     data: dict[str, Any] = {"state": v.review, "changes": changes(session, v) if v.review != DONE else [],
-                            "pending": {"propuestas": 0, "seguimiento": 0}, "waiting": []}
+                            "pending": {"propuestas": 0, "seguimiento": 0, "voces": 0}, "waiting": [],
+                            "doubtful_voices": []}
     if v.review == PROPOSALS:
         data["pending"] = pending(session, v)
+        for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.video_id == v.id,
+                                                          VoiceEmbedding.doubtful.is_(True))):
+            p = session.get(Person, e.person_id)
+            smp = session.exec(select(VoiceSample).where(VoiceSample.video_id == v.id,
+                                                         VoiceSample.person_id == e.person_id)).first()
+            data["doubtful_voices"].append({"id": e.id, "person_id": e.person_id, "person_name": p.name if p else "?",
+                                            "similarity": e.similarity, "seconds": e.seconds,
+                                            "sample_id": smp.id if smp else None})
     # Vídeos que esperan a que se revise este
     for job in session.exec(select(Job).where(Job.status == "waiting")).all():
         if (job.options or {}).get("waiting_for") == v.id:

@@ -20,11 +20,11 @@ from . import followups_store as FS
 from . import knowledge_store as KS
 from . import estimates, removal, review, services, speaker_fix
 from . import regenerate as regen
-from .config import WORK_DIR, load_settings
+from .config import DATA_DIR, WORK_DIR, load_settings
 from .db import engine
 from .llm import LLMServer
-from .models import Job, Keyframe, Segment, Video
-from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision, voices
+from .models import Job, Keyframe, Segment, Video, VoiceEmbedding, VoiceSample
+from .pipeline import analyze, asr, correct, diarize, frames, identify, ingest, learn, names, vision, voiceprints, voices
 from .pipeline.base import Cancelled, JobContext, free_gpu
 from .pipeline.export import safe_name, unique_dir
 
@@ -348,12 +348,41 @@ class Worker:
                 ctx.report(1.0, f"No se pudieron actualizar los seguimientos: {e}")
                 return 0.0
 
-    @staticmethod
-    def _voiceprints(ctx: JobContext) -> None:
-        """Anota con qué hablantes confirmados se aplicó la revisión (las huellas se guardan al confirmar)."""
+    def _voiceprints(self, ctx: JobContext) -> None:
+        """Huellas y muestras de voz de las personas confirmadas, con las intervenciones ya arregladas
+        (`pipeline/voiceprints.py`). Sustituyen a las que tenía este vídeo."""
+        self._apply_overrides(ctx)
+        with Session(engine) as s:
+            label_person = review.speakers_map(s, ctx.video_id)
+            previous = services.voice_db(s, exclude_video=ctx.video_id)
+        result: dict | None = {}
+        if label_person:
+            if not ctx.path("audio.wav").exists():
+                if ctx.source_path and Path(ctx.source_path).is_file():
+                    ingest.run(ctx)  # el audio de trabajo se borró (vídeos de antes de la revisión)
+                else:
+                    result = None
+            if result is not None:
+                result = voiceprints.run(ctx, label_person, previous, ctx.settings.voice_match_threshold,
+                                         DATA_DIR / "voces")
         with Session(engine) as s:
             v = s.get(Video, ctx.video_id)
-            v.voices_applied = review.speakers_map(s, v.id)
+            if result is None:
+                ctx.report(1.0, "No se encuentra el vídeo: se conservan sus voces")
+            else:
+                for e in s.exec(select(VoiceEmbedding).where(VoiceEmbedding.video_id == v.id)):
+                    s.delete(e)
+                for old in s.exec(select(VoiceSample).where(VoiceSample.video_id == v.id)):
+                    if not any(r.get("sample") == old.path for r in result.values()):
+                        Path(old.path).unlink(missing_ok=True)
+                    s.delete(old)
+                for pid, r in result.items():
+                    s.add(VoiceEmbedding(person_id=pid, video_id=v.id, vector=r["vector"], doubtful=r["doubtful"],
+                                         similarity=r["similarity"], seconds=r["seconds"]))
+                    if r["sample"]:
+                        s.add(VoiceSample(person_id=pid, video_id=v.id, path=r["sample"], seconds=r["sample_seconds"],
+                                          score=r["score"]))
+            v.voices_applied = label_person
             s.add(v)
             s.commit()
 

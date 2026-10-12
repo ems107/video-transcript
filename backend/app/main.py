@@ -33,7 +33,7 @@ from .db import engine, get_session, init_db
 from .media import probe
 from .models import (
     Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Keyframe, KnowledgeItem, KnowledgeVersion, Person,
-    Profile, ProfilePersonLink, Segment, Speaker, Video, SpeakerOverride, VideoCorrection, VoiceEmbedding,
+    Profile, ProfilePersonLink, Segment, Speaker, Video, SpeakerOverride, VideoCorrection, VoiceEmbedding, VoiceSample,
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
@@ -635,16 +635,10 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
         if video.profile_id:
             session.add(ProfilePersonLink(profile_id=video.profile_id, person_id=person.id))
 
-    # Quitar la huella anterior de este vídeo si se cambia de persona
-    for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.video_id == video.id)):
-        if sp.person_id and e.person_id == sp.person_id:
-            session.delete(e)
-
+    # La voz no se guarda aquí: se calcula al aplicar la revisión, con las intervenciones ya arregladas
     old_pid = sp.person_id
     sp.person_id = person_id
     sp.confirmed = bool(person_id) and body.confirm
-    if sp.confirmed and sp.embedding:
-        session.add(VoiceEmbedding(person_id=person_id, video_id=video.id, vector=sp.embedding))
     session.add(sp)
     session.commit()
 
@@ -883,11 +877,83 @@ def delete_person(person_id: int, session: Session = SessionDep) -> dict[str, An
 
 @app.delete("/api/people/{person_id}/voices")
 def reset_voices(person_id: int, session: Session = SessionDep) -> dict[str, Any]:
-    """Olvida las huellas de voz de una persona (por si se asignaron mal)."""
+    """Olvida las huellas y las muestras de voz de una persona (por si se asignaron mal)."""
     for e in session.exec(select(VoiceEmbedding).where(VoiceEmbedding.person_id == person_id)):
         session.delete(e)
+    for smp in session.exec(select(VoiceSample).where(VoiceSample.person_id == person_id)):
+        Path(smp.path).unlink(missing_ok=True)
+        session.delete(smp)
     session.commit()
     return {"ok": True}
+
+
+@app.get("/api/people/{person_id}/voice")
+def person_voice(person_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Sus huellas y sus mejores muestras de voz (las 3 de más calidad), para escucharla."""
+    _404(session.get(Person, person_id), "Persona")
+    prints = session.exec(select(VoiceEmbedding).where(VoiceEmbedding.person_id == person_id)).all()
+    samples = sorted(session.exec(select(VoiceSample).where(VoiceSample.person_id == person_id)).all(),
+                     key=lambda x: -x.score)
+    out = []
+    for smp in samples:
+        if not Path(smp.path).is_file():
+            continue
+        v = session.get(Video, smp.video_id) if smp.video_id else None
+        out.append({"id": smp.id, "video_id": smp.video_id, "video_title": v.title if v else "(vídeo quitado)",
+                    "seconds": smp.seconds, "score": smp.score})
+        if len(out) == 3:
+            break
+    return {"prints": len([e for e in prints if not e.doubtful]), "doubtful": len([e for e in prints if e.doubtful]),
+            "samples": out}
+
+
+@app.get("/api/voice-samples/{sample_id}/audio")
+def voice_sample_audio(sample_id: int, session: Session = SessionDep):
+    smp = _404(session.get(VoiceSample, sample_id), "Muestra")
+    if not Path(smp.path).is_file():
+        raise HTTPException(404, "No se encuentra el audio de la muestra")
+    return FileResponse(smp.path, media_type="audio/flac")
+
+
+class VoiceDecision(BaseModel):
+    keep: bool
+
+
+@app.post("/api/voice-embeddings/{embedding_id}/decide")
+def decide_voice(embedding_id: int, body: VoiceDecision, session: Session = SessionDep) -> dict[str, Any]:
+    """Una huella dudosa (no se parece a las otras de esa persona): guardarla igualmente o descartarla."""
+    e = _404(session.get(VoiceEmbedding, embedding_id), "Huella")
+    vid = e.video_id
+    if body.keep:
+        e.doubtful = False
+        session.add(e)
+    else:
+        for smp in session.exec(select(VoiceSample).where(VoiceSample.person_id == e.person_id,
+                                                          VoiceSample.video_id == vid)):
+            Path(smp.path).unlink(missing_ok=True)
+            session.delete(smp)
+        session.delete(e)
+    session.commit()
+    review.check_videos(session, {vid})
+    return {"ok": True}
+
+
+@app.post("/api/voices/recompute")
+def recompute_voices(session: Session = SessionDep) -> dict[str, Any]:
+    """Recalcula las huellas y las muestras de voz de los vídeos revisados que aún tienen sus datos de trabajo
+    y su archivo de vídeo. Encola un trabajo corto por vídeo."""
+    queued, skipped = 0, 0
+    for v in session.exec(select(Video).where(Video.status == "done", Video.review == review.DONE)).all():
+        last = _last_job(session, v)
+        work = WORK_DIR / f"job_{last.id}" if last else None
+        if not (work and (work / "utterances.json").exists() and regen.video_file(v)) \
+                or last.status in ("queued", "running", "waiting"):
+            skipped += 1
+            continue
+        _requeue(session, v, ["voiceprints"], "Recalculando las voces", check_work=False,
+                 extra={"only": ["voiceprints"]})
+        queued += 1
+    return {"queued": queued, "skipped": skipped}
 
 
 # --------------------------------------------------------------------------- conocimiento aprendido

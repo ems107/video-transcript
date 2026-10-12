@@ -28,9 +28,10 @@ resumen, pero la app lo trata como una propuesta.
 - **Confirmar** acepta la propuesta. **Aceptar propuestas** confirma todas las del vídeo de una vez.
 - **Cambiar** permite elegir otra persona o escribir el nombre de una nueva.
 
-Al confirmar, la app **guarda la huella de voz** de esa persona y la reconocerá en los vídeos siguientes.
-Por eso conviene no confirmar un hablante que mezcla dos voces (ver más abajo): su huella sería de las dos
-personas. Si una huella se guardó mal, en **Personas** está **Olvidar voz**.
+Cuando apliques la [revisión del vídeo](ayuda:revision), la app **guarda la voz** de cada persona
+confirmada y la reconocerá en los vídeos siguientes. La voz se calcula con sus frases tal como quedan
+después de tus arreglos, así que conviene arreglar antes un hablante que mezcla dos voces (ver más abajo).
+Ver [Su voz](ayuda:personas#su-voz).
 
 Si un hablante aparecía como «Hablante N», al confirmarlo su nombre se sustituye al momento en la
 transcripción y en el resumen.
@@ -91,7 +92,8 @@ cambios manuales y permite **Deshacer** cada uno. El resumen los tendrá en cuen
 continuar** ([Revisar un vídeo](ayuda:revision)); mientras tanto, la app avisa de que hay cambios sin
 aplicar.
 
-Un cambio manual nunca modifica la huella de voz de nadie: un tramo corto no es fiable para eso.
+Los cambios manuales cuentan para la voz de cada persona al aplicar la revisión: sus frases largas (de
+al menos {{v:voz_minimo_limpia}} s) pasan a la persona correcta.
 
 ## Dos voces en un hablante
 

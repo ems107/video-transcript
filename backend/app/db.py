@@ -45,6 +45,9 @@ NEW_COLUMNS = [
     ("video", "review", "VARCHAR NOT NULL DEFAULT 'revisado'"),  # los vídeos de antes se dan por revisados
     ("video", "voices_applied", "JSON"),
     ("followupitem", "review", "JSON"),
+    ("voiceembedding", "doubtful", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("voiceembedding", "similarity", "FLOAT"),
+    ("voiceembedding", "seconds", "FLOAT NOT NULL DEFAULT 0"),
 ]
 
 

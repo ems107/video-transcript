@@ -33,9 +33,16 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   perfil los datos que son del negocio. Lo descartado queda plegado en **Descartadas por la IA**, con el
   botón **Recuperar**.
 - Si las secciones del resumen del perfil no encajan con un vídeo, la IA propone otras más generales.
+- **Escuchar su voz.** La ficha de cada persona tiene sus mejores muestras de voz (de 5 a 30 s), sacadas de
+  los vídeos a su calidad original, para comprobar de oído que es ella. Se guardan solo en tu equipo.
+- **Recalcular las voces** de los vídeos ya revisados, desde **Personas**.
 
 ### Cambiado
 
+- La voz de cada persona se guarda al aplicar la revisión, con sus frases tal como quedan después de tus
+  arreglos de quién habla: si estaba mezclada con otra persona, ninguna se queda con la voz de la otra. Si
+  habla menos de 5 s, no se guarda; si no se parece a la de sus otros vídeos, queda como dudosa hasta que
+  decidas.
 - Las propuestas se ordenan por lo que más ayuda en los vídeos siguientes: primero las correcciones de
   transcripción y lo que identifica a cada persona; al final lo dudoso.
 - El resumen de un seguimiento cuenta la evolución de toda la serie (lo que aportó cada vídeo), no solo el

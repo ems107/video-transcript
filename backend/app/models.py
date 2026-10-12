@@ -55,6 +55,22 @@ class VoiceEmbedding(SQLModel, table=True):
     video_id: Optional[int] = Field(default=None, foreign_key="video.id", ondelete="SET NULL")
     vector: list[float] = Field(sa_column=Column(JSON))
     created_at: NaiveDatetime = Field(default_factory=now)
+    # No se parece a las otras huellas de esa persona: no se usa para reconocerla hasta que el usuario la acepte
+    doubtful: bool = False
+    similarity: Optional[float] = None  # parecido con sus huellas de otros vídeos al calcularla
+    seconds: float = 0.0  # voz limpia con que se calculó
+
+
+class VoiceSample(SQLModel, table=True):
+    """Muestra de voz de una persona en un vídeo: sus mejores tramos, para escucharla en su ficha."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    person_id: int = Field(foreign_key="person.id", index=True, ondelete="CASCADE")
+    video_id: Optional[int] = Field(default=None, foreign_key="video.id", ondelete="SET NULL")
+    path: str
+    seconds: float = 0.0
+    score: float = 0.0  # parecido medio de sus tramos con la huella de ese vídeo
+    created_at: NaiveDatetime = Field(default_factory=now)
 
 
 class Video(SQLModel, table=True):

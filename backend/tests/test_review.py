@@ -125,7 +125,7 @@ def test_done_when_nothing_left_to_decide(session):
                        review={"tipo": "duplicado", "de": 1, "motivo": "Parece la misma"})
     session.add(dup)
     session.commit()
-    assert review.pending(session, v) == {"propuestas": 1, "seguimiento": 1}
+    assert review.pending(session, v) == {"propuestas": 1, "seguimiento": 1, "voces": 0}
     assert not review.check_done(session, v)
     item.status = "aceptado"
     dup.review = {}
