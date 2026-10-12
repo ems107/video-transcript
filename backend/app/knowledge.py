@@ -244,15 +244,22 @@ def numbers_backed(text: str, near: str) -> bool:
     return True
 
 
+def claim_score(claim: str, line: str) -> int:
+    """Cuánto respalda una línea una frase: palabras con contenido en común y, sobre todo, sus cifras (la
+    pregunta «¿cuál es tu salario neto?» comparte más palabras que la respuesta «2.200 euros»)."""
+    words = {w[:5] for w in content_words(claim)}
+    score = len(words & {w[:5] for w in normalize(line).split()})
+    return score + 3 * sum(1 for n in _numbers(claim) if numbers_backed(n, line))
+
+
 def best_moment(text: str, utts: list[dict[str, Any]], t: float, window: float = 60.0) -> float:
-    """Inicio de la intervención que más palabras comparte con la frase, cerca de `t` (o `t` si ninguna).
+    """Inicio de la intervención que más respalda la frase (`claim_score`), cerca de `t` (o `t` si ninguna).
 
     La marca de tiempo de la IA es aproximada: la evidencia se centra en la frase que de verdad lo dice."""
-    words = {w[:5] for w in content_words(text)}
     best, best_n = t, 0
     for u in utts:
         if u["end"] >= t - window and u["start"] <= t + window:
-            n = len(words & {w[:5] for w in normalize(u["text"]).split()})
+            n = claim_score(text, u["text"])
             if n > best_n:
                 best, best_n = float(u["start"]), n
     return best

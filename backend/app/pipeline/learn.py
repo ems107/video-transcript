@@ -349,8 +349,10 @@ def judge_lines(batch: list[tuple[int, dict[str, Any]]], names: dict[str, str], 
         if p["kind"] in ("dato", "contexto") and lines:
             # La línea que más palabras comparte con el dato: con las primeras del fragmento, la IA descartaba
             # datos ciertos porque «la frase no lo dice»
-            words = {w[:5] for w in K.content_words(p["data"].get("text", ""))}
-            lines = [max(lines, key=lambda ln: len(words & {w[:5] for w in normalize(ln["text"]).split()}))]
+            # y la siguiente: la respuesta a una pregunta suele venir justo después
+            claim = p["data"].get("text", "")
+            i = max(range(len(lines)), key=lambda j: K.claim_score(claim, lines[j]["text"]))
+            lines = lines[i:i + 2]
         line = " / ".join(ln["text"][:180] for ln in lines[:2])
         out.append(f"{i}. [{_owner_label(p, names, people)} · {KIND_NAMES.get(p['kind'], p['kind'])}"
                    f"{' · ' + cat if cat else ''}] {text}" + (f" (frase: «{line}»)" if line else ""))
