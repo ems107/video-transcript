@@ -35,8 +35,8 @@ librería de IA: es la primera línea de `main.py`. Si un script nuevo usa estos
 
 ## Presupuesto de VRAM (16 GB)
 
-- Solo hay **un modelo grande cargado a la vez**. El worker para llama-server antes de asr, align y
-  diarize, y cada fase con torch libera su modelo al terminar (ver `AI_PIPELINE.md`).
+- Solo hay **un modelo grande cargado a la vez**. El worker para llama-server antes de cada fase de
+  `GPU_TORCH_STAGES` (asr, align, diarize, voices y voiceprints), y cada fase con torch libera su modelo al terminar (ver `AI_PIPELINE.md`).
 - Con Qwen3.6-35B-A3B y `-c 65536`, la caché KV en `q8_0` y `--n-cpu-moe 24`, la GPU queda cerca del
   límite. Con `--n-cpu-moe 20` llegaba a 15,6/16 GB y se subió a 24. Si aumentas el contexto o cargas
   más capas en la GPU, comprueba el uso con `nvidia-smi` durante la fase `vision`.
@@ -56,13 +56,18 @@ temperatura ni quites la penalización sin volver a medir. `config.OLD_DEFAULTS`
 quedó guardado en el `settings.json` de versiones anteriores.
 
 - Opciones: `-ngl 999 --n-cpu-moe N -c 65536 -np 1 -fa on --jinja --cache-type-k/v q8_0 --mmproj ...`,
-  escuchando en `127.0.0.1:<llm_port>` (8091). El log se guarda en `data/llama-server.log`.
+  escuchando en `127.0.0.1:<llm_port>` (8091; las instancias de prueba usan 8092). El log se guarda en
+  `data/llama-server.log`. Es un proceso aparte: si se mata el backend sin pararlo, sigue vivo y con la
+  GPU ocupada.
 - `chat_json(system, user, schema)` usa `response_format: json_schema`, por lo que la salida siempre se
   ajusta al esquema. Usa `chat_template_kwargs.enable_thinking = false`: sin razonamiento, para una
-  salida directa y más rápida. Reintenta 2 veces. Con `thinking=True` activa el razonamiento con el
-  muestreo `llm.THINKING_SAMPLING` (temperatura 0,6, top_p 0,95, top_k 20 y sin penalización por presencia: con 1,5, dos de cuatro ejecuciones no devolvían ninguna mención, porque hay que copiar citas literales; sin ella, las cuatro las encontraban): la gramática del esquema se
-  aplica a la respuesta, no a lo que piensa, y `max_tokens` incluye lo pensado (unos 24 000 caracteres para un
-  bloque de 25 min). Solo lo usa `followups_store.mentions`, donde se midió que hace falta.
+  salida directa y más rápida. Reintenta 2 veces.
+- `thinking=True` activa el razonamiento con el muestreo `llm.THINKING_SAMPLING`: temperatura 0,6, top_p
+  0,95, top_k 20 y sin penalización por presencia (con 1,5, dos de cuatro ejecuciones no devolvían ninguna
+  mención, porque hay que copiar citas literales; sin ella, las cuatro las encontraban). La gramática del
+  esquema se aplica a la respuesta, no a lo que piensa, y `max_tokens` incluye lo pensado (unos 24 000
+  caracteres para un bloque de 25 min); si se agota, `chat_json` lanza `LLMTruncated`. Lo usan `followups_store.mentions` y la pasada de juicio del aprendizaje
+  (`learn.judge_proposals`), donde se midió que hace falta; el resto de llamadas van sin razonamiento.
 - Las imágenes se envían como `image_part(path)`, en base64 JPEG dentro del contenido del usuario.
 - Para cambiar de modelo GGUF hay que actualizar `download_models.py` (repositorio y fichero), las rutas
   en `config.py`, las etiquetas de `CHECK_LABELS` en `frontend/src/App.tsx` y las tablas de licencias
@@ -78,7 +83,7 @@ quedó guardado en el `settings.json` de versiones anteriores.
   Se usa `exclusive_speaker_diarization` para los turnos (sin solapes) y `speaker_embeddings` en el
   orden de `speaker_diarization.labels()`. El audio se pasa ya decodificado
   (`{"waveform", "sample_rate"}`), así que torchcodec no se usa y su aviso se silencia en `env.py`.
-- **Huellas por tramo** (fase `voices`): `Model.from_pretrained(<carpeta>/embedding)` e
+- **Huellas por tramo** (fases `voices` y `voiceprints`): `Model.from_pretrained(<carpeta>/embedding)` e
   `Inference(window="whole")` con `crop`. Usa poca VRAM y se libera al terminar. En un vídeo de 37 min
   calcula unas 3300 ventanas en unos 40 s.
 - **Primer uso de CUDA:** la primera transcripción tras instalar tarda unos 90 s más por la compilación
