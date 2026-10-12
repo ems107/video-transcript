@@ -296,6 +296,19 @@ def test_judgment_discards_and_dedupes():
     assert out[5]["data"]["juicio"] == {"valor": "dudosa", "motivo": "No queda claro de quién habla"}
     assert "juicio" not in out[6]["data"]  # las otras formas de nombre no se juzgan
 
+    # Lo que repite algo ya guardado (aceptado en otro vídeo) también se descarta; un número que no existe, no
+    known = {29: "Gestibarymont gestiona los seguros de los clientes"}
+    answer = {"propuestas": [
+        {"id": 3, "valor": "util", "motivo": "Hecho del negocio", "igual_que": 0, "ya_guardado": 29},
+        {"id": 5, "valor": "util", "motivo": "Dato personal", "igual_que": 0, "ya_guardado": 7},
+        {"id": 7, "valor": "util", "motivo": "", "igual_que": 0, "ya_guardado": 29},
+    ]}
+    out = apply_proposal_judgment(proposals, answer, known)
+    assert out[3]["status"] == "descartado_ia"
+    assert out[3]["data"]["juicio"]["motivo"] == "Ya está guardado: «Gestibarymont gestiona los seguros de los clientes»."
+    assert out[5].get("status", "propuesto") == "propuesto"
+    assert out[7].get("status", "propuesto") == "propuesto"  # lo que sale de tus notas no se juzga
+
     sec = {"secciones": {"encajan": False, "motivo": "Son de una reunión administrativa",
                          "propuestas": [{"titulo": "[#01] Qué se trató", "reemplaza": 7}, {"titulo": "#2 Datos", "reemplaza": 99},
                                         {"titulo": "#2 Otra más", "reemplaza": 0}]}}
@@ -340,3 +353,16 @@ def test_judge_lines_keep_the_proposal_number():
          "lines": [{"t": 1.0, "label": "S1", "text": "Hola"}, {"t": 2.0, "label": "S1", "text": "Tengo 27 años"}]}
     out = judge_lines([(7, p)], {"S1": "Edgar"}, [])
     assert out.startswith("7. [Edgar · dato · Personal] Tiene 27 años (frase: «Tengo 27 años»)")
+
+
+def test_judgment_sees_what_is_already_saved():
+    from app.pipeline.learn import known_block, known_items
+    from app.prompts import judge_user
+
+    profile = {"learned": [{"id": 29, "kind": "contexto", "category": "", "data": {"text": "Gestibarymont lleva los seguros"}},
+                           {"id": 30, "kind": "seccion", "category": "", "data": {"title": "Acuerdos"}}]}
+    people = [{"id": 1, "name": "Iosu", "in_video": True, "facts": [{"id": 41, "category": "cargo", "text": "Es planificador"}]}]
+    assert known_items(profile, people) == {29: "Gestibarymont lleva los seguros", 41: "Iosu: Es planificador"}
+    text = judge_user("Sesión", "Tutoría", "", "0. [Iosu · dato] Es planificador", known_block(profile, people))
+    assert "Ya guardado en el perfil" in text and "[#29]" in text and "[#41]" in text and "ya_guardado" in text
+    assert "Ya guardado en el perfil" not in judge_user("Sesión", "Tutoría", "", "(ninguna)")

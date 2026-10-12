@@ -13,6 +13,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - **Responsables del seguimiento con su nombre.** Una tarea encargada a «Grupo X (Iosu/Selu)» o a «Iosu y Selu»
   queda a nombre de las personas que conoce la app, por su nombre o su apodo. Lo que no es una persona conocida
   se queda como estaba.
+- **Sin repetir lo ya guardado.** La IA revisa las propuestas de un vídeo viendo también lo que ya aceptaste
+  en vídeos anteriores: lo que lo repite con otras palabras queda en «Descartadas por la IA», con el motivo.
 
 ## [1.6.0] - 2026-10-12
 

@@ -422,8 +422,9 @@ JUDGE_SCHEMA = {
                     "valor": {"type": "string", "enum": ["util", "dudosa", "descartar"]},
                     "motivo": {"type": "string"},
                     "igual_que": {"type": "integer"},
+                    "ya_guardado": {"type": "integer"},
                 },
-                "required": ["id", "valor", "motivo", "igual_que"],
+                "required": ["id", "valor", "motivo", "igual_que", "ya_guardado"],
             },
         },
         "secciones": {
@@ -447,11 +448,15 @@ JUDGE_SCHEMA = {
 }
 
 
-def judge_user(about: str, profile: str, sections: str, proposals: str) -> str:
+def judge_user(about: str, profile: str, sections: str, proposals: str, known: str = "") -> str:
     sec = (f"""
 Secciones con las que se organiza el resumen de este tipo de vídeo:
 {sections}
 """ if sections else "")
+    sec += (f"""
+Ya guardado en el perfil y en las fichas de las personas (aceptado en vídeos anteriores):
+{known}
+""" if known else "")
     return f"""De qué trata el vídeo:
 {about}
 
@@ -477,6 +482,8 @@ obvio, algo que se ve en pantalla sin relación con el tema, o algo que la frase
 - motivo: por qué, en pocas palabras.
 - igual_que: el número de otra propuesta de esta lista que dice lo mismo (la que sobra lleva el número de \
 la que se queda), o 0.
+- ya_guardado: el número [#…] de lo ya guardado que la propuesta repite sin añadir nada nuevo (aunque esté \
+escrito de otra forma), o 0. Si añade algo que lo guardado no dice, no es una repetición: 0.
 Y en «secciones»: encajan (si las secciones sirven para organizar el resumen de este vídeo y de los \
 siguientes de este tipo), motivo, y propuestas: si no encajan, hasta 2 títulos generales que sirvan para \
 cualquier vídeo de este tipo (reemplaza: el número [#…] de la sección que sustituye, o 0). Si encajan o no \
