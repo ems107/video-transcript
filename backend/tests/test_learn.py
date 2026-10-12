@@ -331,3 +331,12 @@ def test_discarded_proposals_are_saved_listed_and_recoverable(client, session):
     session.expire_all()
     assert session.get(Video, vid).review == "propuestas"
     assert [k["text"] for k in client.get(f"/api/proposals?video_id={vid}").json()["items"]] == ["Stripe"]
+
+
+def test_judge_lines_keep_the_proposal_number():
+    from app.pipeline.learn import judge_lines
+
+    p = {"kind": "dato", "category": "personal", "owner": ("speaker", "S1"), "data": {"text": "Tiene 27 años"},
+         "lines": [{"t": 1.0, "label": "S1", "text": "Hola"}, {"t": 2.0, "label": "S1", "text": "Tengo 27 años"}]}
+    out = judge_lines([(7, p)], {"S1": "Edgar"}, [])
+    assert out.startswith("7. [Edgar · dato · Personal] Tiene 27 años (frase: «Tengo 27 años»)")
