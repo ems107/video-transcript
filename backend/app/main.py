@@ -119,7 +119,7 @@ def put_settings(body: Settings) -> Settings:
 def open_logs_folder() -> dict[str, Any]:
     """Abre la carpeta de los registros en el Explorador."""
     logs.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    os.startfile(logs.LOGS_DIR)  # noqa: S606  (abre el Explorador de Windows)
+    os.startfile(logs.LOGS_DIR)  # abre el Explorador de Windows
     return {"ok": True}
 
 
