@@ -50,7 +50,10 @@ La app no sugiere por su cuenta a qué seguimiento pertenece un vídeo: lo decid
 
 - **Resumen de la evolución**: de dónde partió el tema, qué aportó cada vídeo y dónde está ahora. Los
   momentos que cita llevan la fecha de su vídeo («8 sep · 0:24:00») y enlazan con él.
-- **Tareas**: abiertas, hechas o descartadas, con su responsable y su plazo.
+- **Tareas**: abiertas, hechas o descartadas, con su responsable y su plazo. El responsable se escribe con
+  el nombre de las personas que conoce la app («Iosu/Selu» pasa a «Iosu Urcelay, José Luis Pérez», por su
+  nombre o su apodo); lo que no es una persona conocida se queda como lo dijo la IA. En los puntos creados
+  antes de la versión 1.6.1, se arregla con **Rehacer el estado**.
 - **Decisiones**: vigentes, cambiadas por otra posterior o anuladas.
 - **Dudas y pendientes**: abiertas o resueltas.
 
