@@ -112,6 +112,7 @@ def pending(session: Session, v: Video) -> dict[str, int]:
 def mark_changed(session: Session, v: Video) -> None:
     """El usuario ha cambiado algo que requiere aplicar de nuevo: el vídeo vuelve a estar pendiente."""
     if v.review in (DONE, PROPOSALS) and v.analysis:
+        log.info("Vídeo %s: vuelve a quedar pendiente de revisar por un cambio del usuario", v.id)
         v.review = PENDING
         session.add(v)
         session.commit()
@@ -121,6 +122,7 @@ def check_done(session: Session, v: Video) -> bool:
     """Si ya no queda nada por decidir, el vídeo queda revisado (y se libera lo que esperaba por él)."""
     if v.review != PROPOSALS or any(pending(session, v).values()):
         return False
+    log.info("Vídeo %s: revisado", v.id)
     v.review = DONE
     session.add(v)
     session.commit()
@@ -149,6 +151,7 @@ def release_waiting(session: Session) -> int:
     for job in session.exec(select(Job).where(Job.status == "waiting")).all():
         v = session.get(Video, job.video_id)
         if v and blocker(session, v) is None:
+            log.info("Trabajo %s (vídeo %s): continúa tras la revisión", job.id, job.video_id)
             job.status, job.message = "queued", "Continúa tras la revisión"
             job.options = {k: val for k, val in (job.options or {}).items() if k != "waiting_for"}
             session.add(job)

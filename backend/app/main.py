@@ -37,7 +37,7 @@ from .models import (
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
-from .worker import STAGE_LABELS, worker
+from .worker import STAGE_LABELS, job_kind, worker
 
 log = logging.getLogger(__name__)
 mimetypes.add_type("video/x-matroska", ".mkv")
@@ -173,6 +173,7 @@ def create_job(body: JobCreate, session: Session = SessionDep) -> dict[str, Any]
     job = Job(video_id=video.id, options=body.options)
     session.add(job)
     session.commit()
+    log.info("Trabajo %s encolado: análisis del vídeo %s", job.id, video.id)
     session.refresh(job)
     session.refresh(video)
     worker.notify()
@@ -599,6 +600,7 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
     last.started_at, last.finished_at = None, None  # el tiempo de este trabajo empieza ahora
     kept = {k: val for k, val in (last.options or {}).items() if k not in ONE_SHOT_OPTIONS}
     last.options = {**kept, **(extra or {}), "redo": redo}
+    log.info("Trabajo %s encolado para el vídeo %s: %s", last.id, v.id, job_kind(last.options))
     v.status = "processing"
     session.add(last), session.add(v)
     session.commit()

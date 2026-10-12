@@ -13,12 +13,13 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from sqlmodel import Session, select
 
 from . import followups_store as FS
 from . import knowledge_store as KS
-from . import estimates, removal, review, services, speaker_fix
+from . import estimates, logs, removal, review, services, speaker_fix
 from . import regenerate as regen
 from .config import DATA_DIR, WORK_DIR, load_settings
 from .db import engine
@@ -61,6 +62,25 @@ PARTIALS = {
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
+# Fases cuyo mensaje final lleva contenido del vídeo (el título): en el registro van sus recuentos
+QUIET_SUMMARY = {"analyze"}
+
+
+def job_kind(options: dict[str, Any]) -> str:
+    """Qué hace un trabajo, para el registro: análisis, aplicar la revisión, regenerar o fases sueltas."""
+    if options.get("apply"):
+        what = "aplicar la revisión"
+    elif options.get("only"):
+        what = "solo " + ", ".join(options["only"])
+    elif options.get("redo"):
+        what = "repetir " + ", ".join(options["redo"])
+    else:
+        what = "análisis"
+    if options.get("follow_rebuild"):
+        what += f"; rehacer los seguimientos {', '.join(map(str, options['follow_rebuild']))}"
+    return what
+
+
 def is_short(job: Job | dict) -> bool:
     """Trabajo corto: aplicar la revisión de un vídeo o una sola fase (rehacer un seguimiento, aprender…)."""
     options = job if isinstance(job, dict) else (job.options or {})
@@ -101,15 +121,16 @@ class Worker:
                 queued = s.exec(select(Job).where(Job.status == "queued").order_by(Job.id)).all()
                 # Los cortos primero: no tiene sentido esperar a que termine el análisis de otro vídeo
                 job = min(queued, key=lambda j: (not is_short(j), j.id), default=None)
-                job_id = job.id if job else None
+                job_id, video_id = (job.id, job.video_id) if job else (None, None)
             if job_id is None:
                 self._wake.wait(5)
                 self._wake.clear()
                 continue
-            try:
-                self._run(job_id)
-            except Exception:
-                log.exception("Error inesperado en el worker")
+            with logs.context(job=job_id, video=video_id):
+                try:
+                    self._run(job_id)
+                except Exception:
+                    log.exception("Error inesperado en el worker")
 
     # ------------------------------------------------------------------
     def _run(self, job_id: int) -> None:
@@ -157,6 +178,10 @@ class Worker:
             if now - state["last"] < 0.7 and frac < 1.0:
                 return
             state["last"] = now
+            if frac >= 1.0 and state["stage"] not in QUIET_SUMMARY and not msg.endswith(": hecho"):
+                log.info("%s", msg)
+            else:
+                log.debug("%s (%.0f %%)", msg, frac * 100)
             w = dict((k, w) for k, _, w in STAGES)[state["stage"]]
             with Session(engine) as s:
                 j = s.get(Job, job_id)
@@ -172,6 +197,7 @@ class Worker:
             cancel_event=cancel_ev,
         )
         llm = LLMServer(settings)
+        log.info("Empieza: %s", job_kind(options))
         only = set(options.get("only") or [])  # trabajos de una sola fase (p. ej. rehacer un seguimiento)
         apply = bool(options.get("apply"))  # aplicar la revisión del vídeo
         gated = bool(only)
@@ -182,11 +208,13 @@ class Worker:
                 if only and key not in only:
                     continue
                 if key in AFTER_REVIEW and not apply and key not in only:
+                    log.debug("«%s» se salta: se hace al aplicar la revisión", key)
                     continue
                 if key == "vision" and options.get("skip_vision"):
                     ctx.save("vision.json", []), ctx.save("screen_terms.json", [])
                     marker.touch()
                 if marker.exists():
+                    log.debug("«%s» ya estaba hecha", key)
                     if key == "identify":
                         self._load_names(ctx)
                     continue
@@ -197,17 +225,20 @@ class Worker:
                     if self._wait(job_id):
                         return
                 ctx.check_cancel()
-                report(0.0, label)
-                if key in GPU_TORCH_STAGES:
-                    llm.stop()  # liberar VRAM antes de cargar Whisper / pyannote
-                t0 = time.monotonic()
-                minutes = self._run_stage(key, ctx, llm, ctx_data["voice"])
-                if key not in GPU_TORCH_STAGES:
-                    free_gpu()
-                marker.touch()
-                if key != "follow" or minutes:  # sin seguimientos no hay nada que medir
-                    self._record_time(ctx, key, time.monotonic() - t0, minutes)
-                report(1.0, label + ": hecho")
+                with logs.context(stage=key):
+                    log.info("Fase «%s»", label)
+                    report(0.0, label)
+                    if key in GPU_TORCH_STAGES:
+                        llm.stop()  # liberar VRAM antes de cargar Whisper / pyannote
+                    t0 = time.monotonic()
+                    minutes = self._run_stage(key, ctx, llm, ctx_data["voice"])
+                    if key not in GPU_TORCH_STAGES:
+                        free_gpu()
+                    marker.touch()
+                    if key != "follow" or minutes:  # sin seguimientos no hay nada que medir
+                        self._record_time(ctx, key, time.monotonic() - t0, minutes)
+                    log.info("Fase «%s» terminada en %.1f s", label, time.monotonic() - t0)
+                    report(1.0, label + ": hecho")
             self._finish(job_id, "done", "Completado")
             with Session(engine) as s:
                 v = s.get(Video, ctx.video_id)
@@ -215,6 +246,7 @@ class Worker:
                     v.review = review.PROPOSALS
                 elif not only:
                     v.review = review.PENDING  # análisis nuevo o regenerado: hay que revisarlo
+                log.info("Revisión del vídeo: %s", v.review)
                 s.add(v)
                 s.commit()
                 review.check_done(s, v)
@@ -222,7 +254,7 @@ class Worker:
         except Cancelled:
             self._finish(job_id, "cancelled", "Cancelado por el usuario")
         except Exception as e:
-            log.exception("Fallo en el trabajo %s", job_id)
+            log.exception("Fallo en el trabajo %s, fase «%s»", job_id, state["stage"])
             self._finish(job_id, "error", f"Error en «{STAGE_LABELS.get(state['stage'], state['stage'])}»",
                          f"{e}\n\n{traceback.format_exc()}")
         finally:
@@ -241,6 +273,7 @@ class Worker:
                 return False
             job = s.get(Job, job_id)
             other = s.get(Video, short.video_id)
+            log.info("Cede el turno al trabajo %s (vídeo %s), que es corto", short.id, short.video_id)
             job.status, job.message = "queued", f"En pausa: antes va «{other.title}»"
             s.add(job)
             s.commit()
@@ -254,6 +287,7 @@ class Worker:
             other = review.blocker(s, s.get(Video, job.video_id))
             if other is None:
                 return False
+            log.info("Espera a que se revise el vídeo %s", other.id)
             job.status, job.message = "waiting", f"Espera a que revises «{other.title}»"
             job.options = {**(job.options or {}), "waiting_for": other.id}
             s.add(job)
@@ -514,6 +548,9 @@ class Worker:
         with Session(engine) as s:
             job = s.get(Job, job_id)
             job.status, job.message, job.error, job.finished_at = status, message, error, datetime.now()
+            took = (job.finished_at - job.started_at).total_seconds() if job.started_at else 0
+            (log.warning if status == "error" else log.info)("Trabajo %s: %s (%s) en %.0f s", status, message,
+                                                             job_id, took)
             if status == "done":
                 job.progress = 1.0
             video = s.get(Video, job.video_id)

@@ -75,3 +75,28 @@ def test_requests_are_logged_by_level(client, caplog):
     assert lines[2][0] == "INFO" and lines[2][1].startswith("POST /api/proposals/decide → 200")
     assert "privado" not in " ".join(m for _, m in lines)  # nunca la consulta
     assert logs.request_level("GET", 200, 1500) == logging.WARNING
+
+
+def test_job_kind_for_the_log():
+    from app.worker import job_kind
+
+    assert job_kind({"file_mode": "copy"}) == "análisis"
+    assert job_kind({"apply": True, "follow_rebuild": [2]}) == "aplicar la revisión; rehacer los seguimientos 2"
+    assert job_kind({"only": ["learn"]}) == "solo learn"
+    assert job_kind({"redo": ["correct", "analyze"]}) == "repetir correct, analyze"
+
+
+def test_requeue_and_review_changes_are_logged(client, session, caplog):
+    from app import review
+    from app.models import Job, Video
+
+    caplog.set_level(logging.INFO)
+    v = Video(source_path="a.mkv", title="Uno", status="done", folder="x", review=review.DONE, analysis={"titulo": "Uno"})
+    session.add(v)
+    session.commit()
+    session.add(Job(video_id=v.id, status="done", options={"file_mode": "copy"}))
+    session.commit()
+    client.post(f"/api/videos/{v.id}/corrections", json={"text": "Selu es José Luis"})
+    msgs = [r.getMessage() for r in caplog.records]
+    assert f"Vídeo {v.id}: vuelve a quedar pendiente de revisar por un cambio del usuario" in msgs
+    assert "Selu" not in " ".join(msgs)  # el texto de la corrección no se registra
