@@ -230,8 +230,8 @@ def _followup_links(session: Session, video: Video) -> list[tuple[str, str]]:
 
 def export_video(session: Session, video: Video) -> None:
     """(Re)escribe los documentos de la carpeta del vídeo con los nombres actuales."""
-    if not video.folder:
-        return
+    if not video.folder or not Path(video.folder).is_dir():
+        return  # sin publicar, o el usuario ha movido o borrado la carpeta: no se vuelve a crear
     names = speaker_names(session, video.id)
     segs = session.exec(select(Segment).where(Segment.video_id == video.id).order_by(Segment.idx)).all()
     utts = [{"start": s.start, "end": s.end, "speaker": s.speaker, "text": s.text} for s in segs]

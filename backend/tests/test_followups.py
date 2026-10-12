@@ -243,11 +243,42 @@ def _followup(session, *videos):
     return f
 
 
+def test_mentions_retry_truncated_block_in_halves(session):
+    """Si el razonamiento agota el límite de tokens, el bloque se repite partido en dos mitades."""
+    from app.llm import LLMTruncated
+
+    utts = [{"start": 60.0 * i, "end": 60.0 * i + 50, "speaker": "S1", "text": f"Frase número {i} de la reunión"}
+            for i in range(6)]
+    v = _video(session, D2, "Segunda", utts=utts)
+    state = [item(1, "tarea", "Enviar el informe", [ev(99, D1, "creada")])]
+    bodies = []
+
+    def ask(system, user, schema, thinking=False):
+        bodies.append(user)
+        if len(bodies) == 1:
+            raise LLMTruncated("se cortó")
+        return {"menciones": [{"id": "T1", "evento": "hecha", "t": "00:05:00", "cita": "Frase número 5 de la reunión"}]
+                if "Frase número 5" in user else []}
+
+    out = FS.mentions(session, v, state, FS.video_utts(session, v.id), ask, D2)
+    assert len(bodies) == 3 and "Frase número 0" in bodies[1] and "Frase número 5" in bodies[2]
+    assert "Frase número 5" not in bodies[1]
+    assert [(x["id"], x["evento"], x["verified"]) for x in out] == [("T1", "hecha", True)]
+
+    def always(system, user, schema, thinking=False):
+        raise LLMTruncated("se cortó")
+
+    with pytest.raises(LLMTruncated):
+        FS.mentions(session, v, state, FS.video_utts(session, v.id), always, D2)
+
+
 def test_apply_in_order_and_rebuild_respects_manual(session, tmp_analyzed):
     v1, v2 = _video(session, D1, "Primera"), _video(session, D2, "Segunda")
     f = _followup(session, v1, v2)
     ask = FakeAsk(ANSWERS, MENTIONS)
-    FS.rebuild_from(session, f, None, ask)
+    # Solo cuenta para medir el tiempo el vídeo en que se buscan menciones (el primero no tiene estado anterior)
+    assert FS.rebuild_from(session, f, None, ask) == 25
+    assert FS.rebuild_seconds(session, f, None) == FS.rebuild_seconds(session, f, D2) == 25 * 6.0
     its = {it["text"]: it for it in FS.items(session, f.id)}
     assert its["Enviar el informe"]["status"] == "hecha" and its["Abrir la cuenta común"]["status"] == "vigente"
     assert f.summary == "Informe enviado y cuenta decidida."
@@ -353,6 +384,21 @@ def test_api_videos(client, session, tmp_path):
     video2 = tmp_path / "otro.mkv"
     video2.write_bytes(b"x")
     assert client.post("/api/jobs", json={"path": str(video2), "followup_ids": [f["id"]]}).status_code == 400
+
+
+def test_api_video_document_lists_followups(client, session, tmp_analyzed):
+    """Al añadir o quitar un vídeo ya publicado, su `resumen.md` dice en qué seguimientos está."""
+    v = _video(session, D1, "Primera")
+    v.folder = str(tmp_analyzed / "2026-10-04 - Primera")
+    (tmp_analyzed / "2026-10-04 - Primera").mkdir(parents=True)
+    session.add(v)
+    session.commit()
+    doc = tmp_analyzed / "2026-10-04 - Primera" / "resumen.md"
+    f = client.post("/api/followups", json={"name": "Tutoría"}).json()
+    client.post(f"/api/followups/{f['id']}/videos/{v.id}", json={"apply": False})
+    assert "**Seguimientos:** [Tutoría](../Seguimiento%20-%20Tutoría/seguimiento.md)" in doc.read_text(encoding="utf-8")
+    client.delete(f"/api/followups/{f['id']}/videos/{v.id}")
+    assert "Seguimientos" not in doc.read_text(encoding="utf-8")
 
 
 def test_regenerate_passes_follow_rebuild_once(client, session, tmp_path, monkeypatch):

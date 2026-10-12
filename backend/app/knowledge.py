@@ -196,15 +196,55 @@ def _content_words(text: str) -> list[str]:
     for raw in text.split():
         w = normalize(raw)
         acronym = raw.strip("«».,;:()").isupper() and len(w) >= 2
-        if w and w not in _FILLER and (len(w) >= 4 or acronym):
+        # Las cifras se comprueban aparte (`numbers_backed`): se pueden decir con palabras
+        if w and w not in _FILLER and (len(w) >= 4 or acronym) and not _NUMBER_RE.fullmatch(w.replace(" ", "")):
             words.append(w)
     return words
+
+
+_UNITS = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce",
+          "trece", "catorce", "quince", "dieciseis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno",
+          "veintidos", "veintitres", "veinticuatro", "veinticinco", "veintiseis", "veintisiete", "veintiocho",
+          "veintinueve"]
+_TENS = {30: "treinta", 40: "cuarenta", 50: "cincuenta", 60: "sesenta", 70: "setenta", 80: "ochenta",
+         90: "noventa", 100: "cien"}
+_NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)*")
+
+
+def number_words(n: int) -> str | None:
+    """Cómo se escribe en palabras un número de 0 a 100 (sin acentos, como `normalize`)."""
+    if n < 30:
+        return _UNITS[n]
+    if n in _TENS:
+        return _TENS[n]
+    if n < 100:
+        return f"{_TENS[n // 10 * 10]} y {_UNITS[n % 10]}"
+    return None
+
+
+def _numbers(text: str) -> set[str]:
+    """Las cifras de un texto, sin separadores de miles ni decimales («1.500» y «1500» son la misma)."""
+    return {re.sub(r"[.,]", "", m) for m in _NUMBER_RE.findall(text)}
+
+
+def numbers_backed(text: str, near: str) -> bool:
+    """Si cada cifra de la frase está en el texto de alrededor, en cifra o en palabra («27» o «veintisiete»).
+
+    Sin esto, «Tiene 27 años» pasaba con cualquier frase cercana que dijera «años»."""
+    digits = _numbers(near)
+    spoken = f" {normalize(near)} "
+    for n in _numbers(text):
+        words = number_words(int(n)) if len(n) <= 3 else None
+        if n not in digits and not (words and f" {words} " in spoken):
+            return False
+    return True
 
 
 def supported(text: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]], t: float,
               window: float = 60.0) -> bool:
     """Si la transcripción (o la pantalla) alrededor de `t` respalda la frase: comparten la mayoría de sus
-    palabras con contenido. Evita que se cuelen datos inventados o copiados de otro sitio."""
+    palabras con contenido y todas sus cifras. Evita que se cuelen datos inventados o copiados de otro
+    sitio."""
     words = _content_words(text)
     if not words:
         return False
@@ -212,7 +252,8 @@ def supported(text: str, utts: list[dict[str, Any]], vision: list[dict[str, Any]
     near += [v.get("texto_relevante", "") for v in vision if abs(v["t"] - t) <= window]
     stems = {w[:5] for w in normalize(" ".join(near)).split()}
     hits = sum(1 for w in words if w[:5] in stems)
-    return hits >= max(1, -(-len(words) * 6 // 10))  # al menos el 60 % (redondeando hacia arriba)
+    # Al menos el 60 % de las palabras (redondeando hacia arriba)
+    return hits >= max(1, -(-len(words) * 6 // 10)) and numbers_backed(text, " ".join(near))
 
 
 def excerpt_at(utts: list[dict[str, Any]], t: float, window: float = 20.0, max_lines: int = 4) -> list[dict[str, Any]]:

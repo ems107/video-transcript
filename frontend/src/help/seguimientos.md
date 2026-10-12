@@ -110,7 +110,9 @@ La fase «Actualizando seguimientos» hace, por cada seguimiento del vídeo, dos
    momentos y frases. La app comprueba cada frase (parecido de {{v:seguimiento_cita_parecido}} sobre 100 con
    lo dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento; una frase troceada con «…» vale
    si cada trozo se dice ahí). Un cambio de estado con la frase comprobada se aplica; sin ella queda como
-   **posible**, para que lo confirmes tú.
+   **posible**, para que lo confirmes tú. A veces el modelo piensa tanto que llega a su límite sin
+   responder: entonces la app repite ese bloque partido en dos mitades. Si tampoco así responde, el
+   seguimiento queda **desactualizado** con el motivo, y se arregla con **Rehacer el estado**.
 2. **Qué puntos del vídeo son el mismo asunto que uno anterior y el resumen de la evolución.** Sin modo
    razonamiento.
 
@@ -123,7 +125,9 @@ cambios que no valen para el tipo de punto; no vuelve a crear un punto que repit
 borraste (parecido de {{v:seguimiento_parecido}} sobre 100 o más); y acepta como mucho
 {{v:seguimiento_max_menciones}} menciones por bloque.
 
-Tarda unos {{v:ritmo_follow}} s por minuto de vídeo, sobre todo por el modo razonamiento. El estado de un
+Tarda unos {{v:ritmo_follow}} s por minuto de vídeo, sobre todo por el modo razonamiento. El primer vídeo
+de un seguimiento apenas tarda, porque aún no hay puntos que buscar: por eso no cuenta ni para medir el
+ritmo ni para estimar lo que tarda **Rehacer el estado**. El estado de un
 punto sale siempre de su último hito. Para el contexto se envía el resumen, lo abierto y lo cerrado en los
 últimos {{v:seguimiento_recientes}} vídeos, hasta {{v:seguimiento_contexto}} caracteres; si no cabe, se
 recorta primero lo cerrado.

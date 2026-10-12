@@ -242,8 +242,9 @@ todo el análisis sin llamar al LLM. «Regenerar análisis» tiene niveles (ver 
 
 **Correcciones del usuario** (`VideoCorrection`, `prompts.corrections_block`). Son hechos escritos por
 el usuario sobre un vídeo («X es quien presenta, no Y»). Se añaden al contexto de cada bloque, del
-informe final y del aprendizaje, con la indicación de que prevalecen sobre la transcripción y la
-pantalla. No se verifican en Python: son la verdad del usuario. `analysis.json` guarda
+informe final y del aprendizaje, como «notas del usuario» que prevalecen sobre la transcripción y la
+pantalla pero que no son parte de la grabación (antes, el resumen las contaba como algo dicho en la
+reunión: «X aclara que…»). No se verifican en Python: son la verdad del usuario. `analysis.json` guarda
 `correcciones_aplicadas` (`id` y `updated_at`): `services.with_applied` marca cada corrección y
 `services.corrections_pending` avisa si las actuales no coinciden. La IA no ve el análisis anterior, así
 que una corrección debe ser un hecho sobre el vídeo, no una referencia al resumen. La IA nunca las escribe ni las modifica.
@@ -252,8 +253,11 @@ que una corrección debe ser un hecho sobre el vídeo, no una referencia al resu
 `pattern` `0h:mm:ss` que la gramática de llama.cpp impone (comprobado en vivo). La hora empieza por 0: con una
 hora libre, el modelo escribía «20:42:00» por el minuto 20:42. Sin él, el modelo a veces ponía
 en `t` el texto de la tarea o una fecha copiada del contexto. Los pendientes son objetos `{pendiente, t}`;
-los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «tal
-como se dice»: el modelo convertía «el lunes» en una fecha.
+los análisis antiguos los tienen como texto (`followups.pending_parts` acepta los dos). El plazo se pide «solo si se dice y
+tal como se dice»: el modelo convertía «el lunes» en una fecha e inventaba plazos («antes de la sesión X»).
+`ANALYSIS_RULES` recuerda que el contexto (perfil, personas, seguimiento, notas) no es contenido de la
+grabación: el resumen contaba edades o estudios de las fichas que no se decían en el vídeo. El informe
+final pone cada asunto en una sola lista (tarea, decisión o pendiente).
 
 **Seguimientos** (`prompts.followup_block`, `FOLLOW_CHECK_*`, `FOLLOW_*`, `followups.py`).
 - **Al resumir**, cada fragmento recibe el estado de cada seguimiento del vídeo según los vídeos

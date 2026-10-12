@@ -44,9 +44,10 @@ Las correcciones afectan al resumen, a las tareas y a lo que se aprende del víd
 transcripción**.
 
 :::tecnico Cómo llegan a la IA
-Se añaden como un bloque propio («Correcciones del usuario sobre este vídeo. Son hechos verificados y
-prevalecen sobre lo que parezca decir la transcripción o la pantalla…») al contexto del resumen de cada
-bloque, del informe final y del aprendizaje. El análisis guarda con qué correcciones se generó (su
+Se añaden como un bloque propio («Notas del usuario sobre este vídeo. Son hechos verificados y prevalecen
+sobre lo que parezca decir la transcripción o la pantalla…») al contexto del resumen de cada bloque, del
+informe final y del aprendizaje. El bloque aclara que no son parte de la grabación: la IA no debe
+atribuírselas a nadie ni contarlas como algo que se dijo en la reunión. El análisis guarda con qué correcciones se generó (su
 identificador y su fecha de modificación); así la web sabe cuáles están aplicadas. Se incluyen en la
 [copia de recuperación](ayuda:quitar#copia-de-recuperacion).
 :::

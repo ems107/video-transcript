@@ -204,6 +204,23 @@ def test_supported_requires_transcript_backing():
     assert not supported("Lleva la integración con Salesforce", utts, [], 500)  # lejos de donde se dijo
 
 
+def test_supported_requires_the_numbers():
+    """Las cifras de la frase deben decirse cerca, en cifra o en palabra."""
+    from app.knowledge import number_words, supported
+
+    assert [number_words(n) for n in (7, 16, 27, 30, 45, 100, 250)] == [
+        "siete", "dieciseis", "veintisiete", "treinta", "cuarenta y cinco", "cien", None]
+    years = [{"start": 10.0, "end": 15.0, "speaker": "A", "text": "Yo tengo veintisiete años y ella treinta y uno."}]
+    other = [{"start": 10.0, "end": 15.0, "speaker": "A", "text": "Llevamos muchos años con la misma póliza."}]
+    money = [{"start": 10.0, "end": 15.0, "speaker": "A", "text": "La cuota sube a 1.500 euros al año."}]
+    assert supported("Tiene 27 años", years, [], 12)
+    assert supported("Tiene 31 años", years, [], 12)
+    assert not supported("Tiene 29 años", years, [], 12)
+    assert not supported("Tiene 27 años", other, [], 12)  # habla de años, pero no de esa edad
+    assert supported("Paga una cuota de 1500 euros al año", money, [], 12)
+    assert not supported("Paga una cuota de 1200 euros al año", money, [], 12)
+
+
 def test_group_forms_and_their_use():
     from app import knowledge as K
 

@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from . import estimates
 from . import followups as F
 from .config import load_settings
+from .llm import LLMTruncated
 from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Segment, Video, now
 from .pipeline.export import safe_name, unique_dir
 from .pipeline.transcript import fmt_ts
@@ -194,12 +195,23 @@ def mentions(session: Session, video: Video, state_items: list[dict[str, Any]], 
         return []
     points = _points_block(state_items)
     chunks = chunk_lines(timeline(utts, [], services.speaker_names(session, video.id)), load_settings().chunk_minutes)
+    def check(part: int, lines: list[tuple[float, str]]) -> list[dict[str, Any]]:
+        body = "\n".join(line for _, line in lines)
+        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", part, len(chunks), body),
+                FOLLOW_CHECK_SCHEMA, True)
+        return r.get("menciones") or []
+
     raw = []
     for i, ch in enumerate(chunks):
-        body = "\n".join(line for _, line in ch)
-        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", i + 1, len(chunks), body),
-                FOLLOW_CHECK_SCHEMA, True)
-        raw += r.get("menciones") or []
+        try:
+            raw += check(i + 1, ch)
+        except LLMTruncated:
+            # A veces razona tanto que agota el límite sin responder: con medio bloque cada vez suele bastar
+            half = len(ch) // 2
+            if half == 0:
+                raise
+            log.warning("Menciones: el bloque %s se cortó; se repite en dos mitades", i + 1)
+            raw += check(i + 1, ch[:half]) + check(i + 1, ch[half:])
     return F.check_signals(raw, utts, video.duration)
 
 
@@ -240,7 +252,9 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     touch(session, f)
     log.info("Seguimiento %s, vídeo %s: menciones %s; descartado %s", f.id, video.id,
              [(x["id"], x["evento"], x["t"], x["verified"]) for x in signals], plan["discarded"])
-    return {"eventos": len(plan["events"]), "nuevos": len(plan["new"]), "descartados": plan["discarded"]}
+    # `revisado`: si se buscaron menciones en la transcripción, que es lo que cuesta (con un estado vacío, no)
+    return {"eventos": len(plan["events"]), "nuevos": len(plan["new"]), "descartados": plan["discarded"],
+            "revisado": bool(visible and utts)}
 
 
 def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask,
@@ -250,8 +264,8 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
     """Rehace el estado desde esa fecha: deshace esos vídeos y los vuelve a aplicar en orden.
 
     `current` y `current_utts` dan el análisis y la transcripción de los vídeos que aún no los tienen en la
-    base de datos (el que se está procesando). Devuelve los minutos de vídeo aplicados (para medir lo que
-    tarda)."""
+    base de datos (el que se está procesando). Devuelve los minutos de vídeo en que se buscaron menciones
+    (para medir lo que tarda: aplicar un vídeo sin estado anterior es casi inmediato)."""
     current, current_utts = current or {}, current_utts or {}
     record_version(session, f, "Antes de actualizar con la IA")
     affected = [(fv, v) for fv, v in links(session, f.id) if since is None or date_of(v) >= since]
@@ -267,8 +281,8 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
         if not analysis:
             continue  # aún sin analizar: se aplicará al terminar su análisis
         report(i / len(affected), f"«{f.name}»: vídeo {i + 1} de {len(affected)}")
-        apply_video(session, f, v, analysis, ask, current_utts.get(v.id))
-        minutes += v.duration / 60
+        if apply_video(session, f, v, analysis, ask, current_utts.get(v.id))["revisado"]:
+            minutes += v.duration / 60
     if f.stale_from is not None and (since is None or f.stale_from >= since):
         f.stale_from, f.stale_reason = None, ""
     touch(session, f)
@@ -350,9 +364,10 @@ def delete(session: Session, f: Followup, delete_folder: bool) -> None:
 # --------------------------------------------------------------------------- para la API
 
 def rebuild_seconds(session: Session, f: Followup, since: datetime | None) -> float:
-    """Estimación de lo que tarda rehacer el estado desde esa fecha."""
-    minutes = sum(v.duration / 60 for _, v in links(session, f.id)
-                  if v.analysis and (since is None or date_of(v) >= since))
+    """Estimación de lo que tarda rehacer el estado desde esa fecha. El primer vídeo no cuenta: sin estado
+    anterior no hay menciones que buscar, que es lo que cuesta."""
+    analyzed = [v for _, v in links(session, f.id) if v.analysis]
+    minutes = sum(v.duration / 60 for v in analyzed[1:] if since is None or date_of(v) >= since)
     return estimates.rates(session, ["follow"])["follow"] * minutes
 
 
