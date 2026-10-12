@@ -577,7 +577,7 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
 def learn_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]:
     """Vuelve a proponer conocimiento a partir de un vídeo ya analizado."""
     v = _404(session.get(Video, video_id), "Vídeo")
-    job = _requeue(session, v, ["learn"], "Aprendiendo del vídeo", extra={"apply": True})
+    job = _requeue(session, v, ["learn"], "Aprendiendo del vídeo", extra={"only": ["learn"]})
     return {"ok": True, "job_id": job.id}
 
 
@@ -1074,7 +1074,7 @@ def profile_from_video(body: FromVideo, session: Session = SessionDep) -> dict[s
     session.commit()
     KS.record_version(session, f"Creado desde el vídeo «{v.title}»", profile_id=p.id)
     try:
-        _requeue(session, v, ["learn"], "Creando el perfil a partir del vídeo")
+        _requeue(session, v, ["learn"], "Creando el perfil a partir del vídeo", extra={"only": ["learn"]})
     except HTTPException:
         v.profile_id = previous
         session.add(v)
@@ -1091,7 +1091,7 @@ def learn_all(profile_id: int, session: Session = SessionDep) -> dict[str, Any]:
     queued, skipped = 0, 0
     for v in session.exec(select(Video).where(Video.profile_id == profile_id, Video.status == "done")):
         try:
-            _requeue(session, v, ["learn"], "Aprendiendo del vídeo")
+            _requeue(session, v, ["learn"], "Aprendiendo del vídeo", extra={"only": ["learn"]})
             queued += 1
         except HTTPException:
             skipped += 1

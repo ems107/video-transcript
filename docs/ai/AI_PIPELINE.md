@@ -82,7 +82,8 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
     archivo de vídeo, y los demás, los JSON de trabajo. `full` llama antes a
     `regenerate.unconfirm_speakers`: al volver a separar las voces, las etiquetas ya no significan lo
     mismo. Las huellas de voz se conservan, así que `identify` vuelve a proponer a cada persona.
-  - `videos/{id}/learn` y `profiles/from-video`: solo `learn` (con `apply: true`).
+  - `videos/{id}/learn`, `profiles/from-video` y `profiles/{id}/learn-all`: solo `learn`, como trabajo de una
+    sola fase (`only: ["learn"]`), que no cambia el estado de la revisión del vídeo.
   - `videos/{id}/apply`: ver «Revisión del vídeo».
   - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior):
     `only` (el worker se salta todas las fases que no estén en la lista; lo usan los trabajos que solo
