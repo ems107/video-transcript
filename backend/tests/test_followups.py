@@ -470,3 +470,19 @@ def test_video_documents_link_their_followups():
             "followups": [("Tutoría", "../Seguimiento%20-%20Tutoría/seguimiento.md"), ("Sin carpeta", "")]}
     md = summary_md(meta, {})
     assert "- **Seguimientos:** [Tutoría](../Seguimiento%20-%20Tutoría/seguimiento.md), Sin carpeta" in md
+
+
+def test_same_task_for_several_people_keeps_all_owners():
+    """La misma tarea encargada a dos personas en el mismo vídeo queda como un punto con las dos."""
+    points = [{"key": "N1", "kind": "tarea", "text": "Recopilar las facturas y las pólizas", "owner": "Edgar", "due": "",
+               "t": "00:01:00"},
+              {"key": "N2", "kind": "tarea", "text": "Recopilar las facturas y las pólizas", "owner": "Sandra", "due": "",
+               "t": "00:01:00"},
+              {"key": "N3", "kind": "tarea", "text": "Firmar la protección de datos", "owner": "Edgar", "due": "",
+               "t": "00:02:00"},
+              {"key": "N4", "kind": "tarea", "text": "Aceptar el documento de protección de datos", "owner": "Sandra",
+               "due": "", "t": "00:03:00"}]
+    update = {"clasificacion": [{"nuevo": "N4", "relacion": "mismo", "existente": "N3", "motivo": "la misma firma"}]}
+    plan = F.apply_update([], update, 1, D1, 25 * 60, AT, points, [])
+    assert [(n["text"], n["owner"]) for n in plan["new"]] == [
+        ("Recopilar las facturas y las pólizas", "Edgar, Sandra"), ("Firmar la protección de datos", "Edgar, Sandra")]

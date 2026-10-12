@@ -72,7 +72,7 @@ def changes(session: Session, v: Video) -> list[dict[str, Any]]:
     corrections = services.video_corrections(session, v.id)
     if services.corrections_pending(v.analysis, corrections):
         n = sum(1 for c in services.with_applied(v.analysis, corrections) if not c["applied"]) or 1
-        out.append({"kind": "correcciones", "n": n, "label": f"{n} corrección" + ("es" if n != 1 else "")})
+        out.append({"kind": "correcciones", "n": n, "label": f"{n} corrección" if n == 1 else f"{n} correcciones"})
     items = speaker_fix.overrides(session, v.id)
     if speaker_fix.pending(v.analysis, items):
         used = set((v.analysis or {}).get("hablantes_aplicados") or [])

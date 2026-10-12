@@ -24,6 +24,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   de otra forma, no se repite; si la IA duda, pregunta «¿Es lo mismo que…?». Lo que borras ya no vuelve al
   rehacer el estado.
 - Un cambio de estado «posible» (sin frase que lo demuestre) se puede descartar con **No pasó**.
+- Si un vídeo encarga la misma tarea a varias personas, el seguimiento la guarda como un solo punto con
+  todas ellas como responsables (antes se quedaba solo con la primera).
 - **Rehacer el estado…** de un seguimiento cuando quieras, eligiendo desde qué vídeo.
 - **Correcciones de transcripción.** La IA propone cómo se oyen mal los términos («Natur» por «Naturgy»),
   apoyándose en tus correcciones, en lo que se lee en pantalla o en lo que ya corrigió el glosario. Al
@@ -68,6 +70,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   habla de «años».
 - Al cambiar quién habla, las líneas seguidas de la misma persona se unen en una sola, en vez de quedar
   partidas en trozos («esté bien y» / «que nos» / …).
+- Al cambiar quién habla varias veces en un vídeo, las líneas ya arregladas no se desordenan.
 - La estimación de **Rehacer el estado** de un seguimiento es más realista: antes contaba el primer vídeo,
   que casi no tarda, y salía en torno a la mitad de lo real.
 

@@ -321,14 +321,31 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
     verdict = classify(update, by_id, by_key)
     existing = [(it["kind"], it["text"]) for it in items]
     skipped: set[str] = set()
+    created: dict[str, dict[str, Any]] = {}  # punto nuevo creado por cada [N…]
+    owners_for: dict[str, list[str]] = {}  # responsables de los [N…] que se unen a otro de este vídeo
+
+    def join_owner(target: dict[str, Any] | None, key: str | None, owner: str) -> None:
+        """La misma tarea encargada a varias personas en este vídeo queda como un punto con todas ellas."""
+        if not owner:
+            return
+        if target is None:
+            owners_for.setdefault(key or "", []).append(owner)
+        elif normalize(owner) not in {normalize(o) for o in target["owner"].split(", ") if o}:
+            target["owner"] = ", ".join(x for x in (target["owner"], owner) if x)
+
     for pt in points:
         relation, other, motivo = verdict.get(pt["key"], ("nuevo", None, ""))
         if relation == "mismo" and other not in skipped:  # si los dos se dan por «el mismo», queda uno
             skipped.add(pt["key"])
+            if other in by_key:
+                join_owner(created.get(other), other, pt["owner"])
             discarded.append(f"{pt['key']} «{pt['text']}»: el mismo que {other}")
             continue
         # Red de seguridad: casi el mismo texto que un punto existente (también uno borrado por el usuario)
-        if any(k == pt["kind"] and _similar(pt["text"], txt) for k, txt in existing):
+        twin = next((n for n in new if n["kind"] == pt["kind"] and _similar(pt["text"], n["text"])), None)
+        if twin is not None or any(k == pt["kind"] and _similar(pt["text"], txt) for k, txt in existing):
+            if twin is not None:
+                join_owner(twin, None, pt["owner"])
             discarded.append(f"{pt['key']} «{pt['text']}»: ya existe")
             continue
         existing.append((pt["kind"], pt["text"]))
@@ -338,10 +355,14 @@ def apply_update(items: list[dict[str, Any]], update: dict[str, Any], video_id: 
             target = by_id.get(other)
             review = {"tipo": "duplicado", "de": target["id"] if target else None,
                       "texto": target["text"] if target else by_key[other]["text"], "motivo": motivo}
-        new.append({"kind": pt["kind"], "text": pt["text"], "owner": pt["owner"], "due": pt["due"],
-                    "status": INITIAL[pt["kind"]], "manual": False, "hidden": False, "review": review,
-                    "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t) if t is not None else "",
-                                "evento": "creada", "nota": "", "source": "ia", "at": at.isoformat()}]})
+        item = {"kind": pt["kind"], "text": pt["text"], "owner": pt["owner"], "due": pt["due"],
+                "status": INITIAL[pt["kind"]], "manual": False, "hidden": False, "review": review,
+                "events": [{"video_id": video_id, "date": video_date.isoformat(), "t": fmt_ts(t) if t is not None else "",
+                            "evento": "creada", "nota": "", "source": "ia", "at": at.isoformat()}]}
+        for o in owners_for.pop(pt["key"], []):
+            join_owner(item, None, o)
+        created[pt["key"]] = item
+        new.append(item)
     return {"events": events, "new": new, "discarded": discarded}
 
 
