@@ -98,6 +98,10 @@ ANALYSIS_RULES = """Reglas:
 - Usa exclusivamente la información de la transcripción y de lo visto en pantalla. No inventes datos, \
 nombres, cifras ni conclusiones. Si algo no está claro, indícalo.
 - Escribe los términos tal como aparecen en el glosario.
+- El contexto que se te da (tipo de vídeo, personas, vídeos anteriores, notas del usuario) sirve para \
+entender lo que se dice, pero no forma parte de esta grabación: no cuentes sus datos (edades, estudios, \
+cargos, lo que pasó en otros vídeos) como si se dijeran aquí, salvo que se digan o se vean en ella.
+- Un plazo solo si se dice; no lo deduzcas (por ejemplo, «antes de la próxima reunión» sin que nadie lo diga).
 - Cita la marca de tiempo [hh:mm:ss] de donde sale cada punto importante.
 - Escribe en español."""
 
@@ -184,12 +188,17 @@ relaciones con nadie."""
 
 
 def corrections_block(texts: list[str]) -> str:
-    """Correcciones del usuario sobre el vídeo: hechos que prevalecen sobre lo que parezca decir la grabación."""
+    """Correcciones del usuario sobre el vídeo: hechos que prevalecen sobre lo que parezca decir la grabación.
+
+    Se presentan como notas ajenas a la grabación: si no, el resumen las contaba como algo dicho en la
+    reunión («X aclara que…», con una marca de tiempo)."""
     texts = [t.strip() for t in texts if t.strip()]
     if not texts:
         return ""
-    return ("Correcciones del usuario sobre este vídeo. Son hechos verificados y prevalecen sobre lo que \
-parezca decir la transcripción o la pantalla; tenlas en cuenta en todo lo que escribas:\n"
+    return ("Notas del usuario sobre este vídeo. Son hechos verificados y prevalecen sobre lo que parezca \
+decir la transcripción o la pantalla: úsalas para escribir bien quién es quién, los nombres y lo que se \
+dice. No son parte de la grabación ni las dice nadie en ella: no las atribuyas a ningún participante, no \
+les pongas marca de tiempo y no las cuentes como algo que se dijo o se aclaró en la reunión:\n"
             + "\n".join(f"- {t}" for t in texts))
 
 
@@ -267,7 +276,9 @@ Devuelve:
 y marcas de tiempo. {sec}
 - participantes: quién intervino y su papel en la reunión.
 - temas, tareas, decisiones, pendientes: listas consolidadas y sin duplicados, cada punto con la marca \
-de tiempo hh:mm:ss de este vídeo donde se trata; el plazo, tal como se dice.
+de tiempo hh:mm:ss de este vídeo donde se trata; el plazo, solo si se dice y tal como se dice. Cada \
+asunto va en una sola lista: si alguien debe hacer algo, es una tarea, aunque también quede por resolver; \
+los pendientes son las dudas o asuntos abiertos que no son ya una tarea ni una decisión.
 {("\nInstrucciones adicionales del usuario:\n" + extra) if extra else ""}"""
 
 

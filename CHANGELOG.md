@@ -14,6 +14,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   la línea **Seguimientos** con el enlace.
 - Si la IA se queda sin margen al buscar en un vídeo qué pasa con los puntos de un seguimiento, la app
   repite esa parte en dos mitades en vez de dejar el seguimiento desactualizado.
+- El resumen ya no cuenta tus correcciones como algo que se dijo en la reunión («X aclara que…»).
+- El análisis es más fiel a la grabación:
+  - no inventa plazos que nadie dice;
+  - no mete en el resumen datos de las fichas de las personas (edad, estudios…) que no se dicen en el
+    vídeo;
+  - no repite el mismo asunto como tarea y como pendiente.
 
 ## [1.5.0] - 2026-10-12
 
