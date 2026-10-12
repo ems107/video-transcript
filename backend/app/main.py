@@ -418,6 +418,8 @@ def add_overrides(video_id: int, body: OverrideIn, session: Session = SessionDep
     for a, b in ranges:
         session.add(SpeakerOverride(video_id=v.id, start=a, end=b, person_id=pid))
     session.commit()
+    log.info("Vídeo %s: %d tramo(s) pasan a la persona %s (%.1f s en total)", v.id, len(ranges), pid,
+             sum(b - a for a, b in ranges))
     _after_speaker_change(session, v)
     return {"ok": True, "person_id": pid}
 
@@ -474,7 +476,10 @@ def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -
         raise HTTPException(400, "El vídeo se está procesando")
     for f in FS.for_video(session, v.id):
         _detach(session, f, v, f.id in body.follow_rebuild)
-    out = removal.remove(session, v, removal.Options(**body.model_dump(exclude={"follow_rebuild"})))
+    opts = body.model_dump(exclude={"follow_rebuild"})
+    out = removal.remove(session, v, removal.Options(**opts))
+    log.info("Vídeo %s quitado de la app (%s)%s", video_id, ", ".join(k for k, val in opts.items() if val) or
+             "sin borrar ficheros", f"; {len(out['errors'])} error(es) al borrar" if out.get("errors") else "")
     review.release_waiting(session)
     worker.notify()
     return out
@@ -676,6 +681,8 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
     sp.confirmed = bool(person_id) and body.confirm
     session.add(sp)
     session.commit()
+    log.info("Vídeo %s: hablante %s → persona %s%s%s", video.id, sp.label, person_id,
+             " (confirmado)" if sp.confirmed else "", f", antes {old_pid}" if old_pid and old_pid != person_id else "")
 
     new_name = services.speaker_names(session, video.id).get(sp.label, "")
     if old_name and new_name and old_name != new_name:
@@ -856,6 +863,7 @@ def merge_person(person_id: int, body: MergeIn, session: Session = SessionDep) -
     source = _404(session.get(Person, person_id), "Persona")
     target = _404(session.get(Person, body.into_id), "Persona")
     people_mod.merge(session, source, target)
+    log.info("Persona %s fusionada en la persona %s", person_id, body.into_id)
     return person_out(session, session.get(Person, body.into_id))
 
 
@@ -970,6 +978,8 @@ def decide_voice(embedding_id: int, body: VoiceDecision, session: Session = Sess
             session.delete(smp)
         session.delete(e)
     session.commit()
+    log.info("Huella dudosa de la persona %s en el vídeo %s: %s", e.person_id, vid,
+             "se guarda" if body.keep else "descartada")
     review.check_videos(session, {vid})
     return {"ok": True}
 
@@ -1024,6 +1034,8 @@ def get_proposals(
 def decide_proposals(body: Decision, session: Session = SessionDep) -> dict[str, Any]:
     videos = {it.video_id for i in [*body.accept, *body.reject] if (it := session.get(KnowledgeItem, i))}
     out = PR.decide(session, load_settings().voice_auto_threshold, body.accept, body.reject, body.edits)
+    log.info("Propuestas: %d aceptadas (%d editadas) y %d rechazadas, de los vídeos %s", len(body.accept),
+             len(body.edits or {}), len(body.reject), sorted(v for v in videos if v) or "-")
     review.check_videos(session, videos)
     return out
 
@@ -1063,6 +1075,7 @@ def recover_proposal(item_id: int, session: Session = SessionDep) -> dict[str, A
     it.status = "propuesto"
     session.add(it)
     session.commit()
+    log.info("Propuesta %s recuperada (la había descartado la IA)", it.id)
     v = session.get(Video, it.video_id) if it.video_id else None
     if v and v.review == review.DONE:
         v.review = review.PROPOSALS  # vuelve a haber algo por decidir
@@ -1422,6 +1435,7 @@ def resolve_followup_item(followup_id: int, item_id: int, body: ResolveIn,
     session.add(it)
     FS.touch(session, f)
     FS.export(session, f)
+    log.info("Seguimiento %s, punto %s: duda resuelta («%s»)", f.id, it.id, body.action)
     review.check_videos(session, {e.get("video_id") for e in it.events or []})
     return FS.out(session, f, full=True)
 

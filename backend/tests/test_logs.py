@@ -100,3 +100,23 @@ def test_requeue_and_review_changes_are_logged(client, session, caplog):
     msgs = [r.getMessage() for r in caplog.records]
     assert f"Vídeo {v.id}: vuelve a quedar pendiente de revisar por un cambio del usuario" in msgs
     assert "Selu" not in " ".join(msgs)  # el texto de la corrección no se registra
+
+
+def test_user_actions_are_logged_with_ids_not_text(client, session, caplog):
+    from app.models import KnowledgeItem, Person, Speaker, Video
+
+    caplog.set_level(logging.INFO)
+    v = Video(source_path="a.mkv", title="Uno", status="done", folder="x", analysis={"titulo": "Uno"})
+    p = Person(name="Iosu Secreto")
+    session.add_all([v, p])
+    session.commit()
+    sp = Speaker(video_id=v.id, label="SPEAKER_00", order_idx=1)
+    item = KnowledgeItem(kind="termino", data={"term": "Naturgy"}, video_id=v.id)
+    session.add_all([sp, item])
+    session.commit()
+    client.put(f"/api/speakers/{sp.id}", json={"person_id": p.id, "confirm": True})
+    client.post("/api/proposals/decide", json={"accept": [item.id], "reject": []})
+    msgs = " | ".join(r.getMessage() for r in caplog.records)
+    assert f"Vídeo {v.id}: hablante SPEAKER_00 → persona {p.id} (confirmado)" in msgs
+    assert f"Propuestas: 1 aceptadas (0 editadas) y 0 rechazadas, de los vídeos [{v.id}]" in msgs
+    assert "Secreto" not in msgs and "Naturgy" not in msgs
