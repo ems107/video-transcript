@@ -93,7 +93,7 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 
 | Grupo | Endpoints |
 |---|---|
-| Sistema | `GET status` (versión, comprobación de componentes, `pending_proposals` y `to_review`), `GET/PUT settings`, `GET probe?path=`, `GET help/values` (valores `{{v:…}}` de la ayuda), `GET help/changelog` |
+| Sistema | `GET status` (versión, comprobación de componentes, `pending_proposals` y `to_review`), `GET/PUT settings` (PUT aplica `log_level` al momento), `POST logs/open-folder`, `POST client-log {message, stack, url}`, `GET probe?path=`, `GET help/values` (valores `{{v:…}}` de la ayuda), `GET help/changelog` |
 | Trabajos | `POST jobs {path, profile_id, options}`, `GET jobs`, `POST jobs/{id}/cancel`, `POST jobs/{id}/retry`, `GET events` (SSE, evento `jobs` cada segundo si hay cambios) |
 | Vídeos | `GET videos?profile_id&person_id` (tarjetas: `people` sin repetir, `review` y `to_decide`, lo que queda por decidir si está en `propuestas`), `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `GET videos/{id}/regenerate` (niveles, disponibilidad y estimación), `POST videos/{id}/regenerate {level}` (sin cuerpo = `analysis`), `GET/POST videos/{id}/corrections`, `PUT/DELETE corrections/{id}`, `GET/POST videos/{id}/speaker-overrides {ranges, person_id | new_person_name}`, `DELETE speaker-overrides/{id}`, `GET videos/{id}/words?start&end`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
 | Hablantes | `PUT speakers/{id} {person_id \| new_person_name, confirm}` |
@@ -128,6 +128,34 @@ siempre `removal.plan` (tests en `test_removal.py`).
 
 `/api/people/duplicates` va declarada antes que `/api/people/{person_id}` en `main.py`. Si no, FastAPI
 intenta convertir «duplicates» en un entero.
+
+## Registros (`logs.py`)
+
+- **Dónde:** `DATA_DIR/logs/AAAA-MM-DD.log` y la consola, con el mismo formato: fecha y hora con milisegundos,
+  nivel, logger, contexto y mensaje. `DailyFileHandler` abre el fichero del día al cambiar la fecha, sin
+  renombrar (el rotado estándar renombra a medianoche y en Windows falla con el fichero abierto), y
+  `cleanup` borra los de hace `log_keep_days` días o más.
+- **Cuándo:** `logs.setup` se llama en el `lifespan`, no al importar: los tests (`TestClient` sin `with`) y
+  los scripts no crean ficheros. Quita los handlers de uvicorn para que sus líneas y sus trazas pasen por
+  nuestro formato, y baja `uvicorn.access` y `httpx` a WARNING.
+- **Contexto:** `with logs.context(job=…, video=…, stage=…)` añade «[trabajo 3 · vídeo 1 · analyze]» a
+  todo lo registrado dentro (`ContextVar`; el worker lo pone por trabajo y por fase). Para seguir un flujo
+  se busca su vídeo.
+- **Niveles:** ERROR, falló y el usuario lo nota (con `log.exception`); WARNING, falló y se recuperó o se
+  saltó (con `exc_info=True`); INFO, los pasos del flujo y las acciones del usuario; DEBUG, el detalle
+  (cada GET y el progreso de las fases), activable con `Settings.log_level`.
+- **Peticiones:** `logs.RequestLog` (middleware ASGI propio; `BaseHTTPMiddleware` da problemas con el
+  streaming) escribe una línea por petición a `/api/…`: POST/PUT/DELETE en INFO, error o > `SLOW_MS` en
+  WARNING y el resto en DEBUG. No registra `/api/events`, los ficheros ni `/api/client-log`.
+- **LLM:** `chat_json` registra duración, tokens y `finish_reason` de cada llamada.
+- **Web:** `POST /api/client-log` recibe los errores de JavaScript (`main.tsx`) y los registra con el logger
+  `web`, una vez por mensaje y minuto. Los `ApiError` de `api.ts` no se mandan: ya los registra el servidor.
+- **Qué no se registra nunca:** transcripciones, prompts, respuestas del LLM, notas o correcciones, nombres
+  de personas, títulos de vídeo (llevan nombres), la consulta de una URL ni el cuerpo de una petición. Se
+  registran ids, fases, tiempos, recuentos y nombres de claves. Un mensaje nuevo sigue esta regla: así el
+  usuario puede pasar el registro a otra persona.
+- **Añadir un mensaje:** `log = logging.getLogger(__name__)` en el módulo. Un `except` que se traga un
+  error deja un WARNING con `exc_info=True`; ruff (`BLE001`) lo exige.
 
 ## Ajustes (`config.Settings`)
 

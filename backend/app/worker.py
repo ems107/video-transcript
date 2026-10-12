@@ -178,10 +178,11 @@ class Worker:
             if now - state["last"] < 0.7 and frac < 1.0:
                 return
             state["last"] = now
+            safe = logs.without_names(msg)
             if frac >= 1.0 and state["stage"] not in QUIET_SUMMARY and not msg.endswith(": hecho"):
-                log.info("%s", msg)
+                log.info("%s", safe)
             else:
-                log.debug("%s (%.0f %%)", msg, frac * 100)
+                log.debug("%s (%.0f %%)", safe, frac * 100)
             w = dict((k, w) for k, _, w in STAGES)[state["stage"]]
             with Session(engine) as s:
                 j = s.get(Job, job_id)

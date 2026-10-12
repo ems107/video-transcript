@@ -34,6 +34,8 @@ Lee `docs/ai/AI_BACKEND.md` antes de editar.
   `followups_store.export`. Lo que toca el usuario es `manual` (y lo que borra, `hidden`): la IA nunca
   cambia su texto ni su estado.
 - Si cambias una respuesta de la API, actualiza su tipo en `frontend/src/api.ts`.
+- Registros: ids, fases y recuentos, nunca contenido (ver «Registros» en `AI_BACKEND.md`). Una acción
+  del usuario que cambie el estado deja una línea INFO con lo que hizo.
 - Un endpoint que devuelve un fichero (`FileResponse`) llama antes a `_release(session)`: si no, retiene
   una conexión a la BD mientras se envía y un vídeo largo agota el pool (ver `AI_BACKEND.md`).
 - Revisión del vídeo (`review.py`): `follow`, `learn` y `voiceprints` solo corren al aplicar la revisión.

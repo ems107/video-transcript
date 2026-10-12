@@ -150,3 +150,8 @@ def test_web_errors_are_logged_once_without_query(client, caplog):
     msg = rec.getMessage()
     assert msg.startswith("Error en la página /buscar: x is undefined\nat VideoDetail") and "privado" not in msg
     assert len(msg) < 2200
+
+
+def test_progress_messages_lose_names():
+    assert logs.without_names("«Plan financiero de Edgar»: vídeo 1 de 3") == "«…»: vídeo 1 de 3"
+    assert logs.without_names("12 fotogramas analizados") == "12 fotogramas analizados"

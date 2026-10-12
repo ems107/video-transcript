@@ -13,6 +13,9 @@ Antes de cambiar nada aquí, lee `docs/ai/AI_PIPELINE.md` (fases, ficheros de tr
 
 - Nunca debe haber dos modelos grandes en la GPU a la vez: `llm.stop()` antes de cargar torch, y
   `del modelo` + `free_gpu()` al terminar.
+- El worker registra cada fase con su contexto; `ctx.report(1.0, msg)` va al registro en INFO, así que
+  ese mensaje lleva recuentos, no contenido (si no, añade la fase a `worker.QUIET_SUMMARY`). Un fallo
+  del que la fase se recupera deja un WARNING con `exc_info=True`.
 - Lee y escribe con `ctx.load`/`ctx.save`, informa del progreso con `ctx.report(0..1, msg)` y llama
   a `ctx.check_cancel()` en los bucles.
 - Si cambia el formato de un JSON intermedio, ten en cuenta los trabajos a medias en `data/work/`.

@@ -12,6 +12,7 @@ importar: los tests y los scripts no crean ficheros).
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import time
 from collections.abc import Callable, Iterator
@@ -39,6 +40,12 @@ def context_text(ctx: dict[str, Any] | None) -> str:
     if ctx.get("stage"):
         parts.append(str(ctx["stage"]))
     return f" [{' · '.join(parts)}]" if parts else ""
+
+
+def without_names(text: str) -> str:
+    """Los mensajes de la web ponen entre «» los nombres y títulos (de un seguimiento, de un vídeo): en el
+    registro van como «…»."""
+    return re.sub(r"«[^»]*»", "«…»", text)
 
 
 @contextmanager

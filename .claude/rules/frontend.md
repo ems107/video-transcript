@@ -9,7 +9,8 @@ Lee `docs/ai/AI_FRONTEND.md` antes de editar.
 
 - Textos en español. Usa colores solo mediante variables CSS (hay modo oscuro) y reutiliza las clases
   existentes.
-- Los tipos de `src/api.ts` deben reflejar el backend. Verifica con `npm run build`.
+- Los tipos de `src/api.ts` deben reflejar el backend. Verifica con `npx tsc -b` y
+  `npx vite build --outDir <scratchpad>`: `npm run build` sobrescribe el `dist` de la instancia del usuario.
 - Los datos de `analysis` pueden faltar en vídeos antiguos: usa `?.` y `?? []`.
 - Cada cambio visible actualiza su página de `src/help/` (la ayuda de la app). Si cambia una pantalla,
   rehaz sus capturas: `cd backend; uv run python ../scripts/help_screenshots.py`. `uv run pytest`

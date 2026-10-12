@@ -64,6 +64,13 @@ están en español.
 - `npm run build` genera `frontend/dist`, que FastAPI sirve en :8770. `run.ps1` solo recompila si
   falta `dist` o si se pasa `-Rebuild`. Tras cambiar el frontend, avisa al usuario de que ejecute
   `.\run.ps1 -Rebuild`.
+- **`frontend/dist` es el que sirve la instancia del usuario.** Compilar en una rama con `npm run build`
+  cambia su web aunque su backend sea otro. Para comprobar una rama: `npx tsc -b` y
+  `npx vite build --outDir <scratchpad>\dist-check --emptyOutDir`. Si `dist` ya se sobrescribió, rehazlo
+  desde `main` (un `git worktree` de `main` con `node_modules` enlazado y `vite build --outDir` al `dist`
+  del repositorio).
+- Los errores de JavaScript se mandan al registro del servidor (`main.tsx`, `POST /api/client-log`). Un
+  error de la API se lanza como `ApiError` (`api.ts`) y no se reenvía.
 - `npm run lint` (oxlint) avisa de `set-state-in-effect` en `Search.tsx`. Es un aviso conocido, no un
   error.
 
