@@ -55,6 +55,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="video-transcript", version=__version__, lifespan=lifespan)
+app.add_middleware(logs.RequestLog)
 SessionDep = Depends(get_session)
 
 

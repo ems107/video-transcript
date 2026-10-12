@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -137,3 +138,45 @@ def setup(level: str = "INFO", keep_days: int = 30, folder: Path = LOGS_DIR,
     # Cada petición y cada llamada al LLM ya se registran con más sentido (middleware de main.py y llm.py)
     for name in ("uvicorn.access", "httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
+
+
+# --------------------------------------------------------------------------- peticiones HTTP
+
+http_log = logging.getLogger("http")
+SLOW_MS = 1000  # una petición más lenta que esto se registra como aviso
+_QUIET = ("/api/events",)  # dura lo que la página esté abierta
+_FILES = ("/file", "/thumbnail", "/image", "/audio")  # ficheros: muchas peticiones parciales, sin interés
+
+
+def request_level(method: str, status: int, ms: float) -> int:
+    """POST/PUT/DELETE son acciones del usuario (INFO); un error o una petición lenta, aviso; el resto, DEBUG."""
+    if status >= 400 or ms > SLOW_MS:
+        return logging.WARNING
+    return logging.DEBUG if method in ("GET", "HEAD", "OPTIONS") else logging.INFO
+
+
+class RequestLog:
+    """Middleware ASGI: una línea por petición a `/api/…` con método, ruta, estado y milisegundos. Nunca la
+    consulta (`?q=` puede llevar lo que buscas) ni el cuerpo."""
+
+    def __init__(self, app: Any):
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not path.startswith("/api/") or path in _QUIET or path.endswith(_FILES):
+            await self.app(scope, receive, send)
+            return
+        t0, status = time.perf_counter(), [500]
+
+        async def send_status(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                status[0] = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_status)
+        finally:
+            ms = (time.perf_counter() - t0) * 1000
+            http_log.log(request_level(scope["method"], status[0], ms), "%s %s → %s (%d ms)", scope["method"], path,
+                         status[0], ms)

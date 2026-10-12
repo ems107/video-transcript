@@ -61,3 +61,17 @@ def test_importing_the_app_does_not_create_logs():
     from app import main  # noqa: F401
 
     assert not any(isinstance(h, logs.DailyFileHandler) for h in logging.getLogger().handlers)
+
+
+def test_requests_are_logged_by_level(client, caplog):
+    caplog.set_level(logging.DEBUG, logger="http")
+    client.get("/api/settings")
+    client.get("/api/videos/999")
+    client.post("/api/proposals/decide", json={"accept": [], "reject": []})
+    client.get("/api/search?q=algo privado")
+    lines = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "http"]
+    assert ("DEBUG", "GET /api/settings → 200") == (lines[0][0], lines[0][1].split(" (")[0])
+    assert lines[1][0] == "WARNING" and lines[1][1].startswith("GET /api/videos/999 → 404")
+    assert lines[2][0] == "INFO" and lines[2][1].startswith("POST /api/proposals/decide → 200")
+    assert "privado" not in " ".join(m for _, m in lines)  # nunca la consulta
+    assert logs.request_level("GET", 200, 1500) == logging.WARNING
