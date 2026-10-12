@@ -8,6 +8,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Corregido
+
+- **Regenerar un vídeo ya revisado vuelve a esperar a tu revisión.** Después de «Aplicar y continuar»,
+  regenerarlo rehacía en el acto el seguimiento, las propuestas y las voces sin que lo revisaras, y el
+  trabajo se colaba en la cola como si fuera corto. Ahora queda pendiente de revisar, como un análisis nuevo.
+
 ## [1.7.0] - 2026-10-12
 
 Incluye también los arreglos de la 1.6.1 (tag `v1.6.1`, sin release propia).

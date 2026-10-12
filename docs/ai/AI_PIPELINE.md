@@ -24,7 +24,7 @@ worker crea `<fase>.done`.
 | `analyze` | `analyze.py` | `corrected.json`, `vision.json`, `names.json`, `probe.json` | `analysis.json` (`analysis.partial.json`), `context_identities.json` y propuestas «contexto» en `Speaker` | llama-server |
 | `voiceprints` | `voiceprints.py` vía `worker._voiceprints` (solo al aplicar la revisión) | `audio.wav` (si falta, repite `ingest`), `utterances.json` con los arreglos, `Speaker` confirmados | filas `VoiceEmbedding` y `VoiceSample` del vídeo (sustituye las anteriores), `data/voces/<persona>/<vídeo>.flac`, `Video.voices_applied` | modelo de huellas de pyannote |
 | `follow` | `worker._follow` → `followups_store.update_for_video` | `analysis.json` y `corrected.json` (o `Video.analysis` y `Segment` si ya está publicado) | filas `FollowupItem`/`FollowupVideo`/`FollowupVersion` y `Seguimiento - Nombre/seguimiento.md` | llama-server (solo si el vídeo está en algún seguimiento) |
-| `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla), `screen_judgment.json` (valoración de los términos vistos solo en pantalla; `screen_judgment.raw.json` para reanudar) y filas `KnowledgeItem` | llama-server |
+| `learn` | `learn.py` vía `worker._learn` | `corrected.json`, `vision.json`, `screen_terms.json`, `identities.json` | `proposals.json` (`learn.partial.json`; `learn_error.json` si falla), `screen_judgment.json` (valoración de los términos vistos solo en pantalla; `screen_judgment.raw.json` para reanudar), `judgment.raw.json` (pasada de juicio de las propuestas; `judgment_error.json` si falla) y filas `KnowledgeItem` | llama-server |
 | `publish` | `worker._publish` | todo lo anterior | carpeta final (con `datos/`), `Segment`, `Keyframe`, FTS | — |
 
 \* `owner.wav` solo existe si el usuario indica en qué pista está su micrófono.
@@ -81,18 +81,21 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
 - **Repetir fases:** `options["redo"] = [...]` borra esas marcas, y los parciales de `worker.PARTIALS`,
   antes de ejecutar. Lo usa `main._requeue()`:
   - `regenerate {level}`: las fases de `regenerate.stages(level)`. Los niveles son `analysis` (correct,
-    analyze, learn, publish), `speakers` (+ identify), `screen` (+ frames, vision, names) y `full`
-    (todo). `regenerate.availability` dice qué nivel se puede usar: `screen` y `full` necesitan el
-    archivo de vídeo, y los demás, los JSON de trabajo. `full` llama antes a
+    analyze, follow, learn, publish), `speakers` (+ ingest, voices, names, identify), `screen` (+ frames,
+    vision) y `full` (todo, desde asr). `follow`, `learn` y `voiceprints` se saltan igualmente hasta que el
+    usuario aplica la revisión (`AFTER_REVIEW`). `regenerate.availability` dice qué nivel se puede usar:
+    `screen` y `full` necesitan el archivo de vídeo, y los demás, los JSON de trabajo. `full` llama antes a
     `regenerate.unconfirm_speakers`: al volver a separar las voces, las etiquetas ya no significan lo
     mismo. Las huellas de voz se conservan, así que `identify` vuelve a proponer a cada persona.
   - `videos/{id}/learn`, `profiles/from-video` y `profiles/{id}/learn-all`: solo `learn`, como trabajo de una
     sola fase (`only: ["learn"]`), que no cambia el estado de la revisión del vídeo.
   - `videos/{id}/apply`: ver «Revisión del vídeo».
-  - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior):
-    `only` (el worker se salta todas las fases que no estén en la lista; lo usan los trabajos que solo
-    rehacen un seguimiento), `follow_rebuild` (ids de seguimientos cuyo estado se rehace desde este
-    vídeo) y `apply` (ejecutar las fases de después de la revisión).
+  - Opciones de un solo encolado (`main.ONE_SHOT_OPTIONS`, `_requeue` las quita del encolado anterior,
+    porque cada vídeo reutiliza su último `Job`): `only` (el worker se salta todas las fases que no estén en
+    la lista; lo usan los trabajos que solo rehacen un seguimiento), `follow_rebuild` (ids de seguimientos
+    cuyo estado se rehace desde este vídeo), `apply` (ejecutar las fases de después de la revisión) y
+    `waiting_for`. Una opción nueva que solo valga para un encolado va en esa lista: si no, se arrastra
+    (pasó con `apply` hasta la 1.7.1: regenerar un vídeo revisado aplicaba otra vez su revisión).
 - **`persist_speakers` fusiona:** al repetir `identify`, un hablante confirmado conserva su persona y su
   `id`. Solo cambian las propuestas de los no confirmados, y se borran las etiquetas que ya no existen.
 - **Fotogramas publicados:** si en este trabajo se han vuelto a elegir fotogramas, `_publish` vacía
@@ -129,8 +132,8 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
 - **`learn` es de mejor esfuerzo.** Si falla, se guarda `learn_error.json` y el vídeo se publica igual
   (ver `test_learn_failure_does_not_break_the_job`). Si el vídeo no tiene perfil, solo propone datos
   de personas. Los detalles están en `AI_PROMPTS.md` (aprendizaje).
-- **GPU:** antes de una fase de `GPU_TORCH_STAGES` (asr, align, diarize, voices, voiceprints) se llama a `llm.stop()`.
-  Después de las demás se llama a `free_gpu()`. Cada fase con torch descarga su modelo al acabar (`del`
+- **GPU:** antes de una fase de `GPU_TORCH_STAGES` (asr, align, diarize, voices, voiceprints) se llama a
+  `llm.stop()`. Después de las demás se llama a `free_gpu()`. Cada fase con torch descarga su modelo al acabar (`del`
   + `free_gpu()`). Las fases que usan el LLM llaman a `llm.start()`, que no hace nada si ya está
   arrancado.
 - **Progreso:** `ctx.report(frac_fase, mensaje)` en el rango 0..1 de la fase. El worker lo convierte en
@@ -163,12 +166,13 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
 3. Si cambia el formato de un JSON intermedio, ten en cuenta que en `data/work/` puede haber trabajos
    a medias con el formato anterior. Haz que `load` tolere su ausencia (`default`), o borra el `.done`
    afectado.
-4. Pon la lógica pura (sin modelos) en funciones aparte y pruébala en `tests/test_logic.py`.
+4. Pon la lógica pura (sin modelos) en funciones aparte y pruébala en su test (`tests/test_<módulo>.py`;
+   `test_logic.py` reúne la del glosario, la voz, el troceo y la transcripción).
 
 ## Prueba de punta a punta
 
 **No uses `data/` del usuario ni su instancia en :8770.** Arranca una instancia aislada con otra
-carpeta de datos y otro puerto para el LLM:
+carpeta de datos, otro puerto para la API y otro para el LLM:
 
 ```bash
 # settings.json de la carpeta de prueba: {"analyzed_dir": "<scratchpad>\\analizados", "file_mode": "copy", "llm_port": 8092}
@@ -177,7 +181,7 @@ export MSYS_NO_PATHCONV=1   # Git Bash no debe convertir los argumentos «/api/.
 ```
 
 Comprueba antes con `nvidia-smi` que la GPU está libre: si la instancia del usuario está procesando
-algo, no caben dos modelos a la vez. Al terminar, para la instancia de prueba.
+algo, no caben dos modelos a la vez.
 
 Los vídeos sintéticos están en `samples/videos-prueba/`, que no se versiona:
 - `reunion_prueba.mp4`: dos voces y los nombres en pantalla. Sirve para probar la identificación por
@@ -189,12 +193,32 @@ Las dos voces son la misma voz TTS con el tono cambiado, así que en vídeos rea
 será menor.
 
 ```bash
-# API en marcha en :8770. Cuerpo en fichero para evitar problemas de UTF-8 en Windows.
+# Siempre contra la instancia de prueba (:8771). Cuerpo en fichero para evitar problemas de UTF-8 en Windows.
 echo '{"path":"C:\\...\\reunion_prueba.mp4","profile_id":null,"options":{"file_mode":"copy"}}' > job.json
-curl -s -X POST localhost:8770/api/jobs -H 'Content-Type: application/json' --data-binary @job.json
-curl -s localhost:8770/api/jobs        # estado / progreso / error (traceback en "error")
+curl -s -X POST localhost:8771/api/jobs -H 'Content-Type: application/json' --data-binary @job.json
+curl -s localhost:8771/api/jobs        # estado / progreso / error (traceback en "error")
+curl -s -X POST localhost:8771/api/videos/<id>/confirm-speakers   # acepta las propuestas de hablantes
+curl -s -X POST localhost:8771/api/videos/<id>/apply              # «Aplicar y continuar»
 ```
 
-Con un vídeo de unos 2 minutos tarda 1–2 min; `learn` añade unos 10 s (sin recargar el LLM). El primer uso de Whisper tras instalar puede tardar ~90 s
-más por la compilación JIT de CUDA, y solo ocurre una vez. Los errores del LLM se registran en
-`data/llama-server.log`.
+**El análisis no termina en el aprendizaje.** El vídeo queda `pendiente` de revisar: `voiceprints`,
+`follow` y `learn` solo se ejecutan con «Aplicar y continuar» (`POST videos/{id}/apply`). Sin ese paso no
+hay propuestas, ni huellas, ni seguimiento, y no es un fallo. Un segundo vídeo del mismo perfil queda
+`waiting` hasta que el primero está revisado (sin propuestas por decidir).
+
+Con un vídeo de unos 2 minutos, el análisis tarda 1–2 min y aplicar, otro tanto. El primer uso de Whisper
+tras instalar puede tardar ~90 s más por la compilación JIT de CUDA, y solo ocurre una vez. Los errores del
+LLM se registran en `data/llama-server.log` de la instancia.
+
+**Al terminar:**
+- Para la instancia **y su llama-server**: si se mata uvicorn, llama-server sigue vivo en `llm_port`
+  (8092), ocupa la GPU y bloquea su `llama-server.log`. Búscalo por el puerto (`netstat -ano | grep
+  :8092`) y páralo; nunca pares el del puerto 8091, que es el del usuario.
+- Un script propio que arranque `LLMServer` debe llamar a `stop()` antes de crear otro.
+- Borra la carpeta de datos de prueba o avisa al usuario de que existe.
+
+### Medir un cambio de prompt con datos ya analizados
+
+Para comparar un prompt sin volver a analizar vídeos, conserva la carpeta de datos de una prueba real y
+llama a la función de la fase desde un script con `PYTHONPATH=backend` y `VT_DATA_DIR` de esa prueba
+(`app.config` lee la variable al importarse). Ver `AI_PROMPTS.md` («Cómo medir un cambio de prompt»).

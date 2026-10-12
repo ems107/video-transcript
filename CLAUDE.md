@@ -24,11 +24,24 @@ usuario final es una sola persona en su PC con Windows y una RTX 5070 Ti de 16 G
 - **Una sola GPU de 16 GB.** Nunca debe haber dos modelos grandes cargados a la vez (ver
   `docs/ai/AI_MODELS_GPU.md`).
 
+## Principios de diseño
+
+- **Revisar antes de aprender.** Un vídeo recién analizado queda pendiente de revisar: el seguimiento, el
+  aprendizaje y las huellas de voz solo se ejecutan cuando el usuario pulsa «Aplicar y continuar», y los
+  vídeos relacionados esperan a esa revisión (`review.py`).
+- **Razonar, no reglas fijas.** Lo que es relevante o ruido lo razona la IA con el contexto y marca lo
+  dudoso para el usuario; Python comprueba lo verificable (citas, formas oídas, cifras). No se ajustan
+  umbrales para que salga bien un caso concreto.
+- **Poca interacción, pero calidad primero.** El usuario quiere tocar la app lo mínimo tras analizar un
+  vídeo, pero prefiere decidir algo dudoso a que se guarde mal.
+- **Medir antes de dar algo por mejorado.** El modelo varía entre ejecuciones: un cambio de prompt se
+  compara con el actual sobre los mismos datos, al menos dos veces (`docs/ai/AI_PROMPTS.md`).
+
 ## Comandos
 
 ```powershell
 .\run.ps1 [-Rebuild] [-NoBrowser]                          # app completa en http://127.0.0.1:8770
-cd backend;  uv run pytest                                 # pruebas de lógica (sin GPU, < 1 s)
+cd backend;  uv run pytest                                 # pruebas (sin GPU, unos segundos)
 cd backend;  uv run uvicorn app.main:app --port 8770 --reload
 cd frontend; npm run dev                                   # :5173, redirige /api a :8770
 cd frontend; npm run build                                 # tsc -b + vite build (comprueba los tipos)
@@ -66,7 +79,8 @@ backend/app/
   env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA
   llm.py         arranca y para llama-server; chat_json con salida JSON validada por esquema
   media.py       ffprobe / ffmpeg
-frontend/src/    App.tsx (rutas), api.ts (tipos + cliente), util.ts, pages/*.tsx, index.css
+backend/tests/   un test por módulo (BD en memoria, sin GPU); conftest.py: client, session
+frontend/src/    App.tsx (rutas), api.ts (tipos + cliente), util.ts, pages/*.tsx, help/*.md, index.css
 scripts/         download_models.py, release.py, help_screenshots.py (capturas de la ayuda)
 models/ data/ samples/   no se versionan (modelos, BD y trabajo, vídeos de prueba)
 ```
@@ -105,17 +119,21 @@ commit. Lo que se pueda deducir leyendo el código no hace falta documentarlo.
 - **Git:** commits pequeños y descriptivos por cada paso lógico que funcione. Las funciones nuevas van
   en una rama `feature/...`. Cada cambio visible para el usuario lleva una línea bajo
   `## [Sin publicar]` en `CHANGELOG.md`, dentro del mismo commit. No hagas push, no crees tags y no
-  publiques releases si el usuario no lo pide.
+  publiques releases si el usuario no lo pide. Si hay dos versiones en curso, publica la primera antes de
+  fusionar la segunda en `main` (ver `docs/VERSIONADO.md`).
 - **Versión:** su única fuente es el fichero `VERSION`. Los manifiestos los actualiza `release.py`;
   no la cambies a mano.
 
 ## Verificación antes de dar algo por terminado
 
-1. `uv run pytest` en verde. Si cambias lógica pura (glosario, voz, troceo, transcripción), añade o
-   ajusta un test en `backend/tests/test_logic.py`.
+1. `uv run pytest` en verde. Si cambias lógica, añade o ajusta su test: hay uno por módulo
+   (`test_followups.py`, `test_review.py`, `test_voices.py`, `test_learn.py`…) y `test_logic.py` para el
+   glosario, la voz, el troceo y la transcripción. Comprueba que el test nuevo falla sin el arreglo.
 2. Si cambias el frontend o `api.ts`, `npm run build` sin errores.
 3. Si cambias la pipeline o los prompts, haz una prueba de punta a punta con un vídeo corto **en una
-   instancia aislada** (`VT_DATA_DIR`, otro puerto). Así no se tocan los datos del usuario. Los vídeos
-   de prueba están en `samples/videos-prueba/` (ver `docs/ai/AI_PIPELINE.md`). Para no mover los
-   vídeos de muestra, usa `file_mode: "copy"`.
-4. Si la prueba crea datos en `data/` que el usuario no ha pedido, avísale o restáuralos al terminar.
+   instancia aislada** (`VT_DATA_DIR`, API en :8771, `llm_port` 8092). Así no se tocan los datos del
+   usuario. Los vídeos de prueba están en `samples/videos-prueba/`. Para no mover los vídeos de muestra,
+   usa `file_mode: "copy"`. Recuerda «Aplicar y continuar»: sin él no se ejecutan el seguimiento ni el
+   aprendizaje. El procedimiento completo está en «Prueba de punta a punta» de `docs/ai/AI_PIPELINE.md`.
+4. Al terminar, para la instancia de prueba **y su llama-server** (sigue vivo si solo paras uvicorn). Si la
+   prueba crea datos que el usuario no ha pedido, bórralos o avísale.

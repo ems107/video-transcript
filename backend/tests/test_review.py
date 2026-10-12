@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pytest
+from sqlmodel import select
 
 from app import review
 from app.models import (
@@ -170,6 +171,19 @@ def test_api_apply_and_changes_reopen_the_review(client, session, monkeypatch):
     assert r["job_id"] == 99
     session.expire_all()
     assert session.get(Video, vid).review == review.APPLYING
+
+
+def test_requeue_does_not_carry_apply(client, session):
+    """Tras «Aplicar y continuar», regenerar el vídeo no aplica su revisión otra vez sin esperar al usuario."""
+    from app import main
+
+    v = _video(session, "Uno", state=review.DONE)
+    job = session.exec(select(Job).where(Job.video_id == v.id)).one()
+    job.options = {"file_mode": "copy", "apply": True, "waiting_for": 7, "follow_rebuild": [1], "redo": ["learn"]}
+    session.add(job)
+    session.commit()
+    again = main._requeue(session, v, ["correct", "analyze"], "Regenerando", check_work=False)
+    assert again.options == {"file_mode": "copy", "redo": ["correct", "analyze"]}
 
 
 def test_short_jobs_go_first():
