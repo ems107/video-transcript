@@ -48,3 +48,16 @@ def test_invalid_json_is_retried(monkeypatch, tmp_path):
     server, calls = _server(monkeypatch, tmp_path, [_Resp("no es json", "stop"), _Resp('{"ok": 1}', "stop")])
     assert server.chat_json("s", "u", {"type": "object"}) == {"ok": 1}
     assert len(calls) == 2
+
+
+def test_each_call_is_logged_with_tokens_not_content(monkeypatch, tmp_path, caplog):
+    import logging
+
+    resp = _Resp('{"ok": 1}', "stop")
+    resp._data["usage"] = {"prompt_tokens": 1200, "completion_tokens": 85}
+    server, _ = _server(monkeypatch, tmp_path, [resp])
+    caplog.set_level(logging.INFO, logger="app.llm")
+    server.chat_json("sistema secreto", "texto del vídeo", {"type": "object"}, thinking=True)
+    [line] = [r.getMessage() for r in caplog.records if r.name == "app.llm"]
+    assert "1200 → 85 tokens, fin «stop» (razonando)" in line
+    assert "secreto" not in line and "vídeo" not in line
