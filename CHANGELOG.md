@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.7.2] - 2026-10-13
+
 ### Corregido
 
 - **La app ya no se bloquea al moverte por el vídeo.** Al saltar varias veces de un momento a otro de un
@@ -404,7 +406,8 @@ Primera versión completa: transcripción, hablantes, visión, análisis y bibli
 - `run.ps1` arranca la app con un solo comando.
 - La versión de la app se muestra en la web y en `/api/status`.
 
-[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.7.1...HEAD
+[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/ems107/video-transcript/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/ems107/video-transcript/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/ems107/video-transcript/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/ems107/video-transcript/compare/v1.5.1...v1.6.0
