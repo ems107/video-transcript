@@ -26,6 +26,10 @@ class LLMError(RuntimeError):
     pass
 
 
+class LLMTruncated(LLMError):
+    """La respuesta se cortó al llegar a `max_tokens`: repetir la misma petición daría lo mismo."""
+
+
 class LLMServer:
     def __init__(self, settings: Settings):
         self.s = settings
@@ -143,7 +147,7 @@ class LLMServer:
                 saved = save_failure(body, content, choice.get("finish_reason"))
                 if choice.get("finish_reason") == "length":
                     # Se ha cortado por el límite de tokens: repetir la misma petición daría lo mismo
-                    raise LLMError(f"La respuesta del modelo se cortó al llegar a {max_tokens} tokens "
+                    raise LLMTruncated(f"La respuesta del modelo se cortó al llegar a {max_tokens} tokens "
                                    f"(guardada en {saved})") from e
                 log.warning("Respuesta del LLM no válida (guardada en %s): %s", saved, e)
         raise LLMError(f"El modelo de lenguaje no devolvió una respuesta válida: {last}")

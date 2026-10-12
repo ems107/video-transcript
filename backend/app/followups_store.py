@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from . import estimates
 from . import followups as F
 from .config import load_settings
+from .llm import LLMTruncated
 from .models import Followup, FollowupItem, FollowupVersion, FollowupVideo, Job, Segment, Video, now
 from .pipeline.export import safe_name, unique_dir
 from .pipeline.transcript import fmt_ts
@@ -194,12 +195,23 @@ def mentions(session: Session, video: Video, state_items: list[dict[str, Any]], 
         return []
     points = _points_block(state_items)
     chunks = chunk_lines(timeline(utts, [], services.speaker_names(session, video.id)), load_settings().chunk_minutes)
+    def check(part: int, lines: list[tuple[float, str]]) -> list[dict[str, Any]]:
+        body = "\n".join(line for _, line in lines)
+        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", part, len(chunks), body),
+                FOLLOW_CHECK_SCHEMA, True)
+        return r.get("menciones") or []
+
     raw = []
     for i, ch in enumerate(chunks):
-        body = "\n".join(line for _, line in ch)
-        r = ask(FOLLOW_CHECK_SYSTEM, follow_check_user(points, f"{when:%Y-%m-%d}", i + 1, len(chunks), body),
-                FOLLOW_CHECK_SCHEMA, True)
-        raw += r.get("menciones") or []
+        try:
+            raw += check(i + 1, ch)
+        except LLMTruncated:
+            # A veces razona tanto que agota el límite sin responder: con medio bloque cada vez suele bastar
+            half = len(ch) // 2
+            if half == 0:
+                raise
+            log.warning("Menciones: el bloque %s se cortó; se repite en dos mitades", i + 1)
+            raw += check(i + 1, ch[:half]) + check(i + 1, ch[half:])
     return F.check_signals(raw, utts, video.duration)
 
 

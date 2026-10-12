@@ -12,6 +12,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 - Al añadir un vídeo ya analizado a un seguimiento, o al quitarlo, su `resumen.md` ahora muestra o quita
   la línea **Seguimientos** con el enlace.
+- Si la IA se queda sin margen al buscar en un vídeo qué pasa con los puntos de un seguimiento, la app
+  repite esa parte en dos mitades en vez de dejar el seguimiento desactualizado.
 
 ## [1.5.0] - 2026-10-12
 

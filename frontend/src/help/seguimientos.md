@@ -110,7 +110,9 @@ La fase «Actualizando seguimientos» hace, por cada seguimiento del vídeo, dos
    momentos y frases. La app comprueba cada frase (parecido de {{v:seguimiento_cita_parecido}} sobre 100 con
    lo dicho {{v:seguimiento_cita_ventana}} s antes o después de su momento; una frase troceada con «…» vale
    si cada trozo se dice ahí). Un cambio de estado con la frase comprobada se aplica; sin ella queda como
-   **posible**, para que lo confirmes tú.
+   **posible**, para que lo confirmes tú. A veces el modelo piensa tanto que llega a su límite sin
+   responder: entonces la app repite ese bloque partido en dos mitades. Si tampoco así responde, el
+   seguimiento queda **desactualizado** con el motivo, y se arregla con **Rehacer el estado**.
 2. **Qué puntos del vídeo son el mismo asunto que uno anterior y el resumen de la evolución.** Sin modo
    razonamiento.
 

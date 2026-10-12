@@ -243,6 +243,35 @@ def _followup(session, *videos):
     return f
 
 
+def test_mentions_retry_truncated_block_in_halves(session):
+    """Si el razonamiento agota el límite de tokens, el bloque se repite partido en dos mitades."""
+    from app.llm import LLMTruncated
+
+    utts = [{"start": 60.0 * i, "end": 60.0 * i + 50, "speaker": "S1", "text": f"Frase número {i} de la reunión"}
+            for i in range(6)]
+    v = _video(session, D2, "Segunda", utts=utts)
+    state = [item(1, "tarea", "Enviar el informe", [ev(99, D1, "creada")])]
+    bodies = []
+
+    def ask(system, user, schema, thinking=False):
+        bodies.append(user)
+        if len(bodies) == 1:
+            raise LLMTruncated("se cortó")
+        return {"menciones": [{"id": "T1", "evento": "hecha", "t": "00:05:00", "cita": "Frase número 5 de la reunión"}]
+                if "Frase número 5" in user else []}
+
+    out = FS.mentions(session, v, state, FS.video_utts(session, v.id), ask, D2)
+    assert len(bodies) == 3 and "Frase número 0" in bodies[1] and "Frase número 5" in bodies[2]
+    assert "Frase número 5" not in bodies[1]
+    assert [(x["id"], x["evento"], x["verified"]) for x in out] == [("T1", "hecha", True)]
+
+    def always(system, user, schema, thinking=False):
+        raise LLMTruncated("se cortó")
+
+    with pytest.raises(LLMTruncated):
+        FS.mentions(session, v, state, FS.video_utts(session, v.id), always, D2)
+
+
 def test_apply_in_order_and_rebuild_respects_manual(session, tmp_analyzed):
     v1, v2 = _video(session, D1, "Primera"), _video(session, D2, "Segunda")
     f = _followup(session, v1, v2)
