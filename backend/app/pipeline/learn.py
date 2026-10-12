@@ -15,10 +15,10 @@ from ..llm import LLMServer, LLMTruncated
 from ..prompts import (
     JUDGE_SCHEMA,
     JUDGE_SYSTEM,
-    NOTES_SCHEMA,
-    NOTES_SYSTEM,
     LEARN_SCHEMA,
     LEARN_SYSTEM,
+    NOTES_SCHEMA,
+    NOTES_SYSTEM,
     SCREEN_SCHEMA,
     SCREEN_SYSTEM,
     corrections_block,
