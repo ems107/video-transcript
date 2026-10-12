@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 
 from . import followups_store as FS
 from . import knowledge_store as KS
-from . import estimates, removal, services, speaker_fix
+from . import estimates, removal, review, services, speaker_fix
 from . import regenerate as regen
 from .config import WORK_DIR, load_settings
 from .db import engine
@@ -43,11 +43,14 @@ STAGES = [
     ("identify", "Identificando personas", 0.01),
     ("correct", "Corrigiendo términos", 0.04),
     ("analyze", "Resumiendo", 0.19),
+    ("voiceprints", "Guardando las voces", 0.01),
     ("follow", "Actualizando seguimientos", 0.02),
     ("learn", "Aprendiendo del vídeo", 0.09),
     ("publish", "Publicando resultados", 0.02),
 ]
-GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices"}
+GPU_TORCH_STAGES = {"asr", "align", "diarize", "voices", "voiceprints"}
+# Solo al aplicar la revisión del vídeo (o en trabajos de una sola fase): sin revisar, el vídeo no cuenta
+AFTER_REVIEW = {"voiceprints", "follow", "learn"}
 # Ficheros de reanudación que se borran al repetir una fase
 PARTIALS = {
     "vision": ("vision.partial.json",),
@@ -87,6 +90,7 @@ class Worker:
     def _loop(self) -> None:
         while True:
             with Session(engine) as s:
+                review.release_waiting(s)
                 job = s.exec(select(Job).where(Job.status == "queued").order_by(Job.id)).first()
                 job_id = job.id if job else None
             if job_id is None:
@@ -160,11 +164,15 @@ class Worker:
         )
         llm = LLMServer(settings)
         only = set(options.get("only") or [])  # trabajos de una sola fase (p. ej. rehacer un seguimiento)
+        apply = bool(options.get("apply"))  # aplicar la revisión del vídeo
+        gated = bool(only)
         try:
             for key, label, _ in STAGES:
                 marker = wd / f"{key}.done"
                 state["stage"] = key
                 if only and key not in only:
+                    continue
+                if key in AFTER_REVIEW and not apply and key not in only:
                     continue
                 if key == "vision" and options.get("skip_vision"):
                     ctx.save("vision.json", []), ctx.save("screen_terms.json", [])
@@ -173,6 +181,10 @@ class Worker:
                     if key == "identify":
                         self._load_names(ctx)
                     continue
+                if not gated and key in review.GATED_STAGES:
+                    gated = True
+                    if self._wait(job_id):
+                        return
                 ctx.check_cancel()
                 report(0.0, label)
                 if key in GPU_TORCH_STAGES:
@@ -186,7 +198,16 @@ class Worker:
                     self._record_time(ctx, key, time.monotonic() - t0, minutes)
                 report(1.0, label + ": hecho")
             self._finish(job_id, "done", "Completado")
-            self._cleanup(wd)
+            with Session(engine) as s:
+                v = s.get(Video, ctx.video_id)
+                if apply:
+                    v.review = review.PROPOSALS
+                elif not only:
+                    v.review = review.PENDING  # análisis nuevo o regenerado: hay que revisarlo
+                s.add(v)
+                s.commit()
+                review.check_done(s, v)
+                self._cleanup(wd, keep_audio=v.review != review.DONE)
         except Cancelled:
             self._finish(job_id, "cancelled", "Cancelado por el usuario")
         except Exception as e:
@@ -198,6 +219,20 @@ class Worker:
             free_gpu()
             self.current = None
             self._cancel.pop(job_id, None)
+
+    @staticmethod
+    def _wait(job_id: int) -> bool:
+        """Si un vídeo relacionado encolado antes está sin revisar, el trabajo espera (lo pesado ya está hecho)."""
+        with Session(engine) as s:
+            job = s.get(Job, job_id)
+            other = review.blocker(s, s.get(Video, job.video_id))
+            if other is None:
+                return False
+            job.status, job.message = "waiting", f"Espera a que revises «{other.title}»"
+            job.options = {**(job.options or {}), "waiting_for": other.id}
+            s.add(job)
+            s.commit()
+            return True
 
     @staticmethod
     def _apply_overrides(ctx: JobContext) -> None:
@@ -225,6 +260,9 @@ class Worker:
     def _run_stage(self, key: str, ctx: JobContext, llm: LLMServer, voice: dict) -> float | None:
         if key == "follow":
             return self._follow(ctx, llm)
+        if key == "voiceprints":
+            self._voiceprints(ctx)
+            return None
         if key == "ingest":
             ingest.run(ctx)
             info = ctx.load("probe.json")
@@ -308,6 +346,15 @@ class Worker:
                         FS.mark_stale(s, f, FS.date_of(video), f"No se pudo actualizar con «{video.title}»: {e}")
                 ctx.report(1.0, f"No se pudieron actualizar los seguimientos: {e}")
                 return 0.0
+
+    @staticmethod
+    def _voiceprints(ctx: JobContext) -> None:
+        """Anota con qué hablantes confirmados se aplicó la revisión (las huellas se guardan al confirmar)."""
+        with Session(engine) as s:
+            v = s.get(Video, ctx.video_id)
+            v.voices_applied = review.speakers_map(s, v.id)
+            s.add(v)
+            s.commit()
 
     def _learn(self, ctx: JobContext, llm: LLMServer) -> None:
         """Propuestas de conocimiento. Es de mejor esfuerzo: un fallo no impide publicar el vídeo."""
@@ -414,14 +461,19 @@ class Worker:
                 video.status = "done"  # también al repetir fases sueltas (p. ej. solo «learn»), sin publicar
             elif status != "done" and video.status == "processing":
                 video.status = "error" if status == "error" else ("done" if video.folder else "pending")
+            if status != "done" and video.review == review.APPLYING:
+                video.review = review.PENDING
             s.add(job), s.add(video)
             s.commit()
 
     @staticmethod
-    def _cleanup(wd: Path) -> None:
-        """Borra lo voluminoso (audio, fotogramas) y conserva los JSON para regenerar el análisis."""
-        for name in ("audio.wav", "owner.wav"):
-            (wd / name).unlink(missing_ok=True)
+    def _cleanup(wd: Path, keep_audio: bool = False) -> None:
+        """Borra lo voluminoso (audio, fotogramas) y conserva los JSON para regenerar el análisis.
+
+        `keep_audio`: el vídeo aún no está revisado y las huellas de voz se calculan al aplicar la revisión."""
+        if not keep_audio:
+            for name in ("audio.wav", "owner.wav"):
+                (wd / name).unlink(missing_ok=True)
         shutil.rmtree(wd / "frames", ignore_errors=True)
         shutil.rmtree(wd / "samples", ignore_errors=True)
 

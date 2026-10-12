@@ -40,7 +40,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
 
 
 # Columnas añadidas a tablas existentes: create_all no las crea en una base de datos ya hecha
-NEW_COLUMNS = [("segment", "voice", "VARCHAR NOT NULL DEFAULT ''")]
+NEW_COLUMNS = [
+    ("segment", "voice", "VARCHAR NOT NULL DEFAULT ''"),
+    ("video", "review", "VARCHAR NOT NULL DEFAULT 'revisado'"),  # los vídeos de antes se dan por revisados
+    ("video", "voices_applied", "JSON"),
+    ("followupitem", "review", "JSON"),
+]
 
 
 def init_db() -> None:

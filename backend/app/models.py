@@ -70,12 +70,17 @@ class Video(SQLModel, table=True):
     analysis: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     recorded_at: Optional[NaiveDatetime] = None
     created_at: NaiveDatetime = Field(default_factory=now)
+    # Revisión (ver `review.py`): pendiente | aplicando | propuestas | revisado. Hasta que se revisa, el vídeo
+    # no actualiza sus seguimientos ni propone conocimiento, y los vídeos relacionados esperan
+    review: str = "revisado"
+    # Personas confirmadas cuando se calcularon las huellas de voz del vídeo ({etiqueta: persona})
+    voices_applied: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
 
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     video_id: int = Field(foreign_key="video.id", index=True, ondelete="CASCADE")
-    status: str = "queued"  # queued | running | done | error | cancelled
+    status: str = "queued"  # queued | running | waiting (espera la revisión de otro vídeo) | done | error | cancelled
     stage: str = ""
     progress: float = 0.0  # 0..1 global
     message: str = ""
@@ -255,6 +260,8 @@ class FollowupItem(SQLModel, table=True):
     status: str = ""
     manual: bool = False  # creado o editado por el usuario
     hidden: bool = False  # borrado por el usuario: se conserva para que la IA no lo vuelva a crear
+    # Duda de la IA que decide el usuario: {"tipo": "duplicado", "de": id del punto, "motivo"} (o vacío)
+    review: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     # [{video_id, t, evento, nota, source: ia|manual, at}]
     events: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
     created_at: NaiveDatetime = Field(default_factory=now)

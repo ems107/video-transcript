@@ -44,7 +44,7 @@ def date_of(v: Video) -> datetime:
 
 def item_dict(it: FollowupItem) -> dict[str, Any]:
     return {"id": it.id, "kind": it.kind, "text": it.text, "owner": it.owner, "due": it.due, "status": it.status,
-            "manual": it.manual, "hidden": it.hidden, "events": list(it.events or [])}
+            "manual": it.manual, "hidden": it.hidden, "events": list(it.events or []), "review": dict(it.review or {})}
 
 
 def items(session: Session, fid: int) -> list[dict[str, Any]]:
@@ -278,8 +278,8 @@ def rebuild_from(session: Session, f: Followup, since: datetime | None, ask: Ask
     minutes = 0.0
     for i, (_, v) in enumerate(affected):
         analysis = current.get(v.id) or v.analysis
-        if not analysis:
-            continue  # aún sin analizar: se aplicará al terminar su análisis
+        if not analysis or v.review == "pendiente":
+            continue  # aún sin analizar o sin revisar: se aplicará al aplicar su revisión
         report(i / len(affected), f"«{f.name}»: vídeo {i + 1} de {len(affected)}")
         if apply_video(session, f, v, analysis, ask, current_utts.get(v.id))["revisado"]:
             minutes += v.duration / 60
@@ -373,8 +373,8 @@ def rebuild_seconds(session: Session, f: Followup, since: datetime | None) -> fl
 
 def first_from(session: Session, f: Followup, since: datetime | None) -> Video | None:
     """Primer vídeo analizado del seguimiento desde esa fecha: el trabajo que rehace el estado va en él."""
-    return next((v for _, v in links(session, f.id)
-                 if v.analysis and v.status == "done" and (since is None or date_of(v) >= since)), None)
+    return next((v for _, v in links(session, f.id) if v.analysis and v.status == "done"
+                 and v.review != "pendiente" and (since is None or date_of(v) >= since)), None)
 
 def busy_job(session: Session, fid: int) -> Job | None:
     """Trabajo en cola o en curso que va a actualizar este seguimiento."""
@@ -403,6 +403,9 @@ def out(session: Session, f: Followup, full: bool = False) -> dict[str, Any]:
         "profile_id": max(set(profiles), key=profiles.count) if profiles else None,
         "busy": bool(job), "job_id": job.id if job else None,
         "rebuild_seconds": round(rebuild_seconds(session, f, f.stale_from)) if f.stale_from else None,
+        # Vídeos que se aplicarán al estado cuando el usuario los revise
+        "pending_videos": [{"id": v.id, "title": v.title} for _, v in ls if v.review == "pendiente"],
+        "to_review": sum(len(F.needs_review(it)) > 0 for it in shown),
     }
     if full:
         titles = {v.id: v.title for _, v in ls}

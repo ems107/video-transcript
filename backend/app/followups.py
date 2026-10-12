@@ -62,6 +62,30 @@ def status_for_event(kind: str, status: str) -> str | None:
     return next((ev for ev, st in EVENT_STATUS[kind].items() if st == status), None)
 
 
+def open_possible(it: dict[str, Any]) -> dict[str, Any] | None:
+    """El último cambio «posible» (sin frase que lo demuestre) que el usuario aún no ha confirmado ni descartado."""
+    for e in reversed(it["events"]):
+        if e.get("posible"):
+            done = it["status"] == EVENT_STATUS[it["kind"]].get(e["posible"]) or e.get("descartado")
+            return None if done else e
+    return None
+
+
+def needs_review(it: dict[str, Any], video_id: int | None = None) -> list[str]:
+    """Lo que el usuario debe decidir de un punto: si duplica otro («duplicado») o si un cambio de estado sin
+    frase que lo demuestre es cierto («posible»). Con `video_id`, solo lo que salió de ese vídeo."""
+    if it.get("hidden"):
+        return []
+    out = []
+    created = it["events"][0].get("video_id") if it["events"] else None
+    if it.get("review") and (video_id is None or created == video_id):
+        out.append(it["review"].get("tipo", "duplicado"))
+    e = open_possible(it)
+    if e and (video_id is None or e.get("video_id") == video_id):
+        out.append("posible")
+    return out
+
+
 def event_date(e: dict[str, Any]) -> datetime | None:
     return datetime.fromisoformat(e["date"]) if e.get("date") else None
 
