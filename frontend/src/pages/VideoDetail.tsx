@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Job, type Person, type Proposals, type SegmentInfo, type SpeakerInfo, type VideoDetail as VD } from '../api'
-import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge } from '../util'
+import { fmtDate, fmtDuration, fmtTs, parseTs, speakerColor, notifyKnowledge, splitOthers } from '../util'
 import { JobRow } from './Queue'
 import { CorrectionsPanel } from '../CorrectionsPanel'
 import { FollowupsPanel } from '../FollowupsPanel'
@@ -102,7 +102,7 @@ function SpeakerPanel({ video, people, onChange, seek }: {
               {!sp.confirmed && sp.reason && <div>{sp.reason}</div>}
               {sp.split && (
                 <div className="danger-text">
-                  Puede juntar dos voces distintas. <button className="link" onClick={() => setSplitting(sp.id)}>Revisar</button>
+                  Puede juntar dos voces distintas{splitOthers(sp).length > 0 && <> (parece incluir a {splitOthers(sp).join(' y ')})</>}. <button className="link" onClick={() => setSplitting(sp.id)}>Revisar</button>
                 </div>
               )}
               {sp.aliases.length > 0 && <div>También le llaman {sp.aliases.map((a) => `«${a}»`).join(', ')}</div>}

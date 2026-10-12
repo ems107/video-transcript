@@ -17,7 +17,7 @@ worker crea `<fase>.done`.
 | `asr` | `asr.py:run_asr` | `audio.wav`, `screen_terms.json` | `whisper_prompt.json`, `asr.json` | Whisper |
 | `align` | `asr.py:run_align` | `asr.json`, `audio.wav` | `aligned.json` | wav2vec2 |
 | `diarize` | `diarize.py` | `audio.wav`, `owner.wav`*, `aligned.json` | `diarization.json`, `utterances.json` | pyannote |
-| `voices` | `voices.py` | `audio.wav`, `aligned.json`, `diarization.json` | `words.json`, `utterances.json` (con `voice`), `voices.json`; reescribe `embeddings` y `speaking_time` de `diarization.json` | modelo de huellas de pyannote |
+| `voices` | `voices.py` | `audio.wav`, `aligned.json`, `diarization.json` | `words.json`, `utterances.json` (con `voice`), `voices.json` (`splits`: cada grupo con su `centroid`, que `identify` compara con las huellas para `suggested` y no guarda en el hablante); reescribe `embeddings` y `speaking_time` de `diarization.json` | modelo de huellas de pyannote |
 | `names` | `names.py` | `vision.json` (o `vision.raw.json`), `utterances.json` | `names.json`, `vision.json` unificado, `vision.raw.json` (lecturas originales), `screen_terms.json` | — |
 | `identify` | `identify.py` | `diarization.json`, `utterances.json`, `vision.json` | `identities.json` y filas `Speaker` | — |
 | `correct` | `correct.py` | `utterances.json` | `corrected.json` | llama-server |

@@ -8,6 +8,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- **De quién es la otra voz.** Cuando un hablante parece juntar dos voces, la app compara la voz de cada
+  grupo con las huellas de otros vídeos y propone a la persona («Por la voz, parece Selu»). Viene elegida
+  en **Revisar**; el aviso del hablante y la pantalla **Revisar este vídeo** también la nombran.
+
 ### Corregido
 
 - **Responsables del seguimiento con su nombre.** Una tarea encargada a «Grupo X (Iosu/Selu)» o a «Iosu y Selu»

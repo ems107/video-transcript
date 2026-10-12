@@ -102,6 +102,11 @@ forman dos grupos de voz claramente distintos, el panel avisa: **«Puede juntar 
 Pulsa **Revisar**: verás frases de cada grupo, con un botón para escucharlas, y podrás elegir quién es
 cada grupo. Se guarda como cambios manuales.
 
+Si la voz de un grupo se parece a la de una persona que ya tiene huella de otros vídeos, la app lo dice
+(«Por la voz, parece **Selu** (0,82)») y la deja elegida; el aviso del hablante también la nombra: «parece
+incluir a Selu». Compruébalo escuchando sus frases antes de guardar. No hay propuesta si esa persona aún no
+tiene huella (por ejemplo, si casi no ha hablado en los vídeos revisados) o si su voz se parece poco.
+
 Si faltan hablantes, también puedes [regenerar el análisis completo](ayuda:regenerar) indicando el número
 de hablantes.
 
@@ -109,4 +114,9 @@ de hablantes.
 Se agrupan en dos las intervenciones largas del hablante (2-medias sobre sus huellas). Se avisa si los
 grupos están bien separados (silueta de {{v:voz_division_silueta}} o más), cada uno suma al menos
 {{v:voz_division_segundos}} s y sus voces se parecen poco entre sí.
+
+La voz de cada grupo (el centro de sus huellas) se compara con las huellas guardadas de otros vídeos, igual
+que al identificar a un hablante: se propone a la persona más parecida desde {{v:voice_match_threshold}}, y
+nunca la misma para los dos grupos. En los vídeos analizados antes de la versión 1.7.0 no hay propuesta
+hasta que se rehace el análisis desde las voces.
 :::

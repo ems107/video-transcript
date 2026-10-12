@@ -79,3 +79,41 @@ def test_detects_two_voices_in_one_speaker():
     assert list(splits) == ["S0"]
     assert [g["seconds"] for g in splits["S0"]["groups"]] == [30.0, 25.0]
     assert len(splits["S0"]["groups"][1]["ranges"]) == 5
+
+
+def test_split_groups_suggest_a_known_person(session):
+    from sqlmodel import select
+
+    from app import speaker_fix
+    from app.models import Speaker, Video
+
+    rng = np.random.default_rng(1)
+    noise = lambda v: V.unit(v + rng.normal(0, 0.05, 3))
+    items = [{"speaker": "S0", "start": i * 10.0, "end": i * 10.0 + 5, "text": f"t{i}", "vec": noise(A)} for i in range(6)]
+    items += [{"speaker": "S0", "start": 100 + i * 10.0, "end": 100 + i * 10.0 + 5, "text": f"u{i}", "vec": noise(C)}
+              for i in range(5)]
+    splits = V.detect_splits(items)
+    names = {1: "Edgar", 2: "Selu", 3: "Iosu"}
+    # Cada grupo con la persona cuya huella se le parece (Edgar = A, Selu = C)
+    out = speaker_fix.split_suggestions(splits, {1: [A.tolist()], 2: [C.tolist()], 3: [B.tolist()]}, 0.55, names)
+    groups = out["S0"]["groups"]
+    assert [(g["suggested"]["person_id"], g["suggested"]["name"]) for g in groups] == [(1, "Edgar"), (2, "Selu")]
+    assert all("centroid" not in g for g in groups) and groups[0]["suggested"]["similarity"] > 0.9
+    # Por debajo del umbral, sin propuesta; una misma persona solo para el grupo que más se le parece
+    out = speaker_fix.split_suggestions(splits, {3: [B.tolist()]}, 0.55, names)
+    assert all("suggested" not in g for g in out["S0"]["groups"])
+    out = speaker_fix.split_suggestions(splits, {1: [V.unit(A + 0.3 * C).tolist()]}, 0.2, names)
+    assert ["suggested" in g for g in out["S0"]["groups"]] == [True, False]
+    # Trabajos anteriores, sin la voz del grupo: sin propuesta
+    old = {"S0": {**splits["S0"], "groups": [{k: v for k, v in g.items() if k != "centroid"} for g in splits["S0"]["groups"]]}}
+    assert all("suggested" not in g for g in speaker_fix.split_suggestions(old, {1: [A.tolist()]}, 0.55, names)["S0"]["groups"])
+
+    # Al guardarlo en el hablante, sin la voz del grupo
+    v = Video(source_path="a.mkv", title="Uno")
+    session.add(v)
+    session.commit()
+    session.add(Speaker(video_id=v.id, label="S0", order_idx=1))
+    session.commit()
+    speaker_fix.apply_splits(session, v.id, splits)
+    sp = session.exec(select(Speaker)).one()
+    assert all("centroid" not in g for g in sp.visual_hints["_split"]["groups"])

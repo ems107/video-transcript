@@ -4,7 +4,7 @@ import { api, type ApplyInfo, type Job, type ReviewItem, type VideoDetail } from
 import { EVENT_LABELS, KIND_ONE, STATUS_AFTER } from '../followup'
 import { ProposalList } from '../knowledge'
 import { HelpLink } from '../HelpMarkdown'
-import { fmtDuration, notifyKnowledge, plural } from '../util'
+import { fmtDuration, notifyKnowledge, plural, splitOthers } from '../util'
 import { JobRow } from './Queue'
 
 // Botón «Aplicar y continuar»: aplica los cambios, guarda las voces, actualiza los seguimientos y propone conocimiento
@@ -166,6 +166,12 @@ export default function Review({ jobs }: { jobs: Job[] }) {
               }}>Aceptar las propuestas</button></>
             )}
           </li>
+          {video.speakers.filter((s) => s.split).map((s) => (
+            <li key={s.id}>
+              «{s.name}» puede juntar dos voces{splitOthers(s).length > 0 && <> (parece incluir a {splitOthers(s).join(' y ')})</>}.{' '}
+              <Link to={`/videos/${video.id}`}>Revísalo</Link> con <b>Revisar</b>, junto a su nombre.
+            </li>
+          ))}
           <li>
             <Link to={`/videos/${video.id}?tab=transcripcion`}>Transcripción</Link>: si una frase es de otra persona, pulsa su nombre.
             {video.segments.some((s) => s.voice === 'dudosa') && <> Hay tramos con <b>voz dudosa</b>: míralos primero.</>}

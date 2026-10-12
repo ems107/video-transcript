@@ -178,7 +178,8 @@ def detect_splits(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             groups = []
             for g in sorted(range(2), key=lambda g: -secs[g]):
                 members = sorted((x for x, k in zip(mine, a) if k == g), key=lambda x: x["start"])
-                groups.append({"seconds": round(secs[g], 1),
+                # `centroid`: la voz del grupo, para proponer de quién es (`speaker_fix.split_suggestions`)
+                groups.append({"seconds": round(secs[g], 1), "centroid": [float(x) for x in c[g]],
                                "ranges": [[x["start"], x["end"]] for x in members],
                                "samples": [{"start": x["start"], "end": x["end"], "text": x["text"]}
                                            for x in sorted(members, key=lambda x: x["start"] - x["end"])[:5]]})

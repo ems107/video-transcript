@@ -107,7 +107,12 @@ export type Word = { word: string; start: number; end: number }
 export type SpeakerOverride = { id: number; start: number; end: number; person_id: number; person_name: string }
 export type SpeakerSplit = {
   silhouette: number
-  groups: { seconds: number; ranges: [number, number][]; samples: { start: number; end: number; text: string }[] }[]
+  groups: {
+    seconds: number
+    ranges: [number, number][]
+    samples: { start: number; end: number; text: string }[]
+    suggested?: { person_id: number; name: string; similarity: number } // a quién se parece su voz (huellas de otros vídeos)
+  }[]
 }
 
 export type KeyframeInfo = {
