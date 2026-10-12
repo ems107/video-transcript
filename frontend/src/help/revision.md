@@ -16,6 +16,8 @@ entendió algo al revés, se corrige antes de que llegue al perfil o al seguimie
 La página del vídeo lo avisa con una franja arriba. **Paso a paso** abre la pantalla **Revisar este vídeo**,
 con todo lo que hay que mirar en orden.
 
+![La franja de un vídeo pendiente de revisar](captura:video-revision)
+
 ## Paso 1: comprueba el vídeo
 
 1. **Hablantes**: confirma las propuestas correctas y cambia las que no ([Hablantes](ayuda:hablantes)).
@@ -42,6 +44,8 @@ Al terminar, la pantalla muestra lo que la IA no ha podido decidir sola:
 - **Cambios de estado sin frase que los demuestre.** La IA cree que una tarea quedó hecha, pero no
   encuentra la frase que lo diga. **Sí, confirmar** o **No pasó**.
 - **Propuestas para el perfil y las personas**, como en [Propuestas](ayuda:propuestas).
+
+![La pantalla Revisar este vídeo, con lo que queda por decidir](captura:revision)
 
 Cuando no queda nada por decidir, el vídeo queda **revisado**.
 

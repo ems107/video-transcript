@@ -290,8 +290,8 @@ def test_judgment_discards_and_dedupes():
     assert "juicio" not in out[6]["data"]  # las otras formas de nombre no se juzgan
 
     sec = {"secciones": {"encajan": False, "motivo": "Son de una reunión administrativa",
-                         "propuestas": [{"titulo": "[#01] Qué se trató", "reemplaza": 7}, {"titulo": "Datos", "reemplaza": 99},
-                                        {"titulo": "Otra más", "reemplaza": 0}]}}
+                         "propuestas": [{"titulo": "[#01] Qué se trató", "reemplaza": 7}, {"titulo": "#2 Datos", "reemplaza": 99},
+                                        {"titulo": "#2 Otra más", "reemplaza": 0}]}}
     s = section_proposals(sec, {7: "Gestión administrativa y datos"})
     assert [(x["data"]["title"], x["replaces"]) for x in s] == [("Qué se trató", 7), ("Datos", 0)]
     assert section_proposals({"secciones": {"encajan": True, "motivo": "", "propuestas": []}}, {}) == []

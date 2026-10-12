@@ -97,7 +97,7 @@ export default function FollowupDetail({ jobs }: { jobs: Job[] }) {
       )}
       {f.pending_videos.length > 0 && (
         <div className="notice small" style={{ marginBottom: '1rem' }}>
-          Se aplicará{f.pending_videos.length > 1 ? 'n' : ''} al estado cuando lo{f.pending_videos.length > 1 ? 's' : ''} revises:{' '}
+          El estado se actualizará con {f.pending_videos.length > 1 ? 'estos vídeos' : 'este vídeo'} cuando apliques su revisión:{' '}
           {f.pending_videos.map((v, i) => <span key={v.id}>{i > 0 && ', '}«<Link to={`/videos/${v.id}/revisar`}>{v.title}</Link>»</span>)}.
         </div>
       )}

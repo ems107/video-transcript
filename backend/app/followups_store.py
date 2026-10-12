@@ -237,8 +237,9 @@ def apply_video(session: Session, f: Followup, video: Video, analysis: dict[str,
     signals = mentions(session, video, visible, utts, ask, when, about)
     points = F.analysis_points(analysis)
     # El resumen de la serie se escribe con lo que aportó cada vídeo anterior, no solo con el último resumen
-    contributions = [f"{date_of(v):%Y-%m-%d}: {fv.contribution}" for fv, v in links(session, f.id)
-                     if fv.applied and fv.contribution and v.id != video.id and date_of(v) < when]
+    ordered = links(session, f.id)
+    before = ordered[:next((i for i, (_, v) in enumerate(ordered) if v.id == video.id), len(ordered))]
+    contributions = [f"{date_of(v):%Y-%m-%d}: {fv.contribution}" for fv, v in before if fv.applied and fv.contribution]
     r = ask(FOLLOW_SYSTEM, follow_user(state, desc, F.analysis_text(analysis, points, signals), contributions,
                                        F.hidden_block(hidden)), FOLLOW_SCHEMA, False)
     plan = F.apply_update(visible + hidden, r, video.id, when, video.duration, now(), points, signals)

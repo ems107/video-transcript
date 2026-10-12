@@ -369,7 +369,7 @@ def section_proposals(answer: dict[str, Any], learned: dict[int, str]) -> list[d
     out, seen = [], set()
     for x in (sec.get("propuestas") or [])[:2]:
         # La IA a veces copia el número de la lista delante del título («[#01] Acuerdos…»)
-        title = re.sub(r"^\s*\[#?\d+\]\s*", "", x.get("titulo") or "").strip()
+        title = re.sub(r"^\s*(\[#?\d+\]|#\d+[.:)]?)\s*", "", x.get("titulo") or "").strip()
         if not title or normalize(title) in seen or normalize(title) in {normalize(t) for t in learned.values()}:
             continue
         seen.add(normalize(title))
