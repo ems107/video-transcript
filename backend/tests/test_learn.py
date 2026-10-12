@@ -274,6 +274,8 @@ def test_judgment_discards_and_dedupes():
         prop("termino", "Stripe", owner=("profile", None), category=""),
         prop("dato", "Tiene dos hijos", category="personal"),
         prop("alias", "Selu"),
+        {"kind": "correccion", "category": "", "owner": ("profile", None), "t": 1.0, "lines": [], "replaces": 0,
+         "data": {"term": "El Altet", "variants": ["ALTED"], "fuente": "usuario", "motivo": "Según tus correcciones."}},
     ]
     answer = {"propuestas": [
         {"id": 0, "valor": "descartar", "motivo": "Es lo que explicó en la sesión", "igual_que": 0},
@@ -283,10 +285,12 @@ def test_judgment_discards_and_dedupes():
         {"id": 4, "valor": "descartar", "motivo": "Solo se ve en una pestaña", "igual_que": 0},
         {"id": 5, "valor": "dudosa", "motivo": "No queda claro de quién habla", "igual_que": 0},
         {"id": 6, "valor": "descartar", "motivo": "no se juzgan", "igual_que": 0},
+        {"id": 7, "valor": "descartar", "motivo": "dato de pantalla", "igual_que": 0},
     ]}
     out = apply_proposal_judgment(proposals, answer)
     assert [p.get("status", "propuesto") for p in out] == [
-        "descartado_ia", "propuesto", "descartado_ia", "propuesto", "descartado_ia", "propuesto", "propuesto"]
+        "descartado_ia", "propuesto", "descartado_ia", "propuesto", "descartado_ia", "propuesto", "propuesto",
+        "propuesto"]  # la corrección que sale de tus notas no se juzga
     assert out[2]["data"]["juicio"]["motivo"] == "Repite otra propuesta: «Es planificador financiero en Barymont»."
     assert out[3]["kind"] == "dato" and out[3]["data"]["juicio"]["valor"] == "util"
     assert out[5]["data"]["juicio"] == {"valor": "dudosa", "motivo": "No queda claro de quién habla"}

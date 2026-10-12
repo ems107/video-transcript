@@ -466,8 +466,10 @@ decirlo.
 
 Para cada propuesta devuelve:
 - id: su número.
-- valor: «util» si ayuda a reconocer a una persona (quién es, su cargo, su organización, su relación con \
-los demás, cómo la llaman) o a entender o transcribir próximas grabaciones de este tipo (un término o un \
+- valor: «util» si es un dato duradero de una persona para su ficha (quién es, su cargo, su organización, \
+su relación con los demás, cómo la llaman, y también sus datos personales: estudios, edad, familia, \
+contacto, documento o dirección, que el usuario quiere guardar) o si ayuda a entender o transcribir \
+próximas grabaciones de este tipo (un término o un \
 nombre que se repetirá, cómo se oye mal un nombre, un hecho duradero del negocio); «dudosa» si puede servir \
 pero no está claro, o si la frase de la que sale no lo dice del todo; «descartar» si es contenido puntual \
 de esta reunión (lo que se explicó, se enseñó o se hizo en ella, una tarea, un dato de un momento), algo \

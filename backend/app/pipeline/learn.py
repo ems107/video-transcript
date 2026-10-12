@@ -377,7 +377,8 @@ def apply_proposal_judgment(proposals: list[dict[str, Any]], answer: dict[str, A
     out = []
     for i, p in enumerate(proposals):
         v = verdicts.get(i)
-        if not v or p["kind"] in ("alias", "seccion"):
+        # Lo que sale de las correcciones del usuario no se juzga: lo dijo él
+        if not v or p["kind"] in ("alias", "seccion") or p["data"].get("fuente") == "usuario":
             out.append(p)
             continue
         valor, motivo = v.get("valor"), (v.get("motivo") or "").strip()
