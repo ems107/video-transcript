@@ -123,3 +123,16 @@ def test_user_actions_are_logged_with_ids_not_text(client, session, caplog):
     assert f"Vídeo {v.id}: hablante SPEAKER_00 → persona {p.id} (confirmado)" in msgs
     assert f"Propuestas: 1 aceptadas (0 editadas) y 0 rechazadas, de los vídeos [{v.id}]" in msgs
     assert "Secreto" not in msgs and "Naturgy" not in msgs
+
+
+def test_recovered_failures_leave_a_warning(caplog):
+    from app.pipeline.learn import notes_corrections
+
+    class Failing:
+        def chat_json(self, *_a, **_k):
+            raise RuntimeError("el modelo no responde")
+
+    caplog.set_level(logging.WARNING)
+    assert notes_corrections(None, Failing(), ["ALTED es El Altet"]) == []
+    [rec] = [r for r in caplog.records if r.name == "app.pipeline.learn"]
+    assert rec.levelname == "WARNING" and rec.exc_info and "El Altet" not in rec.getMessage()

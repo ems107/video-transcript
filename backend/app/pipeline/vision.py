@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 
 from ..llm import LLMServer, image_part
 from ..prompts import VISION_SCHEMA, VISION_SYSTEM, profile_block, vision_user
 from .base import JobContext
 from .transcript import fmt_ts
+
+log = logging.getLogger(__name__)
 
 
 def run(ctx: JobContext, llm: LLMServer) -> None:
@@ -34,6 +37,7 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
         try:
             r = llm.chat_json(VISION_SYSTEM, content, VISION_SCHEMA, max_tokens=1200)
         except Exception as e:  # un fotograma ilegible no debe parar el análisis
+            log.warning("Fotograma de %s no analizado: %s", fmt_ts(f["t"]), e, exc_info=True)
             r = {"tipo_escena": "otro", "aplicacion": "", "descripcion": f"(no analizado: {e})", "texto_relevante": "",
                  "participantes": [], "hablante_activo": "", "terminos": []}
         r = {"t": f["t"], "file": f["file"], **r}

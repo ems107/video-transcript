@@ -7,6 +7,7 @@ no aparece se descarta. El usuario acepta o rechaza cada propuesta en la web.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -32,6 +33,8 @@ from .analyze import chunk_lines, timeline
 from .base import JobContext
 from .glossary import normalize
 from .transcript import fmt_ts
+
+log = logging.getLogger(__name__)
 
 # Solo protegen frente a respuestas anómalas (un bucle de la IA): un vídeo normal no se acerca a ellos.
 # Lo que limita el ruido son las comprobaciones de cada propuesta, no el número.
@@ -374,7 +377,9 @@ def notes_corrections(ctx: JobContext, llm: LLMServer, notes: list[str]) -> list
         return []
     try:
         r = llm.chat_json(NOTES_SYSTEM, notes_user(notes), NOTES_SCHEMA, max_tokens=1500)
-    except Exception:  # noqa: BLE001  (de mejor esfuerzo)
+    except Exception:  # de mejor esfuerzo
+        log.warning("No se pudieron sacar las correcciones de las notas del usuario; se sigue sin ellas",
+                    exc_info=True)
         return []
     return [x for x in r.get("pares") or [] if (x.get("oido") or "").strip() and (x.get("correcto") or "").strip()]
 
@@ -481,7 +486,8 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
                 answer["propuestas"] += r.get("propuestas") or []
                 if b == 0:
                     answer["secciones"] = r.get("secciones") or answer["secciones"]
-        except Exception as e:  # noqa: BLE001  (de mejor esfuerzo, como el resto del aprendizaje)
+        except Exception as e:  # de mejor esfuerzo, como el resto del aprendizaje
+            log.warning("Falló la revisión de las propuestas por la IA; quedan sin revisar", exc_info=True)
             ctx.save("judgment_error.json", {"error": str(e)})
             return proposals
         answer["learned_sections"] = learned_sections
