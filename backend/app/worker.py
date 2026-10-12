@@ -62,6 +62,8 @@ PARTIALS = {
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
+FINISH_LABELS = {"done": "terminado", "error": "con error", "cancelled": "cancelado"}
+
 # Fases cuyo mensaje final lleva contenido del vídeo (el título): en el registro van sus recuentos
 QUIET_SUMMARY = {"analyze"}
 
@@ -148,6 +150,7 @@ class Worker:
             s.add(job), s.add(video)
             s.commit()
             options = dict(job.options or {})
+            kind = job_kind(options)  # antes de quitar «redo», que dice qué se regenera
             # Fases a repetir (p. ej. regenerar solo el análisis)
             for stage in options.pop("redo", []):
                 (wd / f"{stage}.done").unlink(missing_ok=True)
@@ -198,7 +201,7 @@ class Worker:
             cancel_event=cancel_ev,
         )
         llm = LLMServer(settings)
-        log.info("Empieza: %s", job_kind(options))
+        log.info("Empieza: %s", kind)
         only = set(options.get("only") or [])  # trabajos de una sola fase (p. ej. rehacer un seguimiento)
         apply = bool(options.get("apply"))  # aplicar la revisión del vídeo
         gated = bool(only)
@@ -550,8 +553,8 @@ class Worker:
             job = s.get(Job, job_id)
             job.status, job.message, job.error, job.finished_at = status, message, error, datetime.now()
             took = (job.finished_at - job.started_at).total_seconds() if job.started_at else 0
-            (log.warning if status == "error" else log.info)("Trabajo %s: %s (%s) en %.0f s", status, message,
-                                                             job_id, took)
+            (log.warning if status == "error" else log.info)("Trabajo %s: %s, en %.0f s",
+                                                             FINISH_LABELS.get(status, status), message, took)
             if status == "done":
                 job.progress = 1.0
             video = s.get(Video, job.video_id)
