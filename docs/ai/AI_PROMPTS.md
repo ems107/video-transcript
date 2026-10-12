@@ -308,9 +308,10 @@ nunca proponía uno mal transcrito, que es justo lo que más falta hace.
 propuestas, la IA las revisa todas juntas (cada término con cuántas veces aparece y si se oye: con solo su
 frase de ejemplo, «Un segundito», descartaba términos clave), en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
 `util`, `dudosa` o `descartar` con motivo, `igual_que` (duplicado de otra propuesta) y `ya_guardado` (el
-`[#id]` de lo ya aceptado que repite: recibe `known_block`, lo mismo que la extracción, y `known_items` guarda
-en `judgment.raw.json` qué número es cada cosa). Sin lo aceptado, el perfil acumulaba la misma frase de
-vídeos distintos con otras palabras. Se probó también pasar al perfil los
+`[#id]` de lo ya aceptado que repite: recibe `known_block` solo con los términos y el contexto del perfil, y
+`known_items` guarda en `judgment.raw.json` qué número es cada cosa). Sin lo aceptado, el perfil acumulaba la
+misma frase de vídeos distintos con otras palabras. Con las fichas de las personas también a la vista, descartaba
+datos personales nuevos (salario, cuentas) que antes marcaba dudosos: por eso no se le pasan. Se probó también pasar al perfil los
 datos de persona que fueran del negocio, pero el texto perdía su sujeto («Documenta la configuración…») y
 el modelo lo marcaba con datos que sí eran de la persona: se quitó. `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
 descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso

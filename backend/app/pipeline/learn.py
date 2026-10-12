@@ -447,8 +447,10 @@ def judge_proposals(ctx: JobContext, llm: LLMServer, proposals: list[dict[str, A
                             if it["kind"] == "seccion"}
         sections = "\n".join([*(f"- {t}" for t in (profile or {}).get("summary_sections") or []),
                               *(f"- [#{i}] {t}" for i, t in learned_sections.items())])
-        known = known_items(profile, ctx.people)
-        known_text = known_block(profile, ctx.people)
+        # Solo lo del perfil (términos y contexto), sin las fichas: con los datos de las personas a la vista,
+        # descartaba datos personales nuevos que el usuario sí guarda (salario, cuentas…), probado con 2 vídeos
+        known = known_items(profile, [])
+        known_text = known_block(profile, [])
         kind_name = (profile or {}).get("name", "") + (f": {profile['description']}" if (profile or {}).get("description") else "")
         answer = {"propuestas": [], "secciones": {"encajan": True, "motivo": "", "propuestas": []}}
         indexed = list(enumerate(proposals))
