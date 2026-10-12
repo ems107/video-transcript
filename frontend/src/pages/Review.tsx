@@ -96,7 +96,8 @@ function ReviewItemRow({ r, onChange }: { r: ReviewItem; onChange: () => void })
       {r.reasons.includes('duplicado') && (
         <div style={{ marginTop: '0.4rem' }}>
           <div className="small">
-            ¿Es lo mismo que {r.same_as ? <>«{r.same_as.text}» ({KIND_ONE[r.same_as.kind]}, {r.same_as.hidden ? 'borrada por ti' : r.same_as.status})</> : 'otro punto'}?
+            ¿Es lo mismo que {r.same_as ? <>«{r.same_as.text}» ({KIND_ONE[r.same_as.kind]}, {r.same_as.hidden ? 'borrada por ti' : r.same_as.status})</>
+              : r.item.review.texto ? <>«{r.item.review.texto}», de este mismo vídeo</> : 'otro punto'}?
             {r.item.review.motivo && <span className="muted"> La IA duda: {r.item.review.motivo}</span>}
           </div>
           <div className="row" style={{ gap: '0.35rem', marginTop: '0.3rem' }}>

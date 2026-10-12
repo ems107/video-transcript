@@ -296,7 +296,7 @@ export type FollowupItem = {
   status: string
   manual: boolean
   events: FollowupEvent[]
-  review: { tipo?: 'duplicado'; de?: number; motivo?: string } // duda de la IA que decides tú
+  review: { tipo?: 'duplicado'; de?: number | null; texto?: string; motivo?: string } // duda de la IA que decides tú
 }
 export type Followup = {
   id: number
@@ -322,7 +322,11 @@ export type Followup = {
   to_review: number // puntos con algo que decidir
 }
 export type FollowupDetail = Followup & {
-  videos: { video_id: number; title: string; date: string; duration: number; status: string; applied: boolean; contribution: string }[]
+  videos: {
+    video_id: number; title: string; date: string; duration: number; status: string; review: ReviewState
+    applied: boolean; contribution: string
+    rebuild_seconds: number // rehacer el estado desde este vídeo
+  }[]
   items: FollowupItem[]
 }
 // Punto de un seguimiento con una duda de la IA salida de un vídeo (pantalla «Revisar este vídeo»)

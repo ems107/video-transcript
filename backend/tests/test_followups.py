@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import pytest
+from sqlmodel import select
 
 from app import followups as F
 from app import followups_store as FS
@@ -83,11 +84,21 @@ def test_apply_update_validates_the_answer():
         sig("T2", "hecha", "00:06:00", "la cita con el banco ya la tengo"),  # manual: queda como avance
         sig("P4", "resuelta", "00:07:00", "lo paga la empresa", verified=False),  # sin cita: posible
     ]
-    update = {"mismos": [{"nuevo": "N1", "existente": "T1"}, {"nuevo": "N4", "existente": "T9"}]}
+    update = {"clasificacion": [
+        {"nuevo": "N1", "relacion": "mismo", "existente": "T1", "motivo": "la misma tarea"},
+        {"nuevo": "N4", "relacion": "mismo", "existente": "T9", "motivo": "no existe"},
+        {"nuevo": "N5", "relacion": "mismo", "existente": "[P3]", "motivo": "la borró el usuario"},
+        {"nuevo": "N6", "relacion": "dudoso", "existente": "P4", "motivo": "puede ser la misma cuota"},
+        {"nuevo": "N7", "relacion": "mismo", "existente": "N6", "motivo": "repite la tarea como duda"},
+        {"nuevo": "N6", "relacion": "nuevo", "existente": "", "motivo": "se ignora: ya está clasificado arriba"}]}
     points = [{"key": "N1", "kind": "tarea", "text": "Mandar el informe al gestor", "owner": "", "due": "", "t": "00:05:00"},
               {"key": "N2", "kind": "duda", "text": "¿Hace falta el aval?", "owner": "", "due": "", "t": "00:08:00"},
               {"key": "N3", "kind": "duda", "text": "¿Hay que firmar ante notario?", "owner": "", "due": "", "t": "00:09:00"},
-              {"key": "N4", "kind": "tarea", "text": "Llamar al banco", "owner": "Ana", "due": "", "t": "sin hora"}]
+              {"key": "N4", "kind": "tarea", "text": "Llamar al banco", "owner": "Ana", "due": "", "t": "sin hora"},
+              {"key": "N5", "kind": "duda", "text": "¿Firmamos con el notario?", "owner": "", "due": "", "t": "00:10:00"},
+              {"key": "N6", "kind": "tarea", "text": "Pagar la cuota del seguro", "owner": "", "due": "", "t": "00:11:00"},
+              {"key": "N7", "kind": "duda", "text": "¿Cuándo se paga la cuota del seguro?", "owner": "", "due": "",
+               "t": "00:12:00"}]
     plan = F.apply_update(items, update, 2, D2, 25 * 60, AT, points, signals)
     evs = [(iid, e["evento"], e.get("posible")) for iid, e in plan["events"]]
     # Un cambio sin una frase que lo diga queda como posible (no cambia el estado: lo confirma el usuario)
@@ -96,10 +107,15 @@ def test_apply_update_validates_the_answer():
     assert first["date"] == D2.isoformat() and first["t"] == "00:05:00" and first["cita"] == cita
     # Lo decidió el usuario: el vídeo solo se anota como avance
     assert "hecha" in plan["events"][1][1]["nota"]
-    assert len(plan["discarded"]) == 3
-    # N1 es la misma tarea; N3 la borró el usuario; N4 se relaciona con un punto que no existe: se añade, sin momento
-    assert [(n["text"], n["events"][0]["t"]) for n in plan["new"]] == [("¿Hace falta el aval?", "00:08:00"),
-                                                                        ("Llamar al banco", "")]
+    assert len(plan["discarded"]) == 6
+    # N1 es la misma tarea; N3 casi repite el texto de una borrada por el usuario y N5 la IA la da por esa
+    # borrada; N4 se relaciona con un punto que no existe: se añade, sin momento; N7 repite N6 en el mismo vídeo
+    assert [(n["text"], n["events"][0]["t"]) for n in plan["new"]] == [
+        ("¿Hace falta el aval?", "00:08:00"), ("Llamar al banco", ""), ("Pagar la cuota del seguro", "00:11:00")]
+    # Dudoso: se crea, pero con la duda para que la decida el usuario
+    assert plan["new"][2]["review"] == {"tipo": "duplicado", "de": 4, "texto": "¿Quién paga la cuota?",
+                                        "motivo": "puede ser la misma cuota"}
+    assert plan["new"][0]["review"] == {}
 
 
 def test_quotes_and_signals():
@@ -173,9 +189,13 @@ def test_render_markdown():
     videos = [{"id": 1, "title": "Primera", "date": D1, "link": "../2026-10-04%20-%20Primera", "contribution": "Empieza",
                "applied": True},
               {"id": 2, "title": "Segunda", "date": D2, "link": "", "contribution": "", "applied": False}]
-    md = F.render_markdown({"name": "Tutoría", "summary": "Va bien."}, items, videos)
+    summary = "Empieza el 4 [2026-10-04 00:01:30] y sigue [2026-10-05 00:03:00]; sin vídeo [2026-10-09 00:01:00]."
+    md = F.render_markdown({"name": "Tutoría", "summary": summary}, items, videos)
     assert "# Seguimiento: Tutoría" in md and "**[hecha]** Enviar el informe" in md
     assert "[2026-10-04 00:02:00](../2026-10-04%20-%20Primera/resumen.md)" in md and "*(sin aplicar)*" in md
+    # Las marcas con fecha del resumen enlazan al vídeo de ese día (si tiene carpeta)
+    assert ("Empieza el 4 [2026-10-04 00:01:30](../2026-10-04%20-%20Primera/resumen.md) y sigue 2026-10-05 00:03:00;"
+            " sin vídeo 2026-10-09 00:01:00.") in md
 
 
 # --------------------------------------------------------------------------- con la base de datos
@@ -225,8 +245,8 @@ ANALYSES = {
 UTTS_BY_TITLE = {"Segunda": [{"start": 55.0, "end": 64.0, "speaker": "S1",
                               "text": "El informe ya lo he enviado esta mañana, está hecho."}]}
 ANSWERS = {
-    "Primera": {"mismos": [], "resumen": "Empieza el tema.", "aporte": "Se plantea."},
-    "Segunda": {"mismos": [{"nuevo": "N1", "existente": "T1"}],
+    "Primera": {"clasificacion": [], "resumen": "Empieza el tema.", "aporte": "Se plantea."},
+    "Segunda": {"clasificacion": [{"nuevo": "N1", "relacion": "mismo", "existente": "T1", "motivo": "el mismo informe"}],
                 "resumen": "Informe enviado y cuenta decidida.", "aporte": "Se cierra el informe."},
 }
 MENTIONS = {"2026-10-05": [{"id": "T1", "evento": "hecha", "t": "00:01:00",
@@ -300,6 +320,30 @@ def test_apply_in_order_and_rebuild_respects_manual(session, tmp_analyzed):
     assert [e["evento"] for e in its["Enviar el informe"]["events"]] == ["creada", "avanza", "reabierta"]
     assert f.summary == "Mi resumen" and f.summary_ai == "Informe enviado y cuenta decidida."
     assert len([it for it in its.values() if it["text"] == "Abrir la cuenta común"]) == 1
+
+
+def test_rebuild_tells_the_ai_the_series_and_what_the_user_deleted(session, tmp_analyzed):
+    """Al rehacer, la IA recibe lo que aportó cada vídeo anterior, los puntos borrados y de qué trata el vídeo."""
+    v1, v2 = _video(session, D1, "Primera"), _video(session, D2, "Segunda")
+    f = _followup(session, v1, v2)
+    checks = []
+
+    class Ask(FakeAsk):
+        def __call__(self, system, user, schema, thinking=False):
+            if schema is FOLLOW_CHECK_SCHEMA:
+                checks.append(user)
+            return super().__call__(system, user, schema, thinking)
+
+    FS.rebuild_from(session, f, None, Ask(ANSWERS, MENTIONS))
+    task = next(it for it in session.exec(select(FollowupItem)) if it.text == "Enviar el informe")
+    task.hidden, task.manual = True, True
+    session.add(task)
+    session.commit()
+    ask = Ask(ANSWERS, MENTIONS)
+    FS.rebuild_from(session, f, D2, ask)
+    assert "Lo que aportó cada vídeo anterior, en orden:\n- 2026-10-04: Se plantea." in ask.calls[-1]
+    assert "Puntos que el usuario borró" in ask.calls[-1] and f"[T{task.id}] tarea: Enviar el informe" in ask.calls[-1]
+    assert "De qué trata esta reunión: «Segunda». Segunda" in checks[-1]
 
 
 def test_update_for_video_older_video_marks_stale(session):

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Followup, type FollowupEvent, type VideoDetail } from './api'
-import { EVENT_LABELS } from './followup'
+import { EVENT_LABELS, shortDate } from './followup'
 import { HelpLink } from './HelpMarkdown'
 import { parseTs } from './util'
 
@@ -169,13 +169,11 @@ export function FollowupChoice({ name, rebuild, onChange, rebuildText, keepText 
   )
 }
 
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-}
-
 // Un hito del recorrido de un punto: fecha y momento del vídeo (con enlace) y qué pasó
-export function EventChip({ e, onConfirm }: { e: FollowupEvent; onConfirm?: (evento: FollowupEvent['evento']) => void }) {
-  const label = e.posible ? `¿${EVENT_LABELS[e.posible] ?? e.posible}?` : EVENT_LABELS[e.evento] ?? e.evento
+export function EventChip({ e, onConfirm, onDismiss }: {
+  e: FollowupEvent; onConfirm?: (evento: FollowupEvent['evento']) => void; onDismiss?: () => void
+}) {
+  const label = e.posible ? `¿${EVENT_LABELS[e.posible] ?? e.posible}?${e.descartado ? ' (no pasó)' : ''}` : EVENT_LABELS[e.evento] ?? e.evento
   const where = e.source === 'manual'
     ? <span title={`Cambio tuyo, ${new Date(e.at).toLocaleString('es-ES')}`}>a mano</span>
     : e.date && e.video_id
@@ -190,6 +188,9 @@ export function EventChip({ e, onConfirm }: { e: FollowupEvent; onConfirm?: (eve
       {e.posible && onConfirm && (
         <button className="sm" title="La IA cree que pasó, pero no encontró la frase que lo dice: compruébalo en el vídeo"
           onClick={() => onConfirm(e.posible!)}>Confirmar</button>
+      )}
+      {e.posible && onDismiss && (
+        <button className="sm" title="No pasó: el punto sigue como estaba" onClick={onDismiss}>No pasó</button>
       )}
     </span>
   )

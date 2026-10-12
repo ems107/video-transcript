@@ -270,15 +270,24 @@ final pone cada asunto en una sola lista (tarea, decisión o pendiente).
      Medido con dos vídeos reales: dentro del resumen o sin razonar, el modelo no encontraba los cierres
      dichos de pasada («lo que ayer fallaba ya ha funcionado») e inventaba momentos («00:57:33» en un vídeo
      de 25 min) y citas; con razonamiento, todas las citas existían y encontró el cierre (unos 2 min por
-     bloque de 25 min).
+     bloque de 25 min). Recibe también de qué trata el vídeo (título y resumen breve): sin eso no cerraba
+     «Realizar la sesión de diagnóstico» en la propia sesión. Si un bloque se corta por `max_tokens`
+     (`LLMTruncated`), se repite en dos mitades.
   2. `FOLLOW_*` sin razonamiento: con el estado, los **puntos del vídeo** (`followups.analysis_points`:
-     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones y el resumen, devuelve
-     `mismos` (qué `[N…]` es un punto existente), `resumen` y `aporte`.
+     tareas, decisiones y pendientes del análisis, con clave `[N…]`), las menciones, el resumen, **lo que
+     aportó cada vídeo anterior** (`FollowupVideo.contribution`) y **los puntos borrados por el usuario**
+     (`followups.hidden_block`, con su id), devuelve `clasificacion` (por cada `[N…]`: `mismo`, `nuevo` o
+     `dudoso` frente a un punto del estado, uno borrado u otro `[N…]`, con motivo), `resumen` (de toda la
+     serie; las marcas con fecha `[AAAA-MM-DD hh:mm:ss]`, que la web y `followups.link_moments` enlazan
+     con el vídeo) y `aporte`. Antes, con `mismos` y la comparación difusa, cada vídeo repetía 3–6 puntos
+     con otra redacción, los borrados volvían al rehacer y el resumen describía solo el último vídeo.
   3. `followups.apply_update`: los hitos salen de las menciones (un cambio de estado con cita comprobada se
      aplica; sin ella queda como «avanza» con `posible: <evento>`, que la web muestra como «¿hecha?» con un
-     botón Confirmar); a un punto manual solo se le anotan avances. Los puntos nuevos son los del análisis
-     menos los «mismos» y los parecidos a uno existente o borrado (`DUPLICATE`): no los inventa la IA, que
-     variaba en cada ejecución.
+     botón Confirmar o «No pasó», que marca el evento `descartado`); a un punto manual solo se le anotan
+     avances. Los puntos nuevos son los del análisis menos los «mismo» (`followups.classify` descarta los
+     ids que no existen) y los casi iguales en texto a uno existente o borrado (`DUPLICATE`, red de
+     seguridad): no los inventa la IA, que variaba en cada ejecución. Los «dudoso» se crean con
+     `review = {tipo: duplicado, de, texto, motivo}` y los decide el usuario (`POST …/resolve`).
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 

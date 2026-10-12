@@ -19,9 +19,19 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
     revisión para aprovechar las voces, el glosario y el seguimiento ya revisados (en la cola, «En espera»).
   - Si cambias algo de un vídeo ya revisado, vuelve a quedar pendiente hasta que lo apliques.
   - La barra lateral cuenta los vídeos por revisar.
+- **Seguimientos sin duplicados.** Cada tarea, decisión o duda de un vídeo nuevo se compara con las
+  anteriores (también con las que borraste y con las del mismo vídeo): si es la misma, aunque esté escrita
+  de otra forma, no se repite; si la IA duda, pregunta «¿Es lo mismo que…?». Lo que borras ya no vuelve al
+  rehacer el estado.
+- Un cambio de estado «posible» (sin frase que lo demuestre) se puede descartar con **No pasó**.
+- **Rehacer el estado…** de un seguimiento cuando quieras, eligiendo desde qué vídeo.
 
 ### Cambiado
 
+- El resumen de un seguimiento cuenta la evolución de toda la serie (lo que aportó cada vídeo), no solo el
+  último, y sus momentos llevan la fecha del vídeo y enlazan con él.
+- Un seguimiento da por hecho el punto que consiste en el propio vídeo (por ejemplo, «Realizar la sesión de
+  diagnóstico» en esa sesión), y ya no da por hecho lo que se dice que se hará después de la reunión.
 - Regenerar el análisis ya no actualiza el seguimiento ni lo aprendido: el vídeo queda pendiente de
   revisar y se actualizan al aplicar la revisión.
 

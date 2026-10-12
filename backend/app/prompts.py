@@ -412,18 +412,23 @@ según los vídeos anteriores y el análisis de un vídeo nuevo, y devuelves sol
 FOLLOW_SCHEMA = {
     "type": "object",
     "properties": {
-        "mismos": {
+        "clasificacion": {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"nuevo": {"type": "string"}, "existente": {"type": "string"}},
-                "required": ["nuevo", "existente"],
+                "properties": {
+                    "nuevo": {"type": "string"},
+                    "relacion": {"type": "string", "enum": ["mismo", "nuevo", "dudoso"]},
+                    "existente": {"type": "string"},
+                    "motivo": {"type": "string"},
+                },
+                "required": ["nuevo", "relacion", "existente", "motivo"],
             },
         },
         "resumen": {"type": "string"},
         "aporte": {"type": "string"},
     },
-    "required": ["mismos", "resumen", "aporte"],
+    "required": ["clasificacion", "resumen", "aporte"],
 }
 
 # Qué dice el vídeo de cada punto abierto. Va aparte y con el modo razonamiento: dentro del resumen, o sin
@@ -454,10 +459,15 @@ FOLLOW_CHECK_SCHEMA = {
 }
 
 
-def follow_check_user(points: str, video: str, part: int, total: int, body: str) -> str:
+def follow_check_user(points: str, video: str, part: int, total: int, body: str, about: str = "") -> str:
+    meeting = (f"""
+De qué trata esta reunión: {about}
+Si un asunto es hacer esta misma reunión o sesión (por ejemplo, «realizar la sesión de X» y esta es esa \
+sesión), está hecho: márcalo con la primera frase que muestre que se está haciendo.
+""" if about else "")
     return f"""Asuntos pendientes de reuniones anteriores del mismo tema:
 {points}
-
+{meeting}
 Transcripción de la reunión del {video} (parte {part} de {total}):
 {body}
 
@@ -468,27 +478,36 @@ avanza si se habla de él pero sigue igual.
 - t: la marca de tiempo de la frase.
 - cita: la frase que lo dice, copiada literalmente, sin comillas ni puntos suspensivos.
 Se puede hablar de un asunto sin nombrarlo igual (por ejemplo, «lo que ayer fallaba ya funciona» o «ya \
-sale como predeterminado»). Si no se habla de un asunto, no lo pongas."""
+sale como predeterminado»). Algo que se dice que se hará después de la reunión no está hecho aunque se \
+hable de ello. Si no se habla de un asunto, no lo pongas."""
 
 
-def follow_user(state: str, video: str, analysis: str) -> str:
+def follow_user(state: str, video: str, analysis: str, contributions: list[str] | None = None,
+                hidden: str = "") -> str:
     previous = ("Estado del tema según los vídeos anteriores:\n" + state) if state else \
         "Es el primer vídeo del tema: aún no hay estado."
-    return f"""{previous}
+    history = ("\n\nLo que aportó cada vídeo anterior, en orden:\n" + "\n".join(f"- {c}" for c in contributions)) \
+        if contributions else ""
+    removed = ("\n\nPuntos que el usuario borró: no se vuelven a crear (si un punto de este vídeo es uno de ellos, "
+               "es «mismo»):\n" + hidden) if hidden else ""
+    return f"""{previous}{history}{removed}
 
 Vídeo nuevo: {video}
 
 {analysis}
 
 Devuelve:
-- mismos: puntos de este vídeo ([N…]) que son el mismo asunto que un punto del estado ([T…], [D…], [P…]), \
-para no duplicarlo (por ejemplo, la misma tarea encargada otra vez). nuevo: el [N…]; existente: el del \
-estado. Los demás puntos de este vídeo se añaden al estado tal cual. Una decisión que cambia otra anterior \
-no es «la misma». Lista vacía si no hay ninguno.
-- resumen: el resumen de la evolución del tema hasta este vídeo incluido, en 1-3 párrafos: dónde está \
-ahora y cómo ha llegado ahí, con la fecha de cada vídeo cuando ayude. Parte del resumen anterior y \
-consérvalo: añade lo nuevo, no lo sustituyas por el de este vídeo. Usa lo que dicen las menciones \
-comprobadas sobre los asuntos anteriores; no des por hecho lo que no dicen.
+- clasificacion: una entrada por cada punto de este vídeo ([N…]). relacion: «mismo» si es el mismo asunto \
+que un punto anterior (del estado, uno borrado por el usuario u otro punto de este vídeo), aunque cambie la \
+redacción o el detalle (la misma tarea encargada otra vez, o la misma cuestión como tarea y como duda); \
+«nuevo» si no tiene que ver con ninguno; «dudoso» si puede ser el mismo pero no está claro. existente: el \
+id con el que lo comparas ([T…], [D…], [P…] o [N…]), o "" si es nuevo. motivo: por qué, en pocas palabras. \
+Una decisión que cambia otra anterior no es «la misma».
+- resumen: la evolución del tema desde el primer vídeo hasta este incluido, en 1-3 párrafos: de dónde se \
+partió, qué ha pasado en cada vídeo y dónde está ahora. Usa lo que aportó cada vídeo anterior y el estado \
+de los puntos; no lo centres en este vídeo. Si citas un momento, escribe la fecha de su vídeo y la marca, \
+así: [AAAA-MM-DD hh:mm:ss]. Usa lo que dicen las menciones comprobadas sobre los asuntos anteriores; no \
+des por hecho lo que no dicen.
 - aporte: lo que aporta este vídeo al tema, en 1-3 frases."""
 
 
@@ -539,7 +558,7 @@ que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
 LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
-               "mismos": 30, "menciones": 20}
+               "clasificacion": 40, "menciones": 20}
 LIST_DEFAULT = 40
 
 

@@ -1179,12 +1179,17 @@ def remove_followup_video(followup_id: int, video_id: int, rebuild: bool = False
 
 
 @app.post("/api/followups/{followup_id}/rebuild")
-def rebuild_followup(followup_id: int, all_videos: bool = False, session: Session = SessionDep) -> dict[str, Any]:
-    """Rehace el estado desde que está desactualizado (o desde el principio)."""
+def rebuild_followup(followup_id: int, all_videos: bool = False, since_video_id: int | None = None,
+                     session: Session = SessionDep) -> dict[str, Any]:
+    """Rehace el estado desde un vídeo, desde que está desactualizado o desde el principio."""
     f = _followup(session, followup_id)
-    since = None if all_videos else f.stale_from
-    if not all_videos and since is None:
-        raise HTTPException(400, "El estado ya está al día")
+    if since_video_id is not None:
+        _404(session.get(FollowupVideo, (f.id, since_video_id)), "Vídeo del seguimiento")
+        since = FS.date_of(session.get(Video, since_video_id))
+    else:
+        since = None if all_videos else f.stale_from
+        if not all_videos and since is None:
+            raise HTTPException(400, "El estado ya está al día")
     first = FS.first_from(session, f, since)
     if first:
         job = _queue_follow(session, f, first, f"Rehaciendo el seguimiento «{f.name}»")
