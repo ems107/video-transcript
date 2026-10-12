@@ -468,10 +468,20 @@ def delete_video(video_id: int, session: Session = SessionDep) -> dict[str, Any]
     return remove_video(video_id, RemoveIn(), session)
 
 
+def _release(session: Session) -> None:
+    """Devuelve la conexión a la BD antes de enviar un fichero.
+
+    La sesión de `SessionDep` se cierra cuando termina la respuesta, y un vídeo largo tarda en enviarse
+    (el reproductor abre una descarga parcial en cada salto): con 15 abiertas se agotaba el pool y toda la
+    API esperaba 30 s y fallaba («QueuePool limit … reached»)."""
+    session.close()
+
+
 @app.get("/api/videos/{video_id}/file")
 def video_file(video_id: int, session: Session = SessionDep):
     v = _404(session.get(Video, video_id), "Vídeo")
     p = Path(v.video_path or v.source_path)
+    _release(session)
     if not p.is_file():
         raise HTTPException(404, f"No se encuentra el archivo de vídeo: {p}")
     return FileResponse(p, media_type=mimetypes.guess_type(p.name)[0] or "video/mp4")
@@ -481,17 +491,20 @@ def video_file(video_id: int, session: Session = SessionDep):
 def video_thumbnail(video_id: int, session: Session = SessionDep):
     v = _404(session.get(Video, video_id), "Vídeo")
     p = Path(v.folder or "") / "miniatura.jpg"
-    if not v.folder or not p.is_file():
+    folder = v.folder
+    _release(session)
+    if not folder or not p.is_file():
         raise HTTPException(404, "Sin miniatura")
     return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
 
 
 @app.get("/api/keyframes/{frame_id}/image")
 def keyframe_image(frame_id: int, session: Session = SessionDep):
-    k = _404(session.get(Keyframe, frame_id), "Fotograma")
-    if not Path(k.path).is_file():
+    path = _404(session.get(Keyframe, frame_id), "Fotograma").path
+    _release(session)
+    if not Path(path).is_file():
         raise HTTPException(404, "Fotograma no encontrado en disco")
-    return FileResponse(k.path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
 
 
 @app.post("/api/videos/{video_id}/open-folder")
@@ -912,10 +925,11 @@ def person_voice(person_id: int, session: Session = SessionDep) -> dict[str, Any
 
 @app.get("/api/voice-samples/{sample_id}/audio")
 def voice_sample_audio(sample_id: int, session: Session = SessionDep):
-    smp = _404(session.get(VoiceSample, sample_id), "Muestra")
-    if not Path(smp.path).is_file():
+    path = _404(session.get(VoiceSample, sample_id), "Muestra").path
+    _release(session)
+    if not Path(path).is_file():
         raise HTTPException(404, "No se encuentra el audio de la muestra")
-    return FileResponse(smp.path, media_type="audio/flac")
+    return FileResponse(path, media_type="audio/flac")
 
 
 class VoiceDecision(BaseModel):

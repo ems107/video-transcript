@@ -186,6 +186,37 @@ def test_requeue_does_not_carry_apply(client, session):
     assert again.options == {"file_mode": "copy", "redo": ["correct", "analyze"]}
 
 
+def test_file_endpoints_release_the_db_connection(client, session, tmp_path, monkeypatch):
+    """Servir un fichero no retiene la conexión a la BD mientras se envía (un vídeo largo agotaba el pool)."""
+    from sqlalchemy.orm import Session as OrmSession
+
+    from app import main
+
+    closed, at_send = [], []  # cierres de sesión; cuántos había al crear la respuesta del fichero
+    close, file_response = OrmSession.close, main.FileResponse
+
+    def spy_close(self):
+        closed.append(True)
+        close(self)
+
+    def spy_response(*args, **kwargs):
+        at_send.append(len(closed))
+        return file_response(*args, **kwargs)
+
+    monkeypatch.setattr(OrmSession, "close", spy_close)
+    monkeypatch.setattr(main, "FileResponse", spy_response)
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"0" * 10)
+    v = _video(session, "Uno", folder=str(tmp_path))
+    v.video_path = str(f)
+    session.add(v)
+    session.commit()
+    seen = len(closed)
+    r = client.get(f"/api/videos/{v.id}/file")
+    assert r.status_code == 200 and r.content == b"0" * 10
+    assert at_send == [seen + 1]  # cerrada antes de empezar a enviar, no al terminar
+
+
 def test_short_jobs_go_first():
     """Aplicar una revisión o rehacer un seguimiento no espera a que termine el análisis de otro vídeo."""
     from app.worker import is_short
