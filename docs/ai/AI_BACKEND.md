@@ -14,7 +14,7 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `VoiceSample` | muestra de voz de una persona en un vídeo | `path` en `data/voces/`, `seconds`, `score`; la ficha muestra las 3 mejores. «Olvidar voz», «Quitar» con olvidar y la fusión de personas las tratan como las huellas |
 | `Video` | un vídeo | `status`: pending, processing, done o error. `analysis` guarda el JSON completo; `folder` y `video_path` se rellenan al publicar. `review` (pendiente, aplicando, propuestas o revisado) y `voices_applied` (`{etiqueta: persona}` con que se aplicó la revisión; nulo en vídeos anteriores): ver `review.py` y `AI_PIPELINE.md` |
 | `Job` | un trabajo de la cola | `status`: queued, running, waiting (espera la revisión de `options.waiting_for`), done, error o cancelled. `options` (ver abajo). `error` incluye el traceback |
-| `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz, pantalla o contexto. En `visual_hints`, las claves con «_» son internas (`_motivo`, `_apodos`) |
+| `Speaker` | hablante de un vídeo (`SPEAKER_00`) | `person_id` = confirmado; `suggested_person_id` / `suggested_name` = propuesta; `source`: micrófono, voz, pantalla o contexto. En `visual_hints`, las claves con «_» son internas (`_motivo`, `_apodos`, `_split`: dos voces, con `suggested` por grupo) |
 | `Segment` | intervención de la transcripción | `speaker` es la etiqueta, no el nombre. `original_text` y `corrections` vienen del glosario. `voice`: «» , «reasignada» o «dudosa» (columna añadida con `db.NEW_COLUMNS`) |
 | `SpeakerOverride` | arreglo manual: de `start` a `end` habla `person_id` | ver `speaker_fix.py` |
 | `Keyframe` | fotograma analizado | la ruta apunta a `<carpeta>/fotogramas/` |
@@ -28,12 +28,11 @@ salen de `config.py`: `ROOT_DIR`, `DATA_DIR`, `MODELS_DIR`, `WORK_DIR` y `FRONTE
 | `FollowupItem` | tarea, decisión o duda | `status` sale del último evento de `events[{video_id, date, t, evento, nota, source, at}]`; `manual` = tocado por el usuario (la IA ya no cambia su texto ni su estado); `hidden` = borrado por el usuario (se conserva para que la IA no lo vuelva a crear); `review` = duda de la IA que decide el usuario (`{tipo: duplicado, de, motivo}`); un evento con `posible` sin confirmar (o con `descartado`) también se decide en la revisión (`followups.needs_review`) |
 | `FollowupVersion` | copia del estado antes de cada cambio | `snapshot` = `{summary, summary_manual, summary_ai, items, videos}` |
 
-- **Columnas nuevas en tablas existentes:** se declaran en `db.NEW_COLUMNS`. `init_db` las añade con
-  `ALTER TABLE` si faltan (idempotente).
-- **No hay migraciones.** Añadir **tablas** nuevas es seguro. `init_db()` solo ejecuta `create_all`, que crea tablas nuevas pero **no
-  añade columnas a tablas que ya existen**. Si añades un campo a una tabla existente, añade también en
-  `init_db()` un `ALTER TABLE … ADD COLUMN` idempotente: comprueba antes con `PRAGMA table_info`.
-  Indícalo en el CHANGELOG. Si no lo haces, la BD del usuario dará error al arrancar.
+- **No hay migraciones.** Añadir **tablas** nuevas es seguro: `init_db()` ejecuta `create_all`, que crea
+  las que falten pero **no añade columnas a tablas que ya existen**. Una columna nueva en una tabla
+  existente se declara en `db.NEW_COLUMNS` (nombre, tipo SQL y valor por defecto), e `init_db` la añade con
+  `ALTER TABLE` si falta (idempotente). Si no lo haces, la BD del usuario dará error al arrancar. El valor
+  por defecto decide cómo quedan las filas antiguas (p. ej., `Video.review` = `revisado`).
 - Para las fechas usa `NaiveDatetime` (por SQLModel 0.0.47) y `now()` de `models.py`.
 - Los campos de lista o diccionario usan `sa_column=Column(JSON)`. Si modificas una lista en su sitio,
   SQLAlchemy no lo detecta: reasigna el valor completo.
@@ -51,12 +50,15 @@ Módulos:
 - `people.py`: ficha, duplicados y fusión.
 
 **`KnowledgeItem`:**
-- **Dueño.** `profile_id` para los tipos `termino`, `contexto` y `seccion`. `person_id` para `dato` y
+- **Dueño.** `profile_id` para los tipos `termino`, `contexto`, `seccion` y `correccion` (corrección de
+  transcripción: `{term, variants, fuente, motivo}`). `person_id` para `dato` y
   `alias`. Una propuesta de un hablante tiene `person_id = None` y `speaker_label`, y se resuelve al
   mostrarla (`proposals.Resolver`). `nueva_persona` lleva el `profile_id` del vídeo para enlazar a la
   persona al aceptarla.
 - **Estados.** `propuesto` → `aceptado` | `rechazado`. Un aceptado puede pasar a `retirado`. Los
-  aceptados nunca se borran: el historial los necesita.
+  aceptados nunca se borran: el historial los necesita. `descartado_ia` es lo que la pasada de juicio
+  descartó: no cuenta como pendiente ni bloquea la revisión del vídeo, se lista aparte y el usuario lo
+  puede recuperar (vuelve a `propuesto`).
 - **Un solo valor.** `cargo`, `organizacion` y `equipo` tienen un único valor vigente: al aceptar uno,
   se retira el anterior (`single_value_conflicts`). `replaces_id` retira el dato reemplazado.
 
@@ -91,16 +93,16 @@ video)`. Así lo hacen `update_video`, `update_speaker` y `_publish`.
 
 | Grupo | Endpoints |
 |---|---|
-| Sistema | `GET status` (versión, comprobación de componentes y `pending_proposals`), `GET/PUT settings`, `GET probe?path=` |
+| Sistema | `GET status` (versión, comprobación de componentes, `pending_proposals` y `to_review`), `GET/PUT settings`, `GET probe?path=`, `GET help/values` (valores `{{v:…}}` de la ayuda), `GET help/changelog` |
 | Trabajos | `POST jobs {path, profile_id, options}`, `GET jobs`, `POST jobs/{id}/cancel`, `POST jobs/{id}/retry`, `GET events` (SSE, evento `jobs` cada segundo si hay cambios) |
-| Vídeos | `GET videos?profile_id&person_id`, `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `GET videos/{id}/regenerate` (niveles, disponibilidad y estimación), `POST videos/{id}/regenerate {level}` (sin cuerpo = `analysis`), `GET/POST videos/{id}/corrections`, `PUT/DELETE corrections/{id}`, `GET/POST videos/{id}/speaker-overrides {ranges, person_id | new_person_name}`, `DELETE speaker-overrides/{id}`, `GET videos/{id}/words?start&end`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
+| Vídeos | `GET videos?profile_id&person_id` (tarjetas: `people` sin repetir, `review` y `to_decide`, lo que queda por decidir si está en `propuestas`), `GET/PUT/DELETE videos/{id}`, `GET videos/{id}/file` (con rangos), `GET videos/{id}/thumbnail`, `GET keyframes/{id}/image`, `POST videos/{id}/open-folder`, `GET videos/{id}/regenerate` (niveles, disponibilidad y estimación), `POST videos/{id}/regenerate {level}` (sin cuerpo = `analysis`), `GET/POST videos/{id}/corrections`, `PUT/DELETE corrections/{id}`, `GET/POST videos/{id}/speaker-overrides {ranges, person_id | new_person_name}`, `DELETE speaker-overrides/{id}`, `GET videos/{id}/words?start&end`, `POST videos/{id}/confirm-speakers`, `GET videos/{id}/removal`, `POST videos/{id}/remove {delete_files, delete_video, delete_original, forget}` |
 | Hablantes | `PUT speakers/{id} {person_id \| new_person_name, confirm}` |
 | Perfiles | CRUD de `profiles` (`person_ids[]` en el cuerpo; la respuesta incluye `learned_count` y `pending_count`), `GET profiles/{id}/knowledge`, `GET profiles/{id}/versions`, `POST profiles/{id}/versions/{vid}/restore`, `POST profiles/from-video {video_id, name}`, `POST profiles/{id}/learn-all` |
 | Personas | CRUD de `people` (`GET people/{id}` devuelve la ficha completa), `DELETE people/{id}/voices`, `GET people/{id}/knowledge`, `GET/POST people/{id}/versions[/{vid}/restore]`, `GET people/duplicates`, `POST people/duplicates/dismiss {a, b}`, `POST people/{id}/merge {into_id}` |
-| Conocimiento | `GET proposals?video_id&profile_id&person_id` (`{items, waiting}`), `POST proposals/decide {accept, reject, edits}`, `PUT knowledge/{id}`, `POST knowledge/{id}/retire`, `POST knowledge/forget-video/{video_id}`, `POST videos/{id}/learn` |
+| Conocimiento | `GET proposals?video_id&profile_id&person_id` (`{items, waiting, discarded}`), `POST knowledge/{id}/recover` (recupera un `descartado_ia`), `POST proposals/decide {accept, reject, edits}`, `PUT knowledge/{id}`, `POST knowledge/{id}/retire`, `POST knowledge/forget-video/{video_id}`, `POST videos/{id}/learn` |
 | Voces | `GET people/{id}/voice` (huellas y las 3 mejores muestras), `GET voice-samples/{id}/audio`, `POST voice-embeddings/{id}/decide {keep}` (huella dudosa), `POST voices/recompute` (encola `only: ["voiceprints"]` en los vídeos revisados con datos de trabajo y archivo de vídeo), `DELETE people/{id}/voices` (también las muestras) |
 | Revisión | `GET videos/{id}/apply` (fases, segundos estimados y cambios), `POST videos/{id}/apply` («Aplicar y continuar»), `GET videos/{id}/review-items` (puntos de sus seguimientos con una duda de la IA), `POST followups/{id}/items/{item_id}/resolve {action: mismo\|distinto\|descartar}`. El detalle del vídeo incluye `review` (`review.out`), la tarjeta `review`, y `GET status`, `to_review` |
-| Seguimientos | `GET/POST followups`, `GET/PUT/DELETE followups/{id}` (PUT: `name`, `description`, `status`, `summary`, `use_ai_summary`; DELETE `?delete_folder`), `POST followups/{id}/open-folder`, `POST followups/{id}/videos/{video_id} {apply, regenerate}`, `DELETE followups/{id}/videos/{video_id}?rebuild`, `POST followups/{id}/rebuild?all_videos`, `POST/PUT/DELETE followups/{id}/items[/{item_id}]` (DELETE oculta), `GET followups/{id}/versions`, `POST followups/{id}/versions/{vid}/restore`. `POST jobs` admite `followup_ids`; `POST videos/{id}/regenerate` y `POST videos/{id}/remove`, `follow_rebuild[]`; el detalle del vídeo, `GET …/regenerate` y `GET …/removal` incluyen `followups` |
+| Seguimientos | `GET/POST followups`, `GET/PUT/DELETE followups/{id}` (PUT: `name`, `description`, `status`, `summary`, `use_ai_summary`; DELETE `?delete_folder`), `POST followups/{id}/open-folder`, `POST followups/{id}/videos/{video_id} {apply, regenerate}`, `DELETE followups/{id}/videos/{video_id}?rebuild`, `POST followups/{id}/rebuild?all_videos&since_video_id`, `POST/PUT/DELETE followups/{id}/items[/{item_id}]` (DELETE oculta), `GET followups/{id}/versions`, `POST followups/{id}/versions/{vid}/restore`. `POST jobs` admite `followup_ids`; `POST videos/{id}/regenerate` y `POST videos/{id}/remove`, `follow_rebuild[]`; el detalle del vídeo, `GET …/regenerate` y `GET …/removal` incluyen `followups` |
 | Búsqueda | `GET search?q&profile_id&person_id` |
 
 Las demás rutas sirven el SPA desde `frontend/dist`. Los errores se devuelven como
@@ -108,7 +110,8 @@ Las demás rutas sirven el SPA desde `frontend/dist`. Los errores se devuelven c
 
 `Job.options` admite: `file_mode` (move o copy), `skip_vision`, `main_track` (índice de pista o
 ausente para mezclar todas), `owner_track`, `min_speakers`, `max_speakers`, `num_speakers` y, de uso
-interno, `redo[]`, `only[]` y `follow_rebuild[]` (ver `AI_PIPELINE.md`).
+interno, `redo[]`, `only[]`, `follow_rebuild[]`, `apply` y `waiting_for` (ver `AI_PIPELINE.md`; las de un
+solo encolado están en `main.ONE_SHOT_OPTIONS`).
 
 Quitar un vídeo (`removal.py`, ver `AI_PIPELINE.md`): `POST videos/{id}/remove` lo saca de la BD,
 borra sus propuestas pendientes y, solo con las opciones que marque el usuario, borra ficheros. Sin
@@ -121,11 +124,10 @@ intenta convertir «duplicates» en un entero.
 
 ## Ajustes (`config.Settings`)
 
-`VT_DATA_DIR` (variable de entorno) cambia la carpeta de datos: base de datos, ajustes y `work/`. Se
-usa para pruebas y para segundas instancias.
-
-
 Es un modelo pydantic que se guarda en `data/settings.json`. La web lo edita con `PUT /api/settings`.
+`VT_DATA_DIR` (variable de entorno) cambia la carpeta de datos: base de datos, ajustes, `work/` y
+`voces/`. Se usa para pruebas y para segundas instancias.
+
 Al añadir un ajuste:
 1. Créalo con un valor por defecto, para que los `settings.json` antiguos sigan siendo válidos.
 2. Añádelo en `frontend/src/pages/Settings.tsx` solo si el usuario debe poder cambiarlo.
