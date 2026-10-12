@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+Incluye también los arreglos de la 1.6.1 (tag `v1.6.1`, sin release propia).
+
 ### Añadido
 
 - **De quién es la otra voz.** Cuando un hablante parece juntar dos voces, la app compara la voz de cada
@@ -20,7 +22,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   queda a nombre de las personas que conoce la app, por su nombre o su apodo. Lo que no es una persona conocida
   se queda como estaba.
 - **Sin repetir lo ya guardado.** La IA revisa las propuestas de un vídeo viendo también los términos y el
-  contexto del perfil que ya aceptaste en vídeos anteriores: lo que lo repite con otras palabras queda en «Descartadas por la IA», con el motivo.
+  contexto del perfil que ya aceptaste en vídeos anteriores: lo que lo repite con otras palabras queda en
+  «Descartadas por la IA», con el motivo.
 - **La biblioteca dice qué falta por decidir** en cada vídeo: «3 propuestas», «1 duda del seguimiento» o
   «1 voz dudosa», en lugar de un «Queda por decidir» que lo mezclaba todo.
 - La tarjeta de un vídeo ya no repite a una persona cuando un cambio manual de quién habla le crea otro
