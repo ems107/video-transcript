@@ -20,6 +20,9 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   - no mete en el resumen datos de las fichas de las personas (edad, estudios…) que no se dicen en el
     vídeo;
   - no repite el mismo asunto como tarea y como pendiente.
+- Una propuesta de conocimiento (o una nueva confirmación de algo ya sabido) solo vale si sus cifras se
+  dicen de verdad cerca de su momento: «Tiene 27 años» ya no se confirma con un momento en que solo se
+  habla de «años».
 
 ## [1.5.0] - 2026-10-12
 

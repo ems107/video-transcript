@@ -48,7 +48,10 @@ de cada persona.
 :::tecnico Cómo se comprueba cada propuesta
 La IA no se cree: cada propuesta se verifica en Python antes de mostrarse.
 - Un dato necesita una marca de tiempo dentro del tramo analizado y frases reales alrededor; al menos el
-  60 % de sus palabras con contenido deben aparecer en la transcripción en un margen de un minuto.
+  60 % de sus palabras con contenido deben aparecer en la transcripción en un margen de un minuto. Sus
+  cifras deben aparecer todas, en cifra o en palabra («27» o «veintisiete»): si no, «Tiene 27 años» valdría
+  con cualquier frase cercana que dijera «años». Esto vale también cuando un vídeo vuelve a confirmar algo
+  ya conocido.
 - Se descarta lo puntual de esa reunión («ayer», «la semana que viene», tareas concretas).
 - Lo rechazado no se vuelve a proponer, y lo pendiente de otros vídeos se le indica a la IA para que no lo
   repita con otras palabras.
