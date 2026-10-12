@@ -226,7 +226,8 @@ def video_card(session: Session, v: Video) -> dict[str, Any]:
         "recorded_at": v.recorded_at, "created_at": v.created_at, "folder": v.folder,
         "profile": profile.name if profile else None, "profile_id": v.profile_id,
         "summary": v.summary_md,
-        "people": [names[s.label] for s in sps],
+        # Sin repetir: un arreglo manual crea otro hablante de la misma persona
+        "people": list(dict.fromkeys(names[s.label] for s in sps)),
         "pending_speakers": sum(1 for s in sps if not s.confirmed),
         "review": v.review,
         "to_decide": review.pending(session, v) if v.review == review.PROPOSALS else None,

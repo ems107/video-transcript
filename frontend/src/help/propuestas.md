@@ -37,9 +37,10 @@ reconocer a una persona o a entender y transcribir los vídeos siguientes, o si 
 (lo que se explicó o se enseñó en ella, una tarea, algo puntual).
 - Lo que no sirve lo **descarta**: no te lo enseña como propuesta, pero queda en **Descartadas por la IA**,
   plegado al final de las propuestas del vídeo, con su motivo y el botón **Recuperar**.
-- Lo que repite otra propuesta también se descarta, y lo mismo lo que repite algo ya guardado en el perfil o
-  en la ficha de la persona, aunque esté escrito de otra forma (el motivo dice qué repite). Si añade algo
-  nuevo, se propone.
+- Lo que repite otra propuesta también se descarta, y lo mismo lo que repite un término o un hecho ya
+  guardado en el perfil, aunque esté escrito de otra forma (el motivo dice qué repite). Si añade algo nuevo,
+  se propone. Los datos de las personas no se comparan así: los repetidos los quita la comparación de textos
+  de siempre.
 - Lo que no tiene claro lo marca como **dudoso**, con el motivo.
 
 Un término que solo se ha visto en pantalla, sin que nadie lo mencione, puede tener que ver con la reunión

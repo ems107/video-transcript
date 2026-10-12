@@ -139,7 +139,14 @@ def test_library_card_says_what_is_left(client, session):
     _video(session, "Dos", state=review.PENDING)
     session.add(KnowledgeItem(kind="termino", data={"term": "Naturgy"}, video_id=a.id))
     session.commit()
+    p = Person(name="Iosu")
+    session.add(p)
+    session.commit()
+    session.add_all([Speaker(video_id=a.id, label="S1", order_idx=1, person_id=p.id),
+                     Speaker(video_id=a.id, label="MANUAL_1", order_idx=2, person_id=p.id)])
+    session.commit()
     cards = {c["title"]: c for c in client.get("/api/videos").json()}
+    assert cards["Uno"]["people"] == ["Iosu"]
     assert cards["Uno"]["to_decide"] == {"propuestas": 1, "seguimiento": 0, "voces": 0}
     assert cards["Dos"]["to_decide"] is None
 

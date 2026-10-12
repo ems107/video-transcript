@@ -363,6 +363,6 @@ def test_judgment_sees_what_is_already_saved():
                            {"id": 30, "kind": "seccion", "category": "", "data": {"title": "Acuerdos"}}]}
     people = [{"id": 1, "name": "Iosu", "in_video": True, "facts": [{"id": 41, "category": "cargo", "text": "Es planificador"}]}]
     assert known_items(profile, people) == {29: "Gestibarymont lleva los seguros", 41: "Iosu: Es planificador"}
-    text = judge_user("Sesión", "Tutoría", "", "0. [Iosu · dato] Es planificador", known_block(profile, people))
-    assert "Ya guardado en el perfil" in text and "[#29]" in text and "[#41]" in text and "ya_guardado" in text
+    text = judge_user("Sesión", "Tutoría", "", "0. [Iosu · dato] Es planificador", known_block(profile, []))
+    assert "Ya guardado en el perfil" in text and "[#29]" in text and "[#41]" not in text and "ya_guardado" in text
     assert "Ya guardado en el perfil" not in judge_user("Sesión", "Tutoría", "", "(ninguna)")

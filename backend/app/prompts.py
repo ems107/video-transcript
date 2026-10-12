@@ -454,7 +454,7 @@ Secciones con las que se organiza el resumen de este tipo de vídeo:
 {sections}
 """ if sections else "")
     sec += (f"""
-Ya guardado en el perfil y en las fichas de las personas (aceptado en vídeos anteriores):
+Ya guardado en el perfil (aceptado en vídeos anteriores):
 {known}
 """ if known else "")
     return f"""De qué trata el vídeo:
