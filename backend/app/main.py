@@ -1015,6 +1015,7 @@ def _detach(session: Session, f: Followup, v: Video, rebuild: bool) -> None:
     elif applied:
         FS.mark_stale(session, f, FS.date_of(v), f"Se quitó «{v.title}»; el estado aún incluye lo que aportó")
     FS.export(session, f)
+    services.export_video(session, v)
 
 
 @app.get("/api/followups")
@@ -1112,6 +1113,7 @@ def add_followup_video(followup_id: int, video_id: int, body: FollowupVideoIn | 
     else:
         FS.mark_stale(session, f, FS.date_of(v), f"«{v.title}» se añadió sin aplicarlo al estado")
     FS.export(session, f)
+    services.export_video(session, v)  # la línea «Seguimientos» de su documento
     return {**FS.out(session, f, full=True), "job_id": job["job_id"] if job else None}
 
 

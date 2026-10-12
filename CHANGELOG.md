@@ -8,6 +8,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Corregido
+
+- Al añadir un vídeo ya analizado a un seguimiento, o al quitarlo, su `resumen.md` ahora muestra o quita
+  la línea **Seguimientos** con el enlace.
+
 ## [1.5.0] - 2026-10-12
 
 La app sigue un tema a lo largo de varios vídeos.

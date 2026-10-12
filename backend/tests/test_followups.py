@@ -355,6 +355,21 @@ def test_api_videos(client, session, tmp_path):
     assert client.post("/api/jobs", json={"path": str(video2), "followup_ids": [f["id"]]}).status_code == 400
 
 
+def test_api_video_document_lists_followups(client, session, tmp_analyzed):
+    """Al añadir o quitar un vídeo ya publicado, su `resumen.md` dice en qué seguimientos está."""
+    v = _video(session, D1, "Primera")
+    v.folder = str(tmp_analyzed / "2026-10-04 - Primera")
+    (tmp_analyzed / "2026-10-04 - Primera").mkdir(parents=True)
+    session.add(v)
+    session.commit()
+    doc = tmp_analyzed / "2026-10-04 - Primera" / "resumen.md"
+    f = client.post("/api/followups", json={"name": "Tutoría"}).json()
+    client.post(f"/api/followups/{f['id']}/videos/{v.id}", json={"apply": False})
+    assert "**Seguimientos:** [Tutoría](../Seguimiento%20-%20Tutoría/seguimiento.md)" in doc.read_text(encoding="utf-8")
+    client.delete(f"/api/followups/{f['id']}/videos/{v.id}")
+    assert "Seguimientos" not in doc.read_text(encoding="utf-8")
+
+
 def test_regenerate_passes_follow_rebuild_once(client, session, tmp_path, monkeypatch):
     v = _video(session, D1, "Primera")
     f = _followup(session, v)
