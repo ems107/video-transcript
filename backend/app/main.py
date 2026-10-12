@@ -27,7 +27,7 @@ from . import people as people_mod
 from . import regenerate as regen
 from . import followups as FL
 from . import followups_store as FS
-from . import estimates, help_values, removal, review, speaker_fix
+from . import estimates, help_values, logs, removal, review, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -39,12 +39,15 @@ from .models import now as models_now
 from .pipeline.glossary import normalize
 from .worker import STAGE_LABELS, worker
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger(__name__)
 mimetypes.add_type("video/x-matroska", ".mkv")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings = load_settings()
+    logs.setup(settings.log_level, settings.log_keep_days)
+    log.info("Vídeo Transcript %s arrancado", __version__)
     ensure_dirs()
     init_db()
     worker.start()
@@ -102,8 +105,21 @@ def get_settings() -> Settings:
 
 @app.put("/api/settings")
 def put_settings(body: Settings) -> Settings:
+    old = load_settings().model_dump()
     save_settings(body)
+    logs.set_level(body.log_level)
+    changed = sorted(k for k, v in body.model_dump().items() if old.get(k) != v)
+    if changed:
+        log.info("Ajustes cambiados: %s", ", ".join(changed))  # solo los nombres: los valores pueden ser rutas
     return body
+
+
+@app.post("/api/logs/open-folder")
+def open_logs_folder() -> dict[str, Any]:
+    """Abre la carpeta de los registros en el Explorador."""
+    logs.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    os.startfile(logs.LOGS_DIR)  # noqa: S606  (abre el Explorador de Windows)
+    return {"ok": True}
 
 
 @app.get("/api/probe")

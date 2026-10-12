@@ -73,6 +73,10 @@ class Settings(BaseModel):
     # Resumen por bloques
     chunk_minutes: float = 30.0
 
+    # Registros (data/logs/AAAA-MM-DD.log): «DEBUG» añade cada consulta de la web y el progreso de las fases
+    log_level: Literal["INFO", "DEBUG"] = "INFO"
+    log_keep_days: int = 30
+
 
 # Valores por defecto de versiones anteriores que se guardaron en settings.json sin que el usuario los
 # eligiera: si siguen igual y no existen aún los ajustes que los sustituyen, se usan los nuevos

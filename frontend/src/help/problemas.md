@@ -2,7 +2,7 @@
 titulo: Problemas frecuentes
 seccion: Ayuda
 orden: 50
-claves: problemas, errores, preguntas, mal, no funciona, faq
+claves: problemas, errores, preguntas, mal, no funciona, faq, registros, logs, consola
 ---
 ## Un hablante tiene el nombre equivocado
 En el panel **Hablantes**, pulsa **Cambiar** y elige la persona correcta. Si el resumen ya usaba el nombre
@@ -44,3 +44,19 @@ servidor tienen que ser de la misma versión.
 ## La app reconoce mal a alguien por la voz
 Probablemente se confirmó una vez al hablante equivocado y su huella quedó mal. En **Personas**, pulsa
 **Olvidar voz** en esa persona y vuelve a confirmarla en un vídeo donde hable claramente.
+
+## Registros (logs)
+La app guarda lo que pasa en un fichero por día, en la carpeta `logs` de sus datos (`data/logs/2026-10-13.log`).
+Lo abres con **Abrir carpeta de registros** en [Ajustes](ayuda:ajustes). Es lo mismo que sale en la
+consola de `run.ps1`, con la fecha y la hora de cada línea, así que no hace falta copiar la consola.
+
+- Cada línea dice cuándo pasó, si fue normal (INFO), un fallo del que la app se recuperó (WARNING) o un
+  error (ERROR), qué parte de la app lo registró y, si es de un análisis, de qué trabajo, vídeo y fase.
+  Busca «vídeo 3» para ver todo lo que pasó con ese vídeo.
+- **No contiene lo que se dice en tus vídeos** ni tus notas, correcciones o datos de personas: solo
+  números de vídeo y de persona, fases, tiempos y recuentos. Puedes pasárselo a quien te ayude a encontrar
+  un fallo.
+- Se guardan los últimos {{v:log_keep_days}} días; los más antiguos se borran solos.
+- Para buscar un fallo concreto, pon **Detalle de los registros** en **Detallado**, repite lo que falla y
+  vuelve a Normal: el detallado añade cada consulta de la web y crece deprisa.
+- El modelo de IA escribe su propio registro en `data/llama-server.log`, útil si falla al arrancar.
