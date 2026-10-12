@@ -55,7 +55,8 @@ AFTER_REVIEW = {"voiceprints", "follow", "learn"}
 PARTIALS = {
     "vision": ("vision.partial.json",),
     "analyze": ("analysis.partial.json",),
-    "learn": ("learn.partial.json", "learn_error.json", "screen_judgment.raw.json"),
+    "learn": ("learn.partial.json", "learn_error.json", "screen_judgment.raw.json", "judgment.raw.json",
+              "judgment_error.json"),
 }
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 

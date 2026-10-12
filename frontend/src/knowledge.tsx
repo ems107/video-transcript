@@ -11,6 +11,14 @@ const KIND_LABEL: Record<string, string> = {
   dato: 'Dato',
   alias: 'Otro nombre',
   nueva_persona: 'Persona nueva',
+  correccion: 'Corrección de transcripción',
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  usuario: 'según tus correcciones',
+  pantalla: 'se lee así en pantalla',
+  glosario: 'ya lo corrigió el glosario',
+  ia: 'lo deduce la IA',
 }
 
 const PROFILE_CATEGORIES: [string, string][] = [
@@ -58,7 +66,7 @@ export function EvidenceView({ evidence }: { evidence: Evidence[] }) {
   )
 }
 
-type Edit = { text?: string; term?: string; definition?: string; title?: string; name?: string; category?: string }
+type Edit = { text?: string; term?: string; definition?: string; title?: string; name?: string; category?: string; variants?: string[] }
 
 function initialEdit(k: Knowledge): Edit {
   return { ...k.data, category: k.category } as Edit
@@ -78,6 +86,13 @@ function EditFields({ k, edit, setEdit }: { k: Knowledge; edit: Edit; setEdit: (
         <textarea rows={2} value={edit.text ?? ''} onChange={(e) => setEdit({ ...edit, text: e.target.value })} />
       )}
       {k.kind === 'seccion' && <input value={edit.title ?? ''} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />}
+      {k.kind === 'correccion' && (
+        <div className="grid2">
+          <input value={edit.term ?? ''} onChange={(e) => setEdit({ ...edit, term: e.target.value })} placeholder="Cómo se escribe" />
+          <input value={(edit.variants ?? []).join(', ')} placeholder="Cómo se oye mal (separadas por comas)"
+            onChange={(e) => setEdit({ ...edit, variants: e.target.value.split(',').map((x) => x.trim()) })} />
+        </div>
+      )}
       {(k.kind === 'alias' || k.kind === 'nueva_persona') && (
         <input value={edit.name ?? ''} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Nombre" />
       )}
@@ -91,6 +106,14 @@ function EditFields({ k, edit, setEdit }: { k: Knowledge; edit: Edit; setEdit: (
 }
 
 function Body({ k }: { k: Knowledge }) {
+  if (k.kind === 'correccion') return (
+    <div>
+      <b>{k.data.term}</b> <span className="muted">se oye como</span> {(k.data.variants ?? []).map((v) => `«${v}»`).join(', ')}
+      <div className="small muted">
+        {k.data.fuente && SOURCE_LABEL[k.data.fuente]}{k.data.motivo && `${k.data.fuente ? ': ' : ''}${k.data.motivo}`}
+      </div>
+    </div>
+  )
   if (k.kind === 'termino') return (
     <div>
       <b>{k.data.term}</b>{k.data.definition && <span className="muted"> — {k.data.definition}</span>}
@@ -151,6 +174,7 @@ export function ProposalCard({ k, showOwner, onChange }: { k: Knowledge; showOwn
             {k.status === 'propuesto' && isDoubtful(k) && <span className="pill warn" title="Decide tú: «Aceptar todas» no la incluye">dudosa</span>}
           </div>
           {editing ? <EditFields k={k} edit={edit} setEdit={setEdit} /> : <Body k={k} />}
+          {k.data.juicio?.valor === 'dudosa' && k.data.juicio.motivo && <div className="small muted">Por qué es dudosa: {k.data.juicio.motivo}</div>}
           {k.replaces && <div className="small muted">Sustituye a: «{k.replaces.text}»</div>}
           <EvidenceView evidence={k.evidence} />
           {error && <div className="error-box small" style={{ marginTop: '0.4rem' }}>{error}</div>}
@@ -165,8 +189,17 @@ export function ProposalCard({ k, showOwner, onChange }: { k: Knowledge; showOwn
   )
 }
 
-// Términos vistos solo en pantalla cuya relación con el vídeo no está clara
-const isDoubtful = (k: Knowledge) => k.data.pantalla?.relacion === 'dudoso'
+// Lo que la IA no tiene claro: términos vistos solo en pantalla y lo que la pasada de juicio marca como dudoso
+const isDoubtful = (k: Knowledge) => k.data.pantalla?.relacion === 'dudoso' || k.data.juicio?.valor === 'dudosa'
+
+// Orden dentro de un vídeo: primero lo que más ayuda en los vídeos siguientes (cómo se oye mal un término,
+// quién es cada persona), después el contexto y los términos, y al final lo dudoso
+const IDENTIFYING = ['cargo', 'organizacion', 'equipo', 'relacion', 'responsabilidad']
+function rank(k: Knowledge): number {
+  const base = k.kind === 'correccion' ? 0 : k.kind === 'alias' ? 1 : k.kind === 'dato' && IDENTIFYING.includes(k.category) ? 2
+    : k.kind === 'nueva_persona' ? 3 : k.kind === 'contexto' ? 4 : k.kind === 'termino' ? 5 : k.kind === 'dato' ? 6 : 7
+  return base + (isDoubtful(k) ? 10 : 0)
+}
 
 // Propuestas pendientes agrupadas por vídeo
 export function ProposalList({ query = '', showOwner = true, empty }: { query?: string; showOwner?: boolean; empty: string }) {
@@ -180,12 +213,7 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
 
   if (!data) return <p className="muted">Cargando…</p>
 
-  // Dentro de cada vídeo: primero el perfil, después cada persona y al final las personas nuevas
-  const ownerRank = { profile: 0, person: 1, speaker: 1, new: 2 }
-  const kindRank = ['termino', 'contexto', 'seccion', 'dato', 'alias', 'nueva_persona']
-  const sorted = [...data.items].sort((a, b) =>
-    ownerRank[a.owner.type] - ownerRank[b.owner.type] || a.owner.name.localeCompare(b.owner.name)
-    || kindRank.indexOf(a.kind) - kindRank.indexOf(b.kind) || Number(isDoubtful(a)) - Number(isDoubtful(b)) || a.id - b.id)
+  const sorted = [...data.items].sort((a, b) => rank(a) - rank(b) || a.owner.name.localeCompare(b.owner.name) || a.id - b.id)
   const groups = new Map<string, Knowledge[]>()
   for (const k of sorted) {
     const key = `${k.video_id ?? ''}|${k.video_title}`
@@ -226,6 +254,7 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
           </div>
         )
       })}
+      {(data.discarded ?? []).length > 0 && <DiscardedList items={data.discarded} onChange={load} />}
       {data.waiting.length > 0 && (
         <details className="card pad">
           <summary style={{ cursor: 'pointer' }}>
@@ -242,6 +271,37 @@ export function ProposalList({ query = '', showOwner = true, empty }: { query?: 
         </details>
       )}
     </div>
+  )
+}
+
+// Lo que la pasada de juicio de la IA descartó: plegado, con su motivo y la opción de recuperarlo
+function DiscardedList({ items, onChange }: { items: Knowledge[]; onChange: () => void }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <details className="card pad">
+      <summary style={{ cursor: 'pointer' }}>
+        <b>Descartadas por la IA ({items.length})</b>
+        <span className="muted small"> · no se usan; recupera las que te sirvan</span>
+      </summary>
+      <ul className="small" style={{ marginBottom: 0 }}>
+        {items.map((k) => (
+          <li key={k.id} style={{ marginBottom: '0.3rem' }}>
+            <span className="pill">{KIND_LABEL[k.kind]}</span> {k.owner.type !== 'profile' && <b>{ownerLabel(k)}: </b>}{k.text}
+            {k.data.juicio?.motivo && <span className="muted"> — {k.data.juicio.motivo}</span>}{' '}
+            <button className="sm" disabled={busy} onClick={async () => {
+              setBusy(true)
+              try {
+                await api.post(`/api/knowledge/${k.id}/recover`)
+                notifyKnowledge()
+                onChange()
+              } finally {
+                setBusy(false)
+              }
+            }}>Recuperar</button>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
@@ -299,6 +359,7 @@ export function KnowledgeList({ url, empty }: { url: string; empty: string }) {
   const groups = new Map<string, Knowledge[]>()
   for (const k of items) {
     const g = k.kind === 'termino' ? 'Términos' : k.kind === 'seccion' ? 'Secciones del resumen' : k.kind === 'alias' ? 'Otros nombres'
+      : k.kind === 'correccion' ? 'Cómo se oyen mal los términos'
       : k.category_label || KIND_LABEL[k.kind]
     groups.set(g, [...(groups.get(g) ?? []), k])
   }

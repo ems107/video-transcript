@@ -227,7 +227,7 @@ def drop_pending_from(session: Session, video_id: int) -> None:
     Lo aceptado y lo rechazado se conserva; una propuesta que también viene de otros vídeos solo pierde
     la evidencia de este.
     """
-    q = select(KnowledgeItem).where(KnowledgeItem.status == "propuesto")
+    q = select(KnowledgeItem).where(KnowledgeItem.status.in_(["propuesto", "descartado_ia"]))
     for it in session.exec(q):
         ev = it.evidence or []
         rest = [e for e in ev if e.get("video_id") != video_id]
@@ -257,6 +257,9 @@ def merge_proposals(session: Session, video_id: int, proposals: list[dict[str, A
         key = K.item_key(p["kind"], p["data"])
         ev = {"video_id": video_id, "t": p["t"], "lines": p["lines"]}
         match = K.find_match(p["kind"], key, [item_dict(i) for i in existing])
+        discarded = p.get("status") == "descartado_ia"
+        if match and discarded:
+            continue  # la IA lo descarta: tampoco cuenta como una confirmación más de lo ya sabido
         if match:
             it = session.get(KnowledgeItem, match["id"])
             if it.status in ("rechazado", "retirado"):
@@ -280,7 +283,8 @@ def merge_proposals(session: Session, video_id: int, proposals: list[dict[str, A
             if not (target and target.status == "aceptado" and target.kind == p["kind"]):
                 replaces = None
         session.add(KnowledgeItem(**fields, kind=p["kind"], category=p.get("category", ""), data=p["data"], key=key,
-                                  video_id=video_id, replaces_id=replaces, evidence=[ev], last_seen_at=when))
-        stats["nuevas"] += 1
+                                  video_id=video_id, replaces_id=replaces, evidence=[ev], last_seen_at=when,
+                                  status="descartado_ia" if discarded else "propuesto"))
+        stats["descartadas" if discarded else "nuevas"] += 1
     session.commit()
     return stats

@@ -163,7 +163,7 @@ export type PersonDetail = Person & {
 export type Duplicate = { a: number; b: number; a_name: string; b_name: string; reasons: ('nombre' | 'voz')[] }
 
 // Conocimiento aprendido (aceptado) o propuesto por la IA
-export type KnowledgeKind = 'termino' | 'contexto' | 'seccion' | 'dato' | 'alias' | 'nueva_persona'
+export type KnowledgeKind = 'termino' | 'contexto' | 'seccion' | 'dato' | 'alias' | 'nueva_persona' | 'correccion'
 export type EvidenceLine = { t: number; label: string; name: string; text: string }
 export type Evidence = { video_id: number; video_title: string; t: number | null; lines: EvidenceLine[] }
 export type Knowledge = {
@@ -177,12 +177,16 @@ export type Knowledge = {
     definition?: string
     forms?: string[] // otras formas del mismo nombre (términos)
     pantalla?: { relacion: 'relacionado' | 'dudoso'; motivo: string } // término visto solo en pantalla
+    variants?: string[] // corrección de transcripción: cómo se oye mal el término
+    fuente?: 'usuario' | 'pantalla' | 'glosario' | 'ia' // de dónde sale la forma correcta
+    motivo?: string
+    juicio?: { valor: 'util' | 'dudosa' | 'descartar'; motivo: string } // pasada de juicio de la IA
     title?: string
     name?: string
     datos?: { category: string; text: string; t: number | null }[]
   }
   text: string
-  status: 'propuesto' | 'aceptado' | 'rechazado' | 'retirado'
+  status: 'propuesto' | 'aceptado' | 'rechazado' | 'retirado' | 'descartado_ia'
   seen_count: number
   video_id: number | null
   video_title: string
@@ -191,7 +195,7 @@ export type Knowledge = {
   replaces: { id: number; text: string } | null
   last_seen_at: string | null
 }
-export type Proposals = { items: Knowledge[]; waiting: Knowledge[] }
+export type Proposals = { items: Knowledge[]; waiting: Knowledge[]; discarded: Knowledge[] } // discarded: solo con video_id
 export type Version = {
   id: number
   created_at: string

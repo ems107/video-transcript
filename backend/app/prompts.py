@@ -350,8 +350,17 @@ LEARN_SCHEMA = {
             },
         },
         "secciones": {"type": "array", "items": {"type": "string"}},
+        "correcciones": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"oido": {"type": "string"}, "correcto": {"type": "string"},
+                               "motivo": {"type": "string"}, "t": {"type": "string"}},
+                "required": ["oido", "correcto", "motivo", "t"],
+            },
+        },
     },
-    "required": ["terminos", "contexto", "personas", "secciones"],
+    "required": ["terminos", "contexto", "personas", "secciones", "correcciones"],
 }
 
 
@@ -363,7 +372,12 @@ def learn_user(context: str, known: str, rejected: list[str], candidates: list[s
         "personas), escritos tal como aparecen; no palabras comunes. definicion: qué es, de forma general y "
         "duradera, solo si se explica o es evidente; si no, cadena vacía.\n"
         "- contexto: hechos duraderos del negocio (categoria: proyecto, cliente, sistema, proceso, sigla u otro).\n"
-        if with_profile else "- terminos y contexto: listas vacías.\n"
+        "- correcciones: nombres propios o términos del negocio que la transcripción escribe mal (suenan como "
+        "otro nombre que encaja por el contexto, la pantalla o las notas del usuario; por ejemplo, una empresa "
+        "conocida escrita como otra palabra). oido: tal como aparece escrito en la transcripción; correcto: "
+        "cómo se escribe; motivo: por qué lo crees; t: la marca de tiempo. No incluyas palabras comunes ni "
+        "faltas de ortografía. Lista vacía si no hay.\n"
+        if with_profile else "- terminos, contexto y correcciones: listas vacías.\n"
     )
     sections = ("- secciones: hasta 5 títulos de secciones para organizar el resumen de cualquier vídeo de este \
 tipo, no solo de este. Deben servir aunque el próximo vídeo trate otro tema: describen la estructura (por \
@@ -384,6 +398,86 @@ Devuelve:
 el de la persona mencionada. categoria: cargo, organizacion, equipo, responsabilidad, proyecto, conocimiento \
 (materias o sistemas que domina, no hechos concretos que sabe), relacion, personal u otro. dato: la frase.
 {sections}"""
+
+
+# --------------------------------------------------------------------------- juicio de las propuestas
+
+# Segunda pasada: la IA revisa todas las propuestas juntas antes de enseñarlas. La extracción, fragmento a
+# fragmento, proponía lo que se explicaba en la reunión como datos de quien lo explicaba («Sabe que la regla
+# del 72…») y términos sin valor para el perfil; pedírselo con más fuerza en el mismo prompt no bastaba.
+JUDGE_SYSTEM = """Revisas lo que la IA ha propuesto aprender de una grabación (reunión o sesión de trabajo) \
+antes de enseñárselo al usuario. Lo aceptado se usará para reconocer a las personas y para entender y \
+transcribir las próximas grabaciones del mismo tipo. Razona cada propuesta con lo que se sabe del vídeo y \
+de su evidencia; no apliques reglas fijas por palabras."""
+
+JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "propuestas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "valor": {"type": "string", "enum": ["util", "dudosa", "descartar"]},
+                    "motivo": {"type": "string"},
+                    "igual_que": {"type": "integer"},
+                    "perfil": {"type": "boolean"},
+                },
+                "required": ["id", "valor", "motivo", "igual_que", "perfil"],
+            },
+        },
+        "secciones": {
+            "type": "object",
+            "properties": {
+                "encajan": {"type": "boolean"},
+                "motivo": {"type": "string"},
+                "propuestas": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"titulo": {"type": "string"}, "reemplaza": {"type": "integer"}},
+                        "required": ["titulo", "reemplaza"],
+                    },
+                },
+            },
+            "required": ["encajan", "motivo", "propuestas"],
+        },
+    },
+    "required": ["propuestas", "secciones"],
+}
+
+
+def judge_user(about: str, profile: str, sections: str, proposals: str) -> str:
+    sec = (f"""
+Secciones con las que se organiza el resumen de este tipo de vídeo:
+{sections}
+""" if sections else "")
+    return f"""De qué trata el vídeo:
+{about}
+
+Tipo de vídeo: {profile or "(sin perfil)"}
+{sec}
+Propuestas (número, a quién o a qué se refiere, tipo, texto y la frase de la que sale):
+{proposals}
+
+Para cada propuesta devuelve:
+- id: su número.
+- valor: «util» si ayuda a reconocer a una persona (quién es, su cargo, su organización, su relación con \
+los demás, cómo la llaman) o a entender o transcribir próximas grabaciones de este tipo (un término o un \
+nombre que se repetirá, cómo se oye mal un nombre, un hecho duradero del negocio); «dudosa» si puede servir \
+pero no está claro, o si la frase de la que sale no lo dice del todo; «descartar» si es contenido puntual \
+de esta reunión (lo que se explicó, se enseñó o se hizo en ella, una tarea, un dato de un momento), algo \
+obvio, algo que se ve en pantalla sin relación con el tema, o algo que la frase no dice.
+- motivo: por qué, en pocas palabras.
+- igual_que: el número de otra propuesta de esta lista que dice lo mismo (la que sobra lleva el número de \
+la que se queda), o 0.
+- perfil: true solo si es un dato de una persona que en realidad es un hecho duradero del negocio, útil \
+para el tipo de vídeo (se propondrá como contexto del perfil); si no, false.
+Y en «secciones»: encajan (si las secciones sirven para organizar el resumen de este vídeo y de los \
+siguientes de este tipo), motivo, y propuestas: si no encajan, hasta 2 títulos generales que sirvan para \
+cualquier vídeo de este tipo (reemplaza: el número [#…] de la sección que sustituye, o 0). Si encajan o no \
+hay secciones, lista vacía."""
 
 
 # --------------------------------------------------------------------------- seguimientos
@@ -558,7 +652,7 @@ que no se usan); «dudoso» si no está claro. Si dudas entre «relacionado» y 
 # Sin un máximo, el modelo puede entrar en un bucle repitiendo un elemento hasta agotar los tokens (pasó
 # con «apodos»: la misma pareja decenas de veces). El límite se aplica en la gramática de llama.cpp.
 LIST_LIMITS = {"apodos": 10, "identidades": 10, "participantes": 20, "terminos": 30, "secciones": 12,
-               "clasificacion": 40, "menciones": 20}
+               "clasificacion": 40, "menciones": 20, "correcciones": 15, "propuestas": 30}
 LIST_DEFAULT = 40
 
 

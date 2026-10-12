@@ -201,3 +201,126 @@ def test_participants_seen_on_screen_are_not_terms():
               "contexto": [], "personas": [], "secciones": []}
     props = collect_proposals([result], [(0.0, 60.0)], utts, vision, NAMES, PEOPLE, PROFILE, names, False)
     assert [p["data"]["term"] for p in props if p["kind"] == "termino"] == ["Plan Light"]
+
+
+def test_corrections_from_the_ai_the_screen_and_the_glossary():
+    """Formas mal transcritas: se oyen tal cual, se agrupan por término y se marca de dónde sale la forma correcta."""
+    from app.pipeline.learn import collect_corrections
+
+    utts = [
+        {"start": 10.0, "end": 14.0, "speaker": "A", "text": "La luz la tenemos con Natur y el gas también."},
+        {"start": 20.0, "end": 24.0, "speaker": "A", "text": "El seguro de vida es de Mapfre, lo dice la póliza.",
+         "original_text": "El seguro de vida es de MAFRE, lo dice la póliza.",
+         "corrections": [{"original": "MAFRE", "suggestion": "Mapfre", "kind": "fonetica", "score": 90}]},
+        {"start": 30.0, "end": 34.0, "speaker": "A", "text": "Y el de casa con Yendesa, creo."},
+        {"start": 40.0, "end": 44.0, "speaker": "A", "text": "Lo revisamos en Auradirect."},
+    ]
+    vision = [{"t": 41.0, "texto_relevante": "Ahorro Directo · Informe", "terminos": ["Ahorro Directo"], "descripcion": ""}]
+    profile = {**PROFILE, "glossary": [{"term": "Mapfre", "variants": [], "definition": ""}]}
+    results = [{"correcciones": [
+        {"oido": "Natur", "correcto": "Naturgy", "motivo": "Compañía de luz y gas", "t": "00:00:10"},
+        {"oido": "Yendesa", "correcto": "Endesa", "motivo": "Compañía eléctrica", "t": "00:00:30"},
+        {"oido": "Iberdrola", "correcto": "Iberdrola S.A.", "motivo": "no se oye", "t": "00:00:30"},
+    ]}]
+    out = collect_corrections(results, utts, vision, ["Ahorro Directo"], profile, ["Natur es Naturgy"])
+    by_term = {p["data"]["term"]: p["data"] for p in out}
+    assert set(by_term) == {"Naturgy", "Endesa", "Mapfre", "Ahorro Directo"}  # Iberdrola no se oye así
+    assert by_term["Naturgy"]["fuente"] == "usuario" and "juicio" not in by_term["Naturgy"]
+    assert by_term["Endesa"]["fuente"] == "ia" and by_term["Endesa"]["juicio"]["valor"] == "dudosa"
+    assert by_term["Mapfre"] == {"term": "Mapfre", "variants": ["MAFRE"], "fuente": "glosario",
+                                 "motivo": "La corrección de términos ya cambió «MAFRE» por «Mapfre» en este vídeo."}
+    assert by_term["Ahorro Directo"]["fuente"] == "pantalla" and by_term["Ahorro Directo"]["variants"] == ["Auradirect"]
+    # Las más fiables primero; la evidencia muestra lo que se oyó, no lo ya corregido
+    assert out[0]["data"]["fuente"] == "usuario"
+    mapfre = next(p for p in out if p["data"]["term"] == "Mapfre")
+    assert any("MAFRE" in ln["text"] for ln in mapfre["lines"]) and mapfre["t"] == 20.0
+    # Lo ya conocido no se vuelve a proponer
+    known = {**profile, "learned": [{"kind": "correccion", "data": {"term": "Naturgy", "variants": ["Natur"]}}]}
+    assert "Naturgy" not in {p["data"]["term"] for p in collect_corrections(results, utts, vision, [], known, [])}
+
+
+def test_accepted_corrections_become_trusted_variants():
+    from app.knowledge import effective_glossary, item_key
+
+    profile = {"glossary": [{"term": "Mapfre", "variants": ["Mafre"], "definition": "aseguradora"}],
+               "learned": [{"kind": "termino", "data": {"term": "Barymont"}},
+                           {"kind": "correccion", "data": {"term": "Mapfre", "variants": ["MAFRE", "mafre"]}},
+                           {"kind": "correccion", "data": {"term": "Barymont", "variants": ["Bárimon"]}},
+                           {"kind": "correccion", "data": {"term": "Naturgy", "variants": ["Natur"]}}]}
+    g = {e["term"]: e for e in effective_glossary(profile)}
+    assert g["Mapfre"]["variants"] == ["Mafre"] and g["Mapfre"]["trusted"]  # «MAFRE» ya estaba (normalizado)
+    assert g["Barymont"]["variants"] == ["Bárimon"] and g["Barymont"]["trusted"]
+    assert g["Naturgy"] == {"term": "Naturgy", "variants": ["Natur"], "definition": "", "trusted": True}
+    assert item_key("correccion", {"term": "Naturgy", "variants": ["Natur", "Naturgi"]}) == "naturgy|natur|naturgi"
+
+
+def test_judgment_discards_dedupes_and_moves_to_the_profile():
+    from app.pipeline.learn import apply_proposal_judgment, section_proposals
+
+    def prop(kind, text, owner=("speaker", "S1"), category="conocimiento"):
+        data = {"term": text} if kind == "termino" else {"text": text}
+        return {"kind": kind, "category": category, "owner": owner, "data": data, "t": 1.0, "lines": [], "replaces": 0}
+
+    proposals = [
+        prop("dato", "Sabe que la regla del 72 calcula cuándo se dobla el dinero"),
+        prop("dato", "Es planificador financiero en Barymont", category="cargo"),
+        prop("dato", "Trabaja como planificador financiero en Barymont", category="cargo"),
+        prop("dato", "Ofrece tres sesiones: conceptos básicos, diagnóstico e informe", category="otro"),
+        prop("termino", "Stripe", owner=("profile", None), category=""),
+        prop("dato", "Tiene dos hijos", category="personal"),
+        prop("alias", "Selu"),
+    ]
+    answer = {"propuestas": [
+        {"id": 0, "valor": "descartar", "motivo": "Es lo que explicó en la sesión", "igual_que": 0, "perfil": False},
+        {"id": 1, "valor": "util", "motivo": "Su cargo", "igual_que": 0, "perfil": False},
+        {"id": 2, "valor": "util", "motivo": "Su cargo", "igual_que": 1, "perfil": False},
+        {"id": 3, "valor": "util", "motivo": "Cómo es el servicio", "igual_que": 0, "perfil": True},
+        {"id": 4, "valor": "descartar", "motivo": "Solo se ve en una pestaña", "igual_que": 0, "perfil": False},
+        {"id": 5, "valor": "dudosa", "motivo": "No queda claro de quién habla", "igual_que": 0, "perfil": False},
+        {"id": 6, "valor": "descartar", "motivo": "no se juzgan", "igual_que": 0, "perfil": False},
+    ]}
+    out = apply_proposal_judgment(proposals, answer, has_profile=True)
+    assert [p.get("status", "propuesto") for p in out] == [
+        "descartado_ia", "propuesto", "descartado_ia", "propuesto", "descartado_ia", "propuesto", "propuesto"]
+    assert out[2]["data"]["juicio"]["motivo"] == "Repite otra propuesta: «Es planificador financiero en Barymont»."
+    assert out[3]["kind"] == "contexto" and out[3]["owner"] == ("profile", None) and out[3]["category"] == "otro"
+    assert out[5]["data"]["juicio"] == {"valor": "dudosa", "motivo": "No queda claro de quién habla"}
+    assert "juicio" not in out[6]["data"]  # las otras formas de nombre no se juzgan
+    # Sin perfil, un dato no se puede pasar al perfil
+    assert apply_proposal_judgment(proposals, answer, has_profile=False)[3]["kind"] == "dato"
+
+    sec = {"secciones": {"encajan": False, "motivo": "Son de una reunión administrativa",
+                         "propuestas": [{"titulo": "Qué se trató", "reemplaza": 7}, {"titulo": "Datos", "reemplaza": 99},
+                                        {"titulo": "Otra más", "reemplaza": 0}]}}
+    s = section_proposals(sec, {7: "Gestión administrativa y datos"})
+    assert [(x["data"]["title"], x["replaces"]) for x in s] == [("Qué se trató", 7), ("Datos", 0)]
+    assert section_proposals({"secciones": {"encajan": True, "motivo": "", "propuestas": []}}, {}) == []
+
+
+def test_discarded_proposals_are_saved_listed_and_recoverable(client, session):
+    p = Profile(name="Tutoría")
+    session.add(p)
+    session.commit()
+    v = Video(source_path="a.mkv", title="Uno", status="done", profile_id=p.id, recorded_at=datetime(2026, 9, 2),
+              review="propuestas")
+    session.add(v)
+    session.commit()
+    vid = v.id
+    stats = KS.merge_proposals(session, vid, [
+        {"kind": "termino", "category": "", "owner": ("profile", None), "data": {"term": "Stripe", "juicio": {
+            "valor": "descartar", "motivo": "Solo en una pestaña"}}, "t": 1.0, "lines": [], "replaces": 0,
+         "status": "descartado_ia"},
+        {"kind": "termino", "category": "", "owner": ("profile", None), "data": {"term": "Barymont"}, "t": 2.0,
+         "lines": [], "replaces": 0},
+    ], 0.75)
+    assert stats["nuevas"] == 1 and stats["descartadas"] == 1
+    r = client.get(f"/api/proposals?video_id={vid}").json()
+    assert [k["text"] for k in r["items"]] == ["Barymont"] and [k["text"] for k in r["discarded"]] == ["Stripe"]
+    # Decidir la única propuesta deja el vídeo revisado; recuperar una descartada vuelve a dejar algo por decidir
+    client.post("/api/proposals/decide", json={"accept": [r["items"][0]["id"]]})
+    session.expire_all()
+    assert session.get(Video, vid).review == "revisado"
+    assert client.post(f"/api/knowledge/{r['discarded'][0]['id']}/recover").json() == {"ok": True}
+    session.expire_all()
+    assert session.get(Video, vid).review == "propuestas"
+    assert [k["text"] for k in client.get(f"/api/proposals?video_id={vid}").json()["items"]] == ["Stripe"]

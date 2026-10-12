@@ -75,9 +75,15 @@ def proposal_out(session: Session, r: Resolver, it: KnowledgeItem, person_id: in
 
 def list_proposals(session: Session, auto: float, video_id: int | None = None, profile_id: int | None = None,
                    person_id: int | None = None) -> dict[str, list[dict[str, Any]]]:
-    """Propuestas pendientes; las de hablantes aún sin identificar con seguridad van en «waiting»."""
+    """Propuestas pendientes; las de hablantes aún sin identificar con seguridad van en «waiting». Con
+    `video_id`, también las que descartó la pasada de juicio de ese vídeo («discarded»), para recuperarlas."""
     r = Resolver(session, auto)
-    ready, waiting = [], []
+    ready, waiting, discarded = [], [], []
+    if video_id is not None:
+        for it in session.exec(select(KnowledgeItem).where(KnowledgeItem.video_id == video_id,
+                                                           KnowledgeItem.status == "descartado_ia")):
+            pid = r.person_of(it) if it.kind in K.PERSON_KINDS else None
+            discarded.append(proposal_out(session, r, it, pid))
     for it in _pending(session):
         if video_id is not None and it.video_id != video_id:
             continue
@@ -88,7 +94,7 @@ def list_proposals(session: Session, auto: float, video_id: int | None = None, p
             continue
         out = proposal_out(session, r, it, pid)
         (waiting if it.kind in K.PERSON_KINDS and pid is None else ready).append(out)
-    return {"items": ready, "waiting": waiting}
+    return {"items": ready, "waiting": waiting, "discarded": discarded}
 
 
 def pending_count(session: Session, auto: float) -> int:
@@ -175,6 +181,8 @@ def apply_edit(it: KnowledgeItem, edit: dict[str, Any]) -> None:
     for k in ("text", "term", "definition", "title", "name"):
         if k in edit and isinstance(edit[k], str):
             data[k] = edit[k].strip()
+    if isinstance(edit.get("variants"), list):  # formas oídas de una corrección de transcripción
+        data["variants"] = [v.strip() for v in edit["variants"] if isinstance(v, str) and v.strip()]
     it.data = data
     if edit.get("category") in (*K.PROFILE_CATEGORIES, *K.PERSON_CATEGORIES):
         it.category = edit["category"]

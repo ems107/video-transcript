@@ -159,7 +159,7 @@ def remove(session: Session, v: Video, opts: Options) -> dict[str, Any]:
             session.delete(e)
     # Lo pendiente de este vídeo ya no se podría revisar; lo aceptado se conserva salvo que se olvide
     for it in session.exec(select(KnowledgeItem).where(KnowledgeItem.video_id == v.id,
-                                                       KnowledgeItem.status == "propuesto")):
+                                                       KnowledgeItem.status.in_(["propuesto", "descartado_ia"]))):
         session.delete(it)
     session.connection().execute(text("DELETE FROM search_fts WHERE video_id = :v"), {"v": v.id})
     for model in (Segment, Keyframe, Speaker, Job):

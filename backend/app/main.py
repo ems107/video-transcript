@@ -905,6 +905,7 @@ class ItemEdit(BaseModel):
     title: str | None = None
     name: str | None = None
     category: str | None = None
+    variants: list[str] | None = None  # formas oídas de una corrección de transcripción
 
 
 @app.get("/api/proposals")
@@ -948,6 +949,23 @@ def edit_knowledge(item_id: int, body: ItemEdit, session: Session = SessionDep) 
     if it.status != "aceptado":
         raise HTTPException(400, "Solo se pueden editar datos aceptados; las propuestas se editan al aceptarlas")
     PR.update_item(session, it, body.model_dump(exclude_none=True))
+    return {"ok": True}
+
+
+@app.post("/api/knowledge/{item_id}/recover")
+def recover_proposal(item_id: int, session: Session = SessionDep) -> dict[str, Any]:
+    """Vuelve a proponer algo que descartó la pasada de juicio de la IA."""
+    it = _404(session.get(KnowledgeItem, item_id), "Propuesta")
+    if it.status != "descartado_ia":
+        raise HTTPException(400, "Solo se pueden recuperar las propuestas descartadas por la IA")
+    it.status = "propuesto"
+    session.add(it)
+    session.commit()
+    v = session.get(Video, it.video_id) if it.video_id else None
+    if v and v.review == review.DONE:
+        v.review = review.PROPOSALS  # vuelve a haber algo por decidir
+        session.add(v)
+        session.commit()
     return {"ok": True}
 
 

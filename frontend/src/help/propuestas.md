@@ -2,19 +2,48 @@
 titulo: Propuestas y aprendizaje
 seccion: Conocimiento
 orden: 21
-claves: propuestas, aprender, aceptar, rechazar, evidencia, conocimiento, esperando
+claves: propuestas, aprender, aceptar, rechazar, evidencia, conocimiento, esperando, corrección de transcripción, mal transcrito, descartadas, dudosa
 ---
-Después de analizar cada vídeo, la IA **propone** lo que ha aprendido: términos y contexto para el perfil,
-datos de las personas y personas nuevas que se mencionan. **Nada se usa hasta que lo aceptas.** La página
-**Propuestas** (con un contador en la barra lateral) las reúne todas.
+Cuando aplicas la [revisión de un vídeo](ayuda:revision), la IA **propone** lo que ha aprendido de él:
+cómo se oyen mal los términos, términos y contexto para el perfil, datos de las personas y personas nuevas
+que se mencionan. **Nada se usa hasta que lo aceptas.** La página **Propuestas** (con un contador en la
+barra lateral) las reúne todas, y la pantalla **Revisar este vídeo**, las de cada vídeo.
+
+Van ordenadas por lo que más ayuda en los vídeos siguientes: primero las correcciones de transcripción,
+después lo que identifica a cada persona (otros nombres, cargo, organización, relación), luego el contexto
+y los términos, y al final lo dudoso.
 
 ![La página de propuestas](captura:propuestas)
 
-## Propuestas dudosas
+## Cómo se oyen mal los términos
+
+Whisper a veces escribe mal un nombre: «Natur» por «Naturgy», «MAFRE» por «Mapfre». La IA lo detecta y
+propone una **corrección de transcripción**: el término y las formas en que se oye mal, con las frases
+donde aparecen (para escucharlas). Al aceptarla, esas formas se corrigen solas en los vídeos siguientes y
+el término orienta a Whisper. Es lo mismo que añadir una variante en el [glosario del perfil](ayuda:perfiles#glosario).
+
+Cada corrección dice en qué se apoya, de más a menos fiable:
+- **según tus correcciones**: lo escribiste tú en las [correcciones](ayuda:correcciones) del vídeo;
+- **se lee así en pantalla**: el nombre bien escrito se ve en pantalla y suena como lo transcrito;
+- **ya lo corrigió el glosario**: la corrección de términos ya lo cambió en este vídeo; aceptarla lo hace
+  automático;
+- **lo deduce la IA**: sin otra prueba. Va marcada como **dudosa**: escucha el momento antes de aceptarla.
+
+## Propuestas dudosas y descartadas
+
+Antes de enseñarte las propuestas, la IA las revisa todas juntas y se pregunta, de cada una, si ayudará a
+reconocer a una persona o a entender y transcribir los vídeos siguientes, o si es contenido de esa reunión
+(lo que se explicó o se enseñó en ella, una tarea, algo puntual).
+- Lo que no sirve lo **descarta**: no te lo enseña como propuesta, pero queda en **Descartadas por la IA**,
+  plegado al final de las propuestas del vídeo, con su motivo y el botón **Recuperar**.
+- Lo que repite otra propuesta también se descarta.
+- Lo que no tiene claro lo marca como **dudoso**, con el motivo.
+- Si un dato de una persona es en realidad un hecho del negocio (por ejemplo, cómo es el servicio que
+  ofrece), lo propone como **contexto del perfil**.
 
 Un término que solo se ha visto en pantalla, sin que nadie lo mencione, puede tener que ver con la reunión
-o no (una pestaña abierta, un programa del escritorio). La IA lo razona y, si no está claro, lo propone
-marcado como **dudoso**, con el motivo. Decide tú: **Aceptar todas** no incluye las dudosas.
+o no (una pestaña abierta, un programa del escritorio): también puede salir dudoso. Decide tú: **Aceptar
+todas** no incluye las dudosas.
 
 ## Revisar una propuesta
 
@@ -60,4 +89,11 @@ La IA no se cree: cada propuesta se verifica en Python antes de mostrarse.
   {{v:aprender_max_secciones}} secciones. Son solo una protección ante respuestas anómalas: lo que filtra
   el ruido son las comprobaciones. Antes eran 15, 10, 8, 5 y 5, y se perdían datos buenos por llegar
   tarde en la lista.
+- Una corrección de transcripción necesita que la forma mal oída aparezca tal cual en la transcripción (en el
+  texto de Whisper, antes del glosario). Las de la pantalla salen de la misma búsqueda por sonido que la
+  [corrección con el glosario](ayuda:perfiles#glosario), con un parecido mínimo de
+  {{v:aprender_parecido_pantalla}} sobre 100 (más bajo, porque aquí solo se propone): «Auradirect» frente a
+  «Ahorro Directo» da 76. Como mucho {{v:aprender_max_correcciones}} por vídeo.
+- La revisión conjunta va en tandas de {{v:aprender_juicio_tanda}} propuestas. Si falla, las propuestas se
+  quedan como estaban.
 :::

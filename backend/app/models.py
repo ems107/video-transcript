@@ -153,7 +153,8 @@ class KnowledgeItem(SQLModel, table=True):
     category: str = ""
     data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     key: str = Field(default="", index=True)  # texto normalizado para deduplicar
-    status: str = "propuesto"  # propuesto | aceptado | rechazado | retirado
+    # propuesto | aceptado | rechazado | retirado | descartado_ia (lo descartó la pasada de juicio; recuperable)
+    status: str = "propuesto"
     # Origen: vídeo y hablante (los datos de un hablante se atribuyen a la persona al resolverlo)
     video_id: Optional[int] = Field(default=None, foreign_key="video.id", index=True, ondelete="SET NULL")
     speaker_label: str = ""

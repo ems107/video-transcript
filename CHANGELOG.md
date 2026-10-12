@@ -25,9 +25,19 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
   rehacer el estado.
 - Un cambio de estado «posible» (sin frase que lo demuestre) se puede descartar con **No pasó**.
 - **Rehacer el estado…** de un seguimiento cuando quieras, eligiendo desde qué vídeo.
+- **Correcciones de transcripción.** La IA propone cómo se oyen mal los términos («Natur» por «Naturgy»),
+  apoyándose en tus correcciones, en lo que se lee en pantalla o en lo que ya corrigió el glosario. Al
+  aceptarlas, esas formas se corrigen solas en los vídeos siguientes.
+- **Las propuestas pasan una revisión de la IA** antes de enseñártelas: descarta lo que es contenido de la
+  reunión (lo que se explicó en ella, algo puntual) y lo repetido, marca lo dudoso con su motivo y pasa al
+  perfil los datos que son del negocio. Lo descartado queda plegado en **Descartadas por la IA**, con el
+  botón **Recuperar**.
+- Si las secciones del resumen del perfil no encajan con un vídeo, la IA propone otras más generales.
 
 ### Cambiado
 
+- Las propuestas se ordenan por lo que más ayuda en los vídeos siguientes: primero las correcciones de
+  transcripción y lo que identifica a cada persona; al final lo dudoso.
 - El resumen de un seguimiento cuenta la evolución de toda la serie (lo que aportó cada vídeo), no solo el
   último, y sus momentos llevan la fecha del vídeo y enlazan con él.
 - Un seguimiento da por hecho el punto que consiste en el propio vídeo (por ejemplo, «Realizar la sesión de

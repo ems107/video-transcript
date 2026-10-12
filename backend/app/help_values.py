@@ -51,6 +51,9 @@ def values() -> dict[str, Any]:
         "aprender_max_por_persona": learn.MAX_PER_PERSON,
         "aprender_max_personas_nuevas": learn.MAX_NEW_PEOPLE,
         "aprender_max_secciones": learn.MAX_SECTIONS,
+        "aprender_max_correcciones": learn.MAX_CORRECTIONS,
+        "aprender_juicio_tanda": learn.JUDGE_BATCH,
+        "aprender_parecido_pantalla": round(K.SCREEN_SOUND),
         # Seguimientos
         "seguimiento_contexto": followups.FOLLOW_CONTEXT_CHARS,
         "seguimiento_recientes": followups.RECENT_VIDEOS,

@@ -291,6 +291,30 @@ final pone cada asunto en una sola lista (tarea, decisión o pendiente).
 
 El contexto se limita a `FOLLOW_CONTEXT_CHARS`, recortando primero lo cerrado. Tests en `test_followups.py`.
 
+**Correcciones de transcripción** (`kind = correccion`, `learn.collect_corrections`). Una propuesta por
+término con las formas en que se oye mal (`data = {term, variants, fuente, motivo}`; clave
+`término|formas`, así una forma nueva es otra propuesta). Fuentes: la lista `correcciones` de
+`LEARN_SCHEMA` (la IA, que ve tus notas y la pantalla), `knowledge.corrections_from_screen` (los
+términos de la pantalla con `glossary.find_candidates` a `SCREEN_SOUND` = 75, más bajo que el 86 de la
+corrección porque solo se propone) y `knowledge.corrections_from_correct_stage` (lo que `correct` ya
+validó). Cada forma debe oírse tal cual (`knowledge.heard_at`, sobre `original_text`).
+`knowledge.correction_source` dice en qué se apoya: `usuario` > `pantalla` > `glosario` > `ia` (solo la
+IA: `juicio` dudosa). Aceptadas, `effective_glossary` las añade como variantes **fiables** de su término
+(o lo crea). Antes, el aprendizaje solo proponía términos escritos tal cual en la transcripción, así que
+nunca proponía uno mal transcrito, que es justo lo que más falta hace.
+
+**Pasada de juicio** (`learn.judge_proposals`, `JUDGE_*`). Después de recoger y comprobar las
+propuestas, la IA las revisa todas juntas, en tandas de `JUDGE_BATCH` ordenadas por dueño y tipo:
+`util`, `dudosa` o `descartar` con motivo, `igual_que` (duplicado) y `perfil` (un dato de persona que es
+contexto del negocio). `apply_proposal_judgment`: lo descartado y lo repetido se guarda con `status =
+descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id}/recover`); lo dudoso
+lleva `data.juicio`; las alias y las secciones no se juzgan. En la misma llamada valora si las secciones
+del perfil encajan con el vídeo y, si no, propone hasta 2 generales (`section_proposals`, `replaces` solo
+sobre una aprendida). Es de mejor esfuerzo: si falla, las propuestas quedan como estaban. Medido en la
+prueba de los 3 vídeos de tutoría: 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
+explicaba), términos como un código promocional o el nombre de un programa del escritorio y un duplicado
+de un término ya aceptado; el prompt de extracción ya pedía no incluirlos.
+
 **Respuestas no válidas.** `llm.chat_json` guarda en `data/llm_failures/` cada respuesta que no es JSON
 válido, con su `finish_reason` y los mensajes sin imágenes. Si `finish_reason == "length"`, no se
 reintenta, porque la misma petición se volvería a cortar. Antes de subir un `max_tokens`, mira ahí el

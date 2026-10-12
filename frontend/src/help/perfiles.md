@@ -39,6 +39,10 @@ El glosario corrige la transcripción de forma conservadora:
 
 Además, los términos del glosario orientan a Whisper, que los escribirá mejor en los vídeos siguientes.
 
+No hace falta que escribas tú todas las variantes: al revisar cada vídeo, la IA propone las **correcciones
+de transcripción** que detecta («Natur» por «Naturgy»). Al aceptarlas, sus formas cuentan como variantes
+del término. Ver [Propuestas](ayuda:propuestas#como-se-oyen-mal-los-terminos).
+
 :::tecnico Corrección con el glosario
 La búsqueda de parecidos usa una clave fonética del español y una similitud mínima de 86 sobre 100, en
 ventanas de una palabra más o menos que el término. Los términos de menos de 4 letras solo se corrigen por

@@ -22,6 +22,14 @@ def engine():
     return eng
 
 
+@pytest.fixture(autouse=True)
+def _no_real_work_dir(tmp_path, monkeypatch):
+    """Ninguna prueba toca la carpeta de trabajo del usuario (`review.drop_audio` borra audios)."""
+    from app import review
+
+    monkeypatch.setattr(review, "WORK_DIR", tmp_path / "work")
+
+
 @pytest.fixture
 def session(engine):
     with Session(engine) as s:
