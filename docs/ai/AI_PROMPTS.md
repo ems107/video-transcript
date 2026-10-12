@@ -314,7 +314,13 @@ descartado_ia` (la web lo lista plegado y lo deja recuperar, `POST knowledge/{id
 lleva `data.juicio`; las alias y las secciones no se juzgan. En la misma llamada valora si las secciones
 del perfil encajan con el vídeo y, si no, propone hasta 2 generales (`section_proposals`, `replaces` solo
 sobre una aprendida; solo si el perfil ya tiene secciones). Las correcciones de transcripción no admiten
-nombres de personas: la IA proponía «Juan, puedes» → «Juan Pérez». Es de mejor esfuerzo: si falla, las propuestas quedan como estaban. Medido en la
+nombres de personas: la IA proponía «Juan, puedes» → «Juan Pérez». Va **con modo razonamiento**
+(`max_tokens` 16000; una tanda que se corta se parte en dos): sin él, el mismo código promocional salía
+útil o descartado según la ejecución (unos 3 min por tanda de `JUDGE_BATCH`). Cada dato lleva la línea que
+más lo respalda (`knowledge.claim_score`: palabras comunes y, sobre todo, sus cifras) y la siguiente; con
+la línea del momento aproximado, el juicio veía la pregunta («¿salario neto?») y descartaba datos ciertos.
+Lo que sale de las correcciones del usuario (`fuente = usuario`) no se juzga. Es de mejor esfuerzo: si
+falla, las propuestas quedan como estaban. Medido en la
 prueba de los 3 vídeos de tutoría: 16 propuestas «Sabe que…» (lo explicado en la clase como dato de quien lo
 explicaba), términos como un código promocional o el nombre de un programa del escritorio y un duplicado
 de un término ya aceptado; el prompt de extracción ya pedía no incluirlos.

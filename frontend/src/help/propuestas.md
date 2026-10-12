@@ -93,6 +93,7 @@ La IA no se cree: cada propuesta se verifica en Python antes de mostrarse.
   nombres). Como mucho {{v:aprender_max_correcciones}} por vídeo. Buscar por sonido los nombres de la
   pantalla en la transcripción se probó y se descartó: con un vídeo real salían parejas sin sentido
   («Meta» por «está», «Chat» por «casa»).
-- La revisión conjunta va en tandas de {{v:aprender_juicio_tanda}} propuestas. Si falla, las propuestas se
-  quedan como estaban.
+- La revisión conjunta va en tandas de {{v:aprender_juicio_tanda}} propuestas, con el modo razonamiento. Cada
+  término lleva cuántas veces aparece y si se oye, y cada dato, la frase que lo respalda (la que contiene sus
+  cifras). Si falla, las propuestas se quedan como estaban.
 :::

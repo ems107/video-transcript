@@ -216,8 +216,11 @@ de quien lo explicaba («Sabe que la regla del 72…») y términos sin valor pa
 fuerza en el mismo prompt no bastaba, y una regla fija por palabras («Sabe que…») quitaría también datos
 buenos.
 
-**Consecuencia:** una llamada más a la IA por vídeo (unos segundos por cada {{v:aprender_juicio_tanda}}
-propuestas). Si la revisión falla, se enseñan todas.
+**Consecuencia:** la IA revisa con su **modo razonamiento**, que tarda unos 3 minutos por cada
+{{v:aprender_juicio_tanda}} propuestas (de 3 a 7 minutos por vídeo en una tutoría de 40–50 minutos). Sin
+razonar era más rápido, pero el resultado cambiaba de una vez a otra. Aun así no es perfecta: a veces
+descarta algo cierto (por eso puedes **recuperarlo**) o deja pasar algo dudoso. Lo que sale de tus
+correcciones no lo juzga. Si la revisión falla, se enseñan todas.
 
 ## Nada se confirma solo
 
