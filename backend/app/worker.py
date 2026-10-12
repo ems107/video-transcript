@@ -61,6 +61,12 @@ PARTIALS = {
 STAGE_LABELS = {k: d for k, d, _ in STAGES}
 
 
+def is_short(job: Job | dict) -> bool:
+    """Trabajo corto: aplicar la revisión de un vídeo o una sola fase (rehacer un seguimiento, aprender…)."""
+    options = job if isinstance(job, dict) else (job.options or {})
+    return bool(options.get("apply") or options.get("only"))
+
+
 def work_dir(job_id: int) -> Path:
     return WORK_DIR / f"job_{job_id}"
 
@@ -92,7 +98,9 @@ class Worker:
         while True:
             with Session(engine) as s:
                 review.release_waiting(s)
-                job = s.exec(select(Job).where(Job.status == "queued").order_by(Job.id)).first()
+                queued = s.exec(select(Job).where(Job.status == "queued").order_by(Job.id)).all()
+                # Los cortos primero: no tiene sentido esperar a que termine el análisis de otro vídeo
+                job = min(queued, key=lambda j: (not is_short(j), j.id), default=None)
                 job_id = job.id if job else None
             if job_id is None:
                 self._wake.wait(5)
@@ -182,6 +190,8 @@ class Worker:
                     if key == "identify":
                         self._load_names(ctx)
                     continue
+                if not is_short(options) and self._yield_to_short(job_id):
+                    return
                 if not gated and key in review.GATED_STAGES:
                     gated = True
                     if self._wait(job_id):
@@ -220,6 +230,21 @@ class Worker:
             free_gpu()
             self.current = None
             self._cancel.pop(job_id, None)
+
+    @staticmethod
+    def _yield_to_short(job_id: int) -> bool:
+        """Un análisis largo cede el turno entre fase y fase si hay en cola un trabajo corto (aplicar la
+        revisión de un vídeo, rehacer un seguimiento): se reanuda después desde la fase siguiente."""
+        with Session(engine) as s:
+            short = next((j for j in s.exec(select(Job).where(Job.status == "queued")) if is_short(j)), None)
+            if short is None:
+                return False
+            job = s.get(Job, job_id)
+            other = s.get(Video, short.video_id)
+            job.status, job.message = "queued", f"En pausa: antes va «{other.title}»"
+            s.add(job)
+            s.commit()
+            return True
 
     @staticmethod
     def _wait(job_id: int) -> bool:

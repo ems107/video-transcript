@@ -153,3 +153,13 @@ def test_api_apply_and_changes_reopen_the_review(client, session, monkeypatch):
     assert r["job_id"] == 99
     session.expire_all()
     assert session.get(Video, vid).review == review.APPLYING
+
+
+def test_short_jobs_go_first():
+    """Aplicar una revisión o rehacer un seguimiento no espera a que termine el análisis de otro vídeo."""
+    from app.worker import is_short
+
+    assert is_short(Job(video_id=1, options={"apply": True, "redo": []}))
+    assert is_short(Job(video_id=1, options={"only": ["follow"]}))
+    assert not is_short(Job(video_id=1, options={"file_mode": "copy"}))
+    assert not is_short({"redo": ["analyze"]})

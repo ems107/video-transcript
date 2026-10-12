@@ -19,6 +19,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
     revisión para aprovechar las voces, el glosario y el seguimiento ya revisados (en la cola, «En espera»).
   - Si cambias algo de un vídeo ya revisado, vuelve a quedar pendiente hasta que lo apliques.
   - La barra lateral cuenta los vídeos por revisar.
+  - **Aplicar y continuar** no espera a que termine el análisis de otro vídeo: los trabajos cortos van
+    primero, y el análisis en curso se pausa al acabar su fase.
 - **Seguimientos sin duplicados.** Cada tarea, decisión o duda de un vídeo nuevo se compara con las
   anteriores (también con las que borraste y con las del mismo vídeo): si es la misma, aunque esté escrita
   de otra forma, no se repite; si la IA duda, pregunta «¿Es lo mismo que…?». Lo que borras ya no vuelve al

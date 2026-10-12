@@ -64,6 +64,10 @@ quedan `revisado` por la columna de `db.NEW_COLUMNS`).
 - **Cambios del usuario** (correcciones, arreglos de hablantes, confirmar o cambiar un hablante) llaman a
   `review.mark_changed`: un vídeo `revisado` o en `propuestas` vuelve a `pendiente`. `review.changes` lista
   lo que falta por aplicar (`voices_applied` frente a los hablantes confirmados para las voces).
+- **Prioridad:** los trabajos cortos (`worker.is_short`: `apply` u `only`) se eligen antes que los demás, y
+  un análisis largo cede el turno entre fase y fase si hay uno en cola (`_yield_to_short`: vuelve a
+  `queued` y se reanuda por sus marcas). Sin esto, «Aplicar y continuar» esperaba a que terminara el
+  análisis pesado del vídeo siguiente (unos 45 min).
 - **Audio:** `_cleanup(keep_audio=True)` mientras el vídeo no está revisado (lo necesita `voiceprints`);
   `review.drop_audio` lo borra al quedar revisado.
 - **Seguimientos:** `rebuild_from` y `first_from` se saltan los vídeos `pendiente`; se aplican al aplicar
