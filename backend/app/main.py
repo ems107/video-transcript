@@ -9,6 +9,7 @@ import json
 import logging
 import mimetypes
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -27,7 +28,7 @@ from . import people as people_mod
 from . import regenerate as regen
 from . import followups as FL
 from . import followups_store as FS
-from . import estimates, help_values, removal, review, speaker_fix
+from . import estimates, help_values, logs, removal, review, speaker_fix
 from .config import FRONTEND_DIST, MODELS_DIR, WORK_DIR, Settings, ensure_dirs, load_settings, save_settings
 from .db import engine, get_session, init_db
 from .media import probe
@@ -37,14 +38,17 @@ from .models import (
 )
 from .models import now as models_now
 from .pipeline.glossary import normalize
-from .worker import STAGE_LABELS, worker
+from .worker import STAGE_LABELS, job_kind, worker
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger(__name__)
 mimetypes.add_type("video/x-matroska", ".mkv")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings = load_settings()
+    logs.setup(settings.log_level, settings.log_keep_days)
+    log.info("Vídeo Transcript %s arrancado", __version__)
     ensure_dirs()
     init_db()
     worker.start()
@@ -52,6 +56,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="video-transcript", version=__version__, lifespan=lifespan)
+app.add_middleware(logs.RequestLog)
 SessionDep = Depends(get_session)
 
 
@@ -102,8 +107,46 @@ def get_settings() -> Settings:
 
 @app.put("/api/settings")
 def put_settings(body: Settings) -> Settings:
+    old = load_settings().model_dump()
     save_settings(body)
+    logs.set_level(body.log_level)
+    changed = sorted(k for k, v in body.model_dump().items() if old.get(k) != v)
+    if changed:
+        log.info("Ajustes cambiados: %s", ", ".join(changed))  # solo los nombres: los valores pueden ser rutas
     return body
+
+
+class ClientLogIn(BaseModel):
+    message: str
+    stack: str = ""
+    url: str = ""
+
+
+web_log = logging.getLogger("web")
+_web_seen: dict[str, float] = {}  # último aviso de cada mensaje, para no llenar el registro con el mismo
+WEB_REPEAT_SECONDS = 60
+
+
+@app.post("/api/client-log")
+def client_log(body: ClientLogIn) -> dict[str, Any]:
+    """Un error de JavaScript de la web, para que quede en el registro con lo demás."""
+    msg, now = body.message.strip()[:500] or "(sin mensaje)", time.monotonic()
+    if now - _web_seen.get(msg, -WEB_REPEAT_SECONDS) < WEB_REPEAT_SECONDS:
+        return {"ok": True, "repeated": True}
+    if len(_web_seen) > 200:
+        _web_seen.clear()
+    _web_seen[msg] = now
+    page = body.url.split("?")[0][:200]  # sin la consulta, que puede llevar lo que buscas
+    web_log.error("Error en la página %s: %s%s", page or "?", msg, f"\n{body.stack[:2000]}" if body.stack else "")
+    return {"ok": True}
+
+
+@app.post("/api/logs/open-folder")
+def open_logs_folder() -> dict[str, Any]:
+    """Abre la carpeta de los registros en el Explorador."""
+    logs.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    os.startfile(logs.LOGS_DIR)  # abre el Explorador de Windows
+    return {"ok": True}
 
 
 @app.get("/api/probe")
@@ -156,6 +199,7 @@ def create_job(body: JobCreate, session: Session = SessionDep) -> dict[str, Any]
     job = Job(video_id=video.id, options=body.options)
     session.add(job)
     session.commit()
+    log.info("Trabajo %s encolado: análisis del vídeo %s", job.id, video.id)
     session.refresh(job)
     session.refresh(video)
     worker.notify()
@@ -400,6 +444,8 @@ def add_overrides(video_id: int, body: OverrideIn, session: Session = SessionDep
     for a, b in ranges:
         session.add(SpeakerOverride(video_id=v.id, start=a, end=b, person_id=pid))
     session.commit()
+    log.info("Vídeo %s: %d tramo(s) pasan a la persona %s (%.1f s en total)", v.id, len(ranges), pid,
+             sum(b - a for a, b in ranges))
     _after_speaker_change(session, v)
     return {"ok": True, "person_id": pid}
 
@@ -456,7 +502,10 @@ def remove_video(video_id: int, body: RemoveIn, session: Session = SessionDep) -
         raise HTTPException(400, "El vídeo se está procesando")
     for f in FS.for_video(session, v.id):
         _detach(session, f, v, f.id in body.follow_rebuild)
-    out = removal.remove(session, v, removal.Options(**body.model_dump(exclude={"follow_rebuild"})))
+    opts = body.model_dump(exclude={"follow_rebuild"})
+    out = removal.remove(session, v, removal.Options(**opts))
+    log.info("Vídeo %s quitado de la app (%s)%s", video_id, ", ".join(k for k, val in opts.items() if val) or
+             "sin borrar ficheros", f"; {len(out['errors'])} error(es) al borrar" if out.get("errors") else "")
     review.release_waiting(session)
     worker.notify()
     return out
@@ -582,6 +631,7 @@ def _requeue(session: Session, v: Video, redo: list[str], message: str, check_wo
     last.started_at, last.finished_at = None, None  # el tiempo de este trabajo empieza ahora
     kept = {k: val for k, val in (last.options or {}).items() if k not in ONE_SHOT_OPTIONS}
     last.options = {**kept, **(extra or {}), "redo": redo}
+    log.info("Trabajo %s encolado para el vídeo %s: %s", last.id, v.id, job_kind(last.options))
     v.status = "processing"
     session.add(last), session.add(v)
     session.commit()
@@ -657,6 +707,8 @@ def update_speaker(speaker_id: int, body: SpeakerUpdate, session: Session = Sess
     sp.confirmed = bool(person_id) and body.confirm
     session.add(sp)
     session.commit()
+    log.info("Vídeo %s: hablante %s → persona %s%s%s", video.id, sp.label, person_id,
+             " (confirmado)" if sp.confirmed else "", f", antes {old_pid}" if old_pid and old_pid != person_id else "")
 
     new_name = services.speaker_names(session, video.id).get(sp.label, "")
     if old_name and new_name and old_name != new_name:
@@ -837,6 +889,7 @@ def merge_person(person_id: int, body: MergeIn, session: Session = SessionDep) -
     source = _404(session.get(Person, person_id), "Persona")
     target = _404(session.get(Person, body.into_id), "Persona")
     people_mod.merge(session, source, target)
+    log.info("Persona %s fusionada en la persona %s", person_id, body.into_id)
     return person_out(session, session.get(Person, body.into_id))
 
 
@@ -951,6 +1004,8 @@ def decide_voice(embedding_id: int, body: VoiceDecision, session: Session = Sess
             session.delete(smp)
         session.delete(e)
     session.commit()
+    log.info("Huella dudosa de la persona %s en el vídeo %s: %s", e.person_id, vid,
+             "se guarda" if body.keep else "descartada")
     review.check_videos(session, {vid})
     return {"ok": True}
 
@@ -1005,6 +1060,8 @@ def get_proposals(
 def decide_proposals(body: Decision, session: Session = SessionDep) -> dict[str, Any]:
     videos = {it.video_id for i in [*body.accept, *body.reject] if (it := session.get(KnowledgeItem, i))}
     out = PR.decide(session, load_settings().voice_auto_threshold, body.accept, body.reject, body.edits)
+    log.info("Propuestas: %d aceptadas (%d editadas) y %d rechazadas, de los vídeos %s", len(body.accept),
+             len(body.edits or {}), len(body.reject), sorted(v for v in videos if v) or "-")
     review.check_videos(session, videos)
     return out
 
@@ -1044,6 +1101,7 @@ def recover_proposal(item_id: int, session: Session = SessionDep) -> dict[str, A
     it.status = "propuesto"
     session.add(it)
     session.commit()
+    log.info("Propuesta %s recuperada (la había descartado la IA)", it.id)
     v = session.get(Video, it.video_id) if it.video_id else None
     if v and v.review == review.DONE:
         v.review = review.PROPOSALS  # vuelve a haber algo por decidir
@@ -1403,6 +1461,7 @@ def resolve_followup_item(followup_id: int, item_id: int, body: ResolveIn,
     session.add(it)
     FS.touch(session, f)
     FS.export(session, f)
+    log.info("Seguimiento %s, punto %s: duda resuelta («%s»)", f.id, it.id, body.action)
     review.check_videos(session, {e.get("video_id") for e in it.events or []})
     return FS.out(session, f, full=True)
 

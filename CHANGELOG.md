@@ -8,6 +8,13 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Registros (logs).** La app guarda lo que pasa en un fichero por día (`data/logs/AAAA-MM-DD.log`), con
+  la fecha y la hora de cada línea: lo mismo que la consola, sin tener que copiarla. Se borran solos a los
+  30 días, no contienen nada de lo que se dice en tus vídeos y en **Ajustes** puedes abrir su carpeta o
+  pedir más detalle para buscar un fallo.
+
 ## [1.7.2] - 2026-10-13
 
 ### Corregido

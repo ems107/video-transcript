@@ -145,6 +145,7 @@ def touch(session: Session, f: Followup) -> None:
 # --------------------------------------------------------------------------- aplicar y deshacer
 
 def mark_stale(session: Session, f: Followup, since: datetime, reason: str) -> None:
+    log.info("Seguimiento %s desactualizado desde %s", f.id, f"{since:%Y-%m-%d}")
     if f.stale_from is None or since <= f.stale_from:
         f.stale_from, f.stale_reason = since, reason
     touch(session, f)

@@ -222,6 +222,20 @@ razonar era más rápido, pero el resultado cambiaba de una vez a otra. Aun así
 descarta algo cierto (por eso puedes **recuperarlo**) o deja pasar algo dudoso. Lo que sale de tus
 correcciones no lo juzga. Si la revisión falla, se enseñan todas.
 
+## Qué guardan los registros
+
+**Qué:** la app guarda lo que pasa en un fichero por día (`data/logs/AAAA-MM-DD.log`) durante
+{{v:log_keep_days}} días. Registra números de vídeo, de persona y de trabajo, fases, tiempos y recuentos,
+pero nunca lo que se dice en tus vídeos, tus notas, tus correcciones, los nombres de las personas ni lo que
+buscas.
+
+**Por qué:** para encontrar un fallo hace falta saber qué pasó y en qué orden, no el contenido, que ya está
+en la app. Así el registro se puede pasar a otra persona sin enseñarle tus reuniones.
+
+**Consecuencia:** el registro dice «vídeo 3» o «persona 2», no su nombre; los títulos y los nombres se ven
+en la app. El detalle extra (cada consulta de la web y el progreso de las fases) solo se guarda si lo pides
+en [Ajustes](ayuda:ajustes), porque crece deprisa.
+
 ## Nada se confirma solo
 
 **Qué:** ni los hablantes, ni lo aprendido, ni las identidades deducidas se dan por buenos sin que los

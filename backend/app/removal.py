@@ -8,6 +8,7 @@ Solo se borran ficheros que escribe la app, o el vídeo cuando el usuario lo mar
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,8 @@ from . import proposals as PR
 from . import services
 from .config import WORK_DIR
 from .models import Job, Keyframe, KnowledgeItem, Person, Profile, Segment, Speaker, Video, VoiceEmbedding, VoiceSample
+
+log = logging.getLogger(__name__)
 
 APP_FILES = ("transcripcion.md", "transcripcion.txt", "resumen.md", "analisis.json", "miniatura.jpg")
 APP_DIRS = ("fotogramas", "datos")
@@ -122,6 +125,9 @@ def execute(acts: list[tuple[str, Path, Path | None]]) -> list[str]:
                 path.rmdir()  # solo si ha quedado vacía: nunca se borra nada que no sea de la app
         except OSError as e:
             errors.append(f"{path}: {e}")
+            # Sin la ruta: el nombre de la carpeta lleva el título del vídeo
+            log.warning("Quitar: no se pudo «%s» un %s (%s)", kind, "carpeta" if path.is_dir() else "fichero",
+                        e.strerror or type(e).__name__)
     return errors
 
 

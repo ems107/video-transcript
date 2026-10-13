@@ -81,6 +81,7 @@ class LLMServer:
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
+            log.info("Parando llama-server")
             self.proc.terminate()
             try:
                 self.proc.wait(timeout=30)
@@ -130,16 +131,21 @@ class LLMServer:
             body.update(THINKING_SAMPLING)
         last: Exception | None = None
         for _ in range(retries + 1):
+            t0 = time.monotonic()
             try:
                 r = httpx.post(self.base + "/v1/chat/completions", json=body, timeout=1800)
                 r.raise_for_status()
-                choice = r.json()["choices"][0]
+                data = r.json()
+                choice = data["choices"][0]
                 content = choice["message"]["content"]
             except (httpx.HTTPError, KeyError) as e:
                 last = e
                 log.warning("Fallo en llamada al LLM: %s", e)
                 time.sleep(2)
                 continue
+            usage = data.get("usage") or {}
+            log.info("LLM: %.1f s, %s → %s tokens, fin «%s»%s", time.monotonic() - t0, usage.get("prompt_tokens", "?"),
+                     usage.get("completion_tokens", "?"), choice.get("finish_reason"), " (razonando)" if thinking else "")
             try:
                 return json.loads(content)
             except json.JSONDecodeError as e:

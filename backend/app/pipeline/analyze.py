@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import Counter
 from typing import Any
@@ -27,6 +28,8 @@ from .base import JobContext
 from .glossary import normalize
 from .names import SIMILAR, similarity
 from .transcript import fmt_ts
+
+log = logging.getLogger(__name__)
 
 # Un apodo debe parecerse a una parte del nombre («Selu» en «JoSELUis»): 100; «Selu»/«Sandra»: 40
 NICKNAME_SIMILAR = 75
@@ -223,4 +226,6 @@ def run(ctx: JobContext, llm: LLMServer) -> None:
     final["correcciones_aplicadas"] = [{"id": c["id"], "updated_at": c["updated_at"]} for c in ctx.corrections]
     final["hablantes_aplicados"] = sorted(o["id"] for o in ctx.overrides)
     ctx.save("analysis.json", final)
+    log.info("Resumen hecho en %d bloque(s): %d tareas, %d decisiones, %d pendientes", len(partials),
+             len(final.get("tareas") or []), len(final.get("decisiones") or []), len(final.get("pendientes") or []))
     ctx.report(1.0, f"Título: {final['titulo']}")

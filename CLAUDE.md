@@ -74,6 +74,7 @@ backend/app/
   speaker_fix.py arreglos manuales de hablantes (SpeakerOverride); la comprobación por la voz está en pipeline/voices.py
   followups.py / followups_store.py   seguimientos: lógica pura del estado (puntos, contexto, aplicar y deshacer) y BD
   review.py      revisión del vídeo: estados, espera de los vídeos relacionados y «Aplicar y continuar»
+  logs.py        registros: fichero diario en data/logs, contexto [trabajo · vídeo · fase] y middleware HTTP
   models.py      tablas SQLModel;  db.py: motor SQLite + FTS5
   config.py      Settings (persistidos en data/settings.json) y rutas
   env.py         variables de entorno sin conexión; se importa antes que cualquier librería de IA
@@ -116,6 +117,9 @@ commit. Lo que se pueda deducir leyendo el código no hace falta documentarlo.
   mensajes de commit van en español. Los identificadores de código van en inglés, salvo las claves JSON
   del análisis (`titulo`, `tareas`…), que la web y los exportadores ya usan.
 - Comentarios escasos: explican el *porqué*. Imita el estilo del fichero que edites.
+- **Registros:** `log = logging.getLogger(__name__)`. Registra ids, fases, tiempos y recuentos, nunca
+  contenido (transcripción, prompts, notas, nombres, títulos). Un `except` que se traga un error deja un
+  WARNING con `exc_info=True`. Ver «Registros» en `docs/ai/AI_BACKEND.md`.
 - **Git:** commits pequeños y descriptivos por cada paso lógico que funcione. Las funciones nuevas van
   en una rama `feature/...`. Cada cambio visible para el usuario lleva una línea bajo
   `## [Sin publicar]` en `CHANGELOG.md`, dentro del mismo commit. No hagas push, no crees tags y no
@@ -129,7 +133,8 @@ commit. Lo que se pueda deducir leyendo el código no hace falta documentarlo.
 1. `uv run pytest` en verde. Si cambias lógica, añade o ajusta su test: hay uno por módulo
    (`test_followups.py`, `test_review.py`, `test_voices.py`, `test_learn.py`…) y `test_logic.py` para el
    glosario, la voz, el troceo y la transcripción. Comprueba que el test nuevo falla sin el arreglo.
-2. Si cambias el frontend o `api.ts`, `npm run build` sin errores.
+2. Si cambias el frontend o `api.ts`, comprueba que compila sin tocar `frontend/dist`, que es el de la
+   instancia del usuario: `npx tsc -b` y `npx vite build --outDir <scratchpad>`.
 3. Si cambias la pipeline o los prompts, haz una prueba de punta a punta con un vídeo corto **en una
    instancia aislada** (`VT_DATA_DIR`, API en :8771, `llm_port` 8092). Así no se tocan los datos del
    usuario. Los vídeos de prueba están en `samples/videos-prueba/`. Para no mover los vídeos de muestra,

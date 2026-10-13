@@ -18,6 +18,9 @@ const FIELDS: { key: string; label: string; help?: string; type?: 'number' | 'se
   { key: 'llm_mmproj_path', label: 'Proyector de visión (mmproj)' },
   { key: 'llama_server_path', label: 'llama-server.exe' },
   { key: 'diarization_model_dir', label: 'Carpeta de pyannote community-1' },
+  { key: 'log_level', label: 'Detalle de los registros', type: 'select', options: [['INFO', 'Normal'], ['DEBUG', 'Detallado (para buscar un fallo)']],
+    help: 'Detallado añade cada consulta de la web y el progreso de las fases. Se aplica al guardar.' },
+  { key: 'log_keep_days', label: 'Días que se guardan los registros', type: 'number' },
 ]
 
 export default function SettingsPage() {
@@ -56,6 +59,9 @@ export default function SettingsPage() {
         ))}
         <div className="row">
           <button className="primary" onClick={save}>Guardar</button>
+          <button onClick={() => api.post('/api/logs/open-folder').catch((e) => setMsg((e as Error).message))}>
+            Abrir carpeta de registros
+          </button>
           {msg && <span className="small muted">{msg}</span>}
         </div>
       </div>

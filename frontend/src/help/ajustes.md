@@ -2,7 +2,7 @@
 titulo: Ajustes
 seccion: Otros
 orden: 31
-claves: ajustes, configuración, carpeta, mover, copiar, umbral, voz, fotogramas, memoria, gpu
+claves: ajustes, configuración, carpeta, mover, copiar, umbral, voz, fotogramas, memoria, gpu, registros, logs
 ---
 **Ajustes** reúne la configuración de la app. Los valores que ves en esta ayuda son los de tu app.
 
@@ -21,6 +21,10 @@ claves: ajustes, configuración, carpeta, mover, copiar, umbral, voz, fotogramas
 | **Lote de Whisper** | Bájalo si la transcripción falla por falta de memoria de la tarjeta gráfica. | {{v:whisper_batch_size}} |
 | **Capas MoE del LLM en CPU** | Cuánto del modelo de IA va a la memoria del ordenador en vez de la tarjeta gráfica. Súbelo si falla por falta de memoria; bájalo para ir más rápido. | {{v:llm_n_cpu_moe}} |
 | **Contexto del LLM (tokens)** | Cuánto texto puede leer la IA a la vez. | {{v:llm_ctx}} |
+| **Detalle de los registros** | Normal registra lo que pasa en la app; Detallado añade cada consulta de la web y el progreso de las fases, para buscar un fallo. Se aplica al guardar. Ver [Registros](ayuda:problemas#registros-logs). | {{v:log_level}} |
+| **Días que se guardan los registros** | Los registros más antiguos se borran solos. | {{v:log_keep_days}} |
+
+**Abrir carpeta de registros** abre la carpeta con un fichero por día ([Registros](ayuda:problemas#registros-logs)).
 
 Las rutas de los modelos solo hay que tocarlas si los mueves de sitio.
 
