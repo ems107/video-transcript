@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.8.0] - 2026-10-13
+
 ### Añadido
 
 - **Registros (logs).** La app guarda lo que pasa en un fichero por día (`data/logs/AAAA-MM-DD.log`), con
@@ -413,7 +415,8 @@ Primera versión completa: transcripción, hablantes, visión, análisis y bibli
 - `run.ps1` arranca la app con un solo comando.
 - La versión de la app se muestra en la web y en `/api/status`.
 
-[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.7.2...HEAD
+[Sin publicar]: https://github.com/ems107/video-transcript/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/ems107/video-transcript/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/ems107/video-transcript/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/ems107/video-transcript/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/ems107/video-transcript/compare/v1.6.0...v1.7.0
